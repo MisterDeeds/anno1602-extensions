@@ -208,8 +208,10 @@ Important:
     ("Continue game", "Spiel fortsetzen" in the German game) from the big world is renamed,
     so that the game without the extensions does not load it, and the options of every save
     written in this session are noted for the "Continue" tab. Do not close the window before.
+    Afterwards it closes by itself; it stays open only if something went wrong.
   - Before every start the saves are backed up (Documents\Anno 1602 History Edition\
-    Savegame-Backup-<date>), but only if something has changed.
+    Savegame-Backup-<date>), but only if something has changed. The first backup and the
+    newest five are kept; older ones go to the recycle bin.
   - Single player only and only for the Ubisoft Connect version. After an update of the
     game the tool no longer fits and stops without changing anything.
 

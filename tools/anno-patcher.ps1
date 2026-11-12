@@ -210,6 +210,9 @@ param(
     [ValidateSet('Default', 'Infinite')][string]$Mines = 'Default',
     # Fire, plague, drought, volcano: Default, Off, More (fire and plague twice as likely).
     [ValidateSet('Default', 'Off', 'More')][string]$Disasters = 'Default',
+    # Started from the launcher in its own window: after the game the window closes by itself; on an error it stays
+    # open until Enter is pressed, so that the message can be read.
+    [switch]$PauseOnError,
     # Game folder given by hand (otherwise taken from Ubisoft Connect).
     [string]$GamePath,
     # Only for tools\test-patcher.ps1: other process and load address, no backup.
@@ -225,6 +228,16 @@ function Txt([string]$en, [string]$de) { if ($UiGerman) { $de } else { $en } }
 # German names of the option values (the values themselves are English), for the German messages.
 $GermanValueNames = @{ Default = 'Standard'; Active = 'Aktiv'; Strong = 'Stark'; Off = 'Aus'; Normal = 'Normal'; Large = 'Gross'; Huge = 'Riesig'; More = 'Mehr'; Lots = 'Viele'; Hard = 'Schwer'; Everywhere = 'Ueberall'; Infinite = 'Unendlich' }
 function Get-ValueName([string]$value) { if ($UiGerman) { $GermanValueNames[$value] } else { $value } }
+
+# Every error stops the tool as before; started from the launcher the window then waits for Enter.
+trap {
+    if ($PauseOnError) {
+        Write-Host ''
+        Write-Host ((Txt 'Error: {0}' 'Fehler: {0}') -f $_.Exception.Message) -ForegroundColor Red
+        [void](Read-Host (Txt 'Press Enter to close this window' 'Enter druecken, um dieses Fenster zu schliessen'))
+    }
+    break
+}
 
 $GameFolder = 'C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games\Anno 1602 - History Edition'
 # Game folder on this PC: -GamePath, otherwise Ubisoft Connect (install ID 16236), otherwise
@@ -1042,7 +1055,7 @@ function Get-SessionArgs($bound) {
     $list = New-Object System.Collections.Generic.List[string]
     $list.AddRange([string[]]@('-Width', [string]$Width, '-Height', [string]$Height))
     foreach ($k in $bound.Keys) {
-        if ($k -in 'Width', 'Height', 'CheckOnly', 'WaitMinutes', 'GameAlreadyRunning', 'GamePath', 'NoLastgameProtection', 'TestProcessId', 'TestBase') { continue }
+        if ($k -in 'Width', 'Height', 'CheckOnly', 'WaitMinutes', 'GameAlreadyRunning', 'GamePath', 'NoLastgameProtection', 'PauseOnError', 'TestProcessId', 'TestBase') { continue }
         $v = $bound[$k]
         if ($v -is [System.Management.Automation.SwitchParameter]) { if ($v.IsPresent) { $list.Add("-$k") }; continue }
         $list.Add("-$k")
@@ -1069,6 +1082,19 @@ function Save-SessionRecord([string]$saveFolder, [datetime]$since, [string[]]$se
     ConvertTo-Json -InputObject $all -Depth 4 | Set-Content -LiteralPath $file -Encoding UTF8
     $written.Count
 }
+# Keeps the backups from growing without end (each one is a full copy of the Savegame folder, about 20 MB): the
+# oldest backup (the state before the first use of the tool) and the newest $keep stay, the others go to the recycle
+# bin, so they can still be restored. Returns the names of the moved folders.
+function Limit-Backups([string]$parent, [int]$keep = 5) {
+    $all = @(Get-ChildItem -LiteralPath $parent -Directory | Where-Object { $_.Name -match '^Savegame-(Backup|Sicherung)-\d{8}-\d{6}$' } |
+            Sort-Object { $_.Name -replace '^Savegame-(Backup|Sicherung)-', '' })
+    if ($all.Count -le $keep + 1) { return }
+    Add-Type -AssemblyName Microsoft.VisualBasic
+    foreach ($d in $all[1..($all.Count - $keep - 1)]) {
+        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($d.FullName, 'OnlyErrorDialogs', 'SendToRecycleBin')
+        $d.Name
+    }
+}
 $toolStart = Get-Date
 $saves = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Anno 1602 History Edition\Savegame'
 # Content of a folder as text: relative path, size and modification time of every file.
@@ -1087,6 +1113,11 @@ if ($TestProcessId -eq 0 -and (Test-Path -LiteralPath $saves)) {
         $dest = "$saves-Backup-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
         Copy-Item -LiteralPath $saves -Destination $dest -Recurse
         Write-Host (Txt "Savegames backed up to: $dest" "Spielstaende gesichert nach: $dest")
+        try {
+            $old = @(Limit-Backups (Split-Path $saves) 5)
+            if ($old.Count) { Write-Host ((Txt 'Older backups moved to the recycle bin: {0} (kept: the first one and the newest 5).' 'Aeltere Sicherungen in den Papierkorb verschoben: {0} (behalten: die erste und die neuesten 5).') -f $old.Count) }
+        }
+        catch { Write-Host ((Txt 'Could not tidy up the older backups: {0}' 'Aeltere Sicherungen konnten nicht aufgeraeumt werden: {0}') -f $_.Exception.Message) -ForegroundColor Yellow }
     }
 }
 
@@ -1511,4 +1542,8 @@ if ($TestProcessId -eq 0 -and -not $NoLastgameProtection) {
         if ($n) { Write-Host ((Txt 'Options noted for {0} savegame(s) - the launcher tab "Continue" starts them with the same settings.' 'Optionen fuer {0} Spielstand/Spielstaende gemerkt - die Registerkarte "Weiterspielen" startet sie mit denselben Einstellungen.') -f $n) -ForegroundColor Green }
     }
     catch { Write-Host ((Txt 'Could not note the options of the savegames: {0}' 'Optionen der Spielstaende konnten nicht gemerkt werden: {0}') -f $_.Exception.Message) -ForegroundColor Yellow }
+    if ($PauseOnError) {
+        Write-Host (Txt 'All done. This window closes in 10 seconds.' 'Alles erledigt. Dieses Fenster schliesst sich in 10 Sekunden.')
+        Start-Sleep -Seconds 10
+    }
 }

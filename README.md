@@ -13,6 +13,11 @@ The launcher shows German on a German Windows and English otherwise. The scenari
 the same language: English titles and mission texts on an English Windows, German ones on a
 German Windows.
 
+<p align="center">
+  <img src="docs/images/launcher-tab0-en.png" alt="Launcher: new game" width="62%">
+  <img src="docs/images/logbook-en.png" alt="Logbook next to the game" width="28%">
+</p>
+
 ## Features
 
 | Option | Effect |
@@ -41,6 +46,11 @@ German Windows.
 ## The launcher
 
 The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiterspielen*, *Abenteuer*):
+
+<p align="center">
+  <img src="docs/images/launcher-tab1-en.png" alt="Launcher: continue with the right settings" width="45%">
+  <img src="docs/images/launcher-tab2-en.png" alt="Launcher: campaign progress and random adventures" width="45%">
+</p>
 
 - **New game**: every option as a click, in four groups (World, Economy, Rivals and dangers,
   Ships and speed), plus five presets:
@@ -145,7 +155,10 @@ Uninstall: double-click `uninstall.cmd` in the same folder. The game and your sa
   the **Continue** tab. The save itself does not store the size.
 - After the game ends, the tool renames the autosave ("Continue game") of a big world, so the
   game cannot load it without the extensions.
-- Before every start, the tool backs up `Documents\Anno 1602 History Edition\Savegame`.
+- Before every start, the tool backs up `Documents\Anno 1602 History Edition\Savegame` (only when something
+  changed). It keeps the very first backup and the newest five; older ones go to the recycle bin.
+- Started from the launcher, the tool's window closes by itself after the game; it stays open only if
+  something went wrong, so that you can read the message.
 - Tested with exactly one game version (SHA-256 of `Anno1602.exe` starts with `7731972f`).
   After a game update, the tool stops without changing anything.
 

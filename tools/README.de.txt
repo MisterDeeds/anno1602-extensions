@@ -205,9 +205,10 @@ Wichtig:
     automatischer Spielstand ("Spiel fortsetzen") aus der grossen Welt umbenannt, damit
     ihn das Spiel ohne Erweiterungen nicht laedt, und die Optionen jedes in dieser Sitzung
     gespeicherten Spielstands werden fuer "Weiterspielen" gemerkt. Das Fenster nicht vorher
-    schliessen.
+    schliessen. Danach schliesst es sich von selbst; offen bleibt es nur bei einem Fehler.
   - Vor jedem Start werden die Spielstaende gesichert (Dokumente\Anno 1602 History Edition\
-    Savegame-Backup-<Datum>), aber nur, wenn sich etwas geaendert hat.
+    Savegame-Backup-<Datum>), aber nur, wenn sich etwas geaendert hat. Die erste und die
+    fuenf neuesten Sicherungen bleiben, aeltere wandern in den Papierkorb.
   - Nur fuer das Einzelspiel und nur fuer die Ubisoft-Connect-Version. Nach einem Update des
     Spiels passt das Werkzeug nicht mehr und bricht ab, ohne etwas zu aendern.
 

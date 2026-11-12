@@ -13,6 +13,11 @@ Das Startfenster ist auf einem deutschen Windows deutsch, sonst englisch. Die Sz
 derselben Sprache gebaut: deutsche Titel und Auftragstexte auf einem deutschen Windows, englische
 auf einem englischen.
 
+<p align="center">
+  <img src="docs/images/launcher-tab0-de.png" alt="Startfenster: neues Spiel" width="62%">
+  <img src="docs/images/logbook-de.png" alt="Logbuch neben dem Spiel" width="28%">
+</p>
+
 ## Was es kann
 
 | Option | Wirkung |
@@ -41,6 +46,11 @@ auf einem englischen.
 ## Das Startfenster
 
 Das Startfenster hat drei Registerkarten:
+
+<p align="center">
+  <img src="docs/images/launcher-tab1-de.png" alt="Startfenster: weiterspielen mit den richtigen Einstellungen" width="45%">
+  <img src="docs/images/launcher-tab2-de.png" alt="Startfenster: Kampagnen-Fortschritt und Zufallsabenteuer" width="45%">
+</p>
 
 - **Neues Spiel**: alle Optionen zum Anklicken, in vier Gruppen (Welt, Wirtschaft, Gegner und
   Gefahren, Schiffe und Tempo), dazu fünf Vorlagen:
@@ -148,7 +158,11 @@ Entfernen: im selben Ordner `uninstall.cmd` doppelklicken. Spiel und Spielständ
   Grösse nicht.
 - Das Werkzeug benennt den automatischen Spielstand („Spiel fortsetzen“) einer grossen Welt nach
   dem Spielende um, damit ihn das Spiel ohne Erweiterungen nicht lädt.
-- Vor jedem Start sichert das Werkzeug den Ordner `Dokumente\Anno 1602 History Edition\Savegame`.
+- Vor jedem Start sichert das Werkzeug den Ordner `Dokumente\Anno 1602 History Edition\Savegame` (nur wenn
+  sich etwas geändert hat). Es behält die allererste und die fünf neuesten Sicherungen; ältere wandern in den
+  Papierkorb.
+- Über das Startfenster gestartet, schliesst sich das Fenster des Werkzeugs nach dem Spiel von selbst; offen
+  bleibt es nur, wenn etwas schiefging, damit du die Meldung lesen kannst.
 - Getestet mit genau einer Spielversion (SHA-256 von `Anno1602.exe` beginnt mit `7731972f`).
   Nach einem Update des Spiels bricht das Werkzeug ab, ohne etwas zu ändern.
 

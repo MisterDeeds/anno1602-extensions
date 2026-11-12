@@ -585,10 +585,10 @@ $scenarioList.View = 'Details'
 $scenarioList.FullRowSelect = $true
 $scenarioList.MultiSelect = $false
 $scenarioList.Width = 900
-$scenarioList.Height = 250
-[void]$scenarioList.Columns.Add((Txt 'Scenario' 'Szenario'), 400)
-[void]$scenarioList.Columns.Add((Txt 'Campaign' 'Kampagne'), 220)
-[void]$scenarioList.Columns.Add((Txt 'Status' 'Stand'), 255)
+$scenarioList.Height = 330
+[void]$scenarioList.Columns.Add((Txt 'Scenario' 'Szenario'), 340)
+[void]$scenarioList.Columns.Add((Txt 'Campaign' 'Kampagne'), 170)
+[void]$scenarioList.Columns.Add((Txt 'Status' 'Stand'), 365)
 $pageAdventures.Controls.Add($scenarioList)
 
 $OwnScenarios = Join-Path $GameDocs 'Own Scenarios'
@@ -727,27 +727,42 @@ $buttonOriginal = New-Button (Txt 'Start original' 'Original starten') $buttons
 # The logbook: a small window next to the game with mission progress, statistics and milestones.
 $buttonLogbook = New-Button (Txt 'Open logbook' 'Logbuch öffnen') $buttons
 $buttonLogbook.Visible = (Test-Path -LiteralPath $Logbook)
-$buttonLogbook.Add_Click({ Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Logbook`"") })
+function Start-Logbook { Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Logbook`"") }
+$buttonLogbook.Add_Click({ Start-Logbook })
+# Open the logbook together with the game (remembered in settings.json; the logbook itself allows only one window).
+$checkLogbook = New-Object Windows.Forms.CheckBox
+$checkLogbook.Text = Txt 'Open the logbook with the game' 'Logbuch mit dem Spiel öffnen'
+$checkLogbook.AutoSize = $true
+$checkLogbook.Margin = New-Object Windows.Forms.Padding(8, 10, 3, 3)
+$checkLogbook.Checked = ($saved['LogbookWithGame'] -eq '1')
+$checkLogbook.Visible = (Test-Path -LiteralPath $Logbook)
+$buttons.Controls.Add($checkLogbook)
+function Start-LogbookIfWanted { if ($checkLogbook.Checked -and $checkLogbook.Visible) { Start-Logbook } }
 $form.AcceptButton = $buttonStart
 
 function Save-Choice {
     try {
         New-Item -ItemType Directory -Force -Path (Split-Path $SettingsFile) | Out-Null
-        Get-Selection | ConvertTo-Json | Set-Content -LiteralPath $SettingsFile -Encoding UTF8
+        $sel = Get-Selection
+        $sel['LogbookWithGame'] = if ($checkLogbook.Checked) { '1' } else { '0' }
+        $sel | ConvertTo-Json | Set-Content -LiteralPath $SettingsFile -Encoding UTF8
     }
     catch { }
 }
-# Starts the patcher (in its own window until the game has ended) and then the game.
+# Starts the patcher (in its own window until the game has ended; it closes by itself afterwards and stays open only on an
+# error) and then the game.
 function Start-WithPatcher($patcherArgs) {
-    $ps = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-File', "`"$Patcher`"") + @($patcherArgs)
+    $ps = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Patcher`"") + @($patcherArgs) + @('-PauseOnError')
     Start-Process powershell -ArgumentList $ps
     Start-Sleep -Seconds 3
     Start-Process $GameStart
+    Start-LogbookIfWanted
 }
 
 $buttonOriginal.Add_Click({
         Save-Choice
         Start-Process $GameStart
+        Start-LogbookIfWanted
         $form.Close()
     })
 $buttonStart.Add_Click({
@@ -758,7 +773,7 @@ $buttonStart.Add_Click({
 $buttonContinue.Add_Click({
         if (-not $saveList.SelectedItems.Count) { return }
         $e = $saveList.SelectedItems[0].Tag
-        if ($e.Kind -eq 'original') { Start-Process $GameStart }
+        if ($e.Kind -eq 'original') { Start-Process $GameStart; Start-LogbookIfWanted }
         elseif ($e.Kind -eq 'known') { Start-WithPatcher $e.Args }
         elseif ($e.Kind -eq 'size') {
             # Current options, but the map size of the savegame.
@@ -801,7 +816,8 @@ if ($TestClicks) {
     function Write-Step([string]$what) { $script:Started.Add("--- $what") }
     $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(-10000, -10000); $form.ShowInTaskbar = $false
     $form.Add_Shown({
-            Write-Step 'preset Relaxed, Play with extensions'; Invoke-Click $buttonRelaxed; Invoke-Click $buttonStart
+            Write-Step 'preset Relaxed, logbook with the game, Play with extensions'; $checkLogbook.Checked = $true; Invoke-Click $buttonRelaxed; Invoke-Click $buttonStart
+            $script:Started.Add('SETTINGS LogbookWithGame=' + (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).LogbookWithGame); $checkLogbook.Checked = $false
             Write-Step 'preset Tough test, Start original'; Invoke-Click $buttonTough; Invoke-Click $buttonOriginal
             Write-Step 'Open logbook'; Invoke-Click $buttonLogbook
             # As a player would: switch to the tab first (the list only reports a selection once it is shown).
