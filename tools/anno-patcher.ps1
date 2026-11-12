@@ -104,6 +104,39 @@
     Traders (-Traders)            More / Lots: 2 or 3 times as many free trader ships
                                   (original: 1 per 3 settlements, FUN_1400bc030), at most 24
                                   (the game has 30 trader slots).
+    Build cost (-BuildCost)       Factor 0 to 1 for the construction costs of all buildings: gold and the
+                                  materials tools, wood and bricks (haeuser.cod Money/Werkzeug/Holz/Ziegel,
+                                  building table +0x58 int, +0x50/+0x52/+0x54 16 bits x 32). 0 = free.
+                                  Materials are rounded to whole tons; with a factor above 0 everything
+                                  that cost something keeps at least 1 gold or 1 t. Cannons stay. Applies
+                                  to house upgrades and to the computer rivals as well. The 500 original
+                                  entries are checked with a checksum; marker 'BAUK' at RVA 0xE5BC0.
+    Upkeep (-Upkeep)              Factor 0 to 1 for the running costs of all buildings (haeuser.cod Kosten,
+                                  16 bits at +0x2C active and +0x2A paused). A town adds them up when a
+                                  building is built or a savegame is loaded; FUN_1400bc030 charges the sum
+                                  with the taxes. Ships and soldiers keep their costs. Marker 'UNTH' at
+                                  RVA 0xE5BC8.
+    Taxes (-Taxes)                Factor 1 to 3 for the tax income per resident (haeuser.cod Steuer of the
+                                  5 population groups, int at RVA 0x6BA030 + no. * 0x50, 7/8/11/12/13).
+                                  Read by FUN_1400bbdc0 (income) and the town window; the tax rate slider
+                                  works as before. Also for the computer rivals.
+    Radius (-Radius)              Factor 1 to 2 for the radius of trading post I-IV and market (building
+                                  area) and of the public buildings (chapel, church, cathedral, tavern,
+                                  doctor, bathhouse, theatre, school, university, fire brigade, gallows):
+                                  building table +0x20 (8 bits), 17 entries. At most 48 (circle buffer of
+                                  the AI at +0x1D94 holds 52 bytes). New buildings take the area; the
+                                  supply of the houses is computed all the time, also in savegames.
+    Fertility (-Fertility)        Everywhere: in new endless games every island with fertile land gets all
+                                  six crops (tobacco, spices, sugar cane, cotton, grapes, cocoa). In the
+                                  resource code cave the fertility amounts become 50 and SZENE +0x60 the
+                                  marker 'FERT'; a hook in FUN_1400d0ce0 (RVA 0xD0D56, code cave RVA
+                                  0xE5BA0) then ignores the climate of the crop. Endless templates with
+                                  additional islands only (not campaigns, not savegames).
+    Mines (-Mines)                Infinite: ore and gold deposits are never used up (FUN_1400b9ed0, the two
+                                  subtractions at RVA 0xBA429 and 0xBA495 become NOPs).
+    Disasters (-Disasters)        Off: no new fire, plague, drought or volcanic eruption (5 calls in
+                                  FUN_1400bc030 and FUN_14009e390 become NOPs). More: fire and plague
+                                  twice as likely, the drought check (Demanding/Hard only) twice as often.
 
   Single player only. Load savegames from the big world only with the tool active
   (the savegame does not store the size). This also applies to "Continue game"
@@ -163,6 +196,20 @@ param(
     [ValidateSet('Default', 'More', 'Lots')][string]$Natives = 'Default',
     # Free trader ships: Default, More (2 times), Lots (3 times), at most 24.
     [ValidateSet('Default', 'More', 'Lots')][string]$Traders = 'Default',
+    # Factor for the construction costs in gold, tools, wood and bricks (1 = normal, 0 = free).
+    [ValidateRange(0.0, 1.0)][double]$BuildCost = 1.0,
+    # Factor for the running costs of the buildings (1 = normal, 0 = none).
+    [ValidateRange(0.0, 1.0)][double]$Upkeep = 1.0,
+    # Factor for the tax income per resident (1 = normal).
+    [ValidateRange(1.0, 3.0)][double]$Taxes = 1.0,
+    # Factor for the radius of trading post, market and public buildings (1 = normal).
+    [ValidateRange(1.0, 2.0)][double]$Radius = 1.0,
+    # Fertility in the endless game: Default (as the template), Everywhere (all six crops on every island).
+    [ValidateSet('Default', 'Everywhere')][string]$Fertility = 'Default',
+    # Ore and gold deposits: Default (they run out), Infinite.
+    [ValidateSet('Default', 'Infinite')][string]$Mines = 'Default',
+    # Fire, plague, drought, volcano: Default, Off, More (fire and plague twice as likely).
+    [ValidateSet('Default', 'Off', 'More')][string]$Disasters = 'Default',
     # Game folder given by hand (otherwise taken from Ubisoft Connect).
     [string]$GamePath,
     # Only for tools\test-patcher.ps1: other process and load address, no backup.
@@ -176,7 +223,7 @@ $ErrorActionPreference = 'Stop'
 $UiGerman = if ($env:ANNO_EXTENSIONS_LANG) { $env:ANNO_EXTENSIONS_LANG -eq 'de' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'de' }
 function Txt([string]$en, [string]$de) { if ($UiGerman) { $de } else { $en } }
 # German names of the option values (the values themselves are English), for the German messages.
-$GermanValueNames = @{ Default = 'Standard'; Active = 'Aktiv'; Strong = 'Stark'; Off = 'Aus'; Normal = 'Normal'; Large = 'Gross'; Huge = 'Riesig'; More = 'Mehr'; Lots = 'Viele'; Hard = 'Schwer' }
+$GermanValueNames = @{ Default = 'Standard'; Active = 'Aktiv'; Strong = 'Stark'; Off = 'Aus'; Normal = 'Normal'; Large = 'Gross'; Huge = 'Riesig'; More = 'Mehr'; Lots = 'Viele'; Hard = 'Schwer'; Everywhere = 'Ueberall'; Infinite = 'Unendlich' }
 function Get-ValueName([string]$value) { if ($UiGerman) { $GermanValueNames[$value] } else { $value } }
 
 $GameFolder = 'C:\Program Files (x86)\Ubisoft\Ubisoft Game Launcher\games\Anno 1602 - History Edition'
@@ -258,7 +305,9 @@ foreach ($s in $Patches) { $s.Target = [byte[]]((Bytes $s.Original)[0..5] + $val
 # recognised by island count and position of the first island) and then copies the island
 # list computed by the tool into it. Unknown templates: positions are only stretched (x*Width/500,
 # y*Height/350). Savegames have no SZENE section and stay untouched.
-$CaveRva = 0xE5100; $TableRva = 0xE5200; $TableMax = 0xE5C00 - 0xE5200   # from 0xE5C00: resources, from 0xE5F80: pirates
+# The table needs at most 4 + 3 x 816 = 2452 bytes (three endless layouts); from 0xE5BA0: fertility code
+# cave and markers, from 0xE5C00: resources, from 0xE5F80: pirates.
+$CaveRva = 0xE5100; $TableRva = 0xE5200; $TableMax = 0xE5BA0 - 0xE5200
 $HookRva = 0xD0E29; $HookContinue = 0xD0E30
 # At most 50 islands (SZENE section, island table 0x14062DDC0 and grid FUN_14009ce30 have
 # 50 slots). Density: extra islands per area as in the template x 0.7 (until 2026-11-11: 0.6 and 48).
@@ -426,7 +475,27 @@ function Build-IslandCode([bool]$withResources = $false, [bool]$withBigMap = $fa
 # from NORDNAT/SUEDNAT. Each village takes one of the 75 settlement slots (FUN_14009a9f0, 0x140622DC0).
 $ResourceCaveRva = 0xE5C00; $ResourceCaveEnd = 0xE5E00   # from 0xE5E00: code caves for pirates and traders
 $ResourceOffsets = @(0x96, 0x9E, 0xA6, 0xAE, 0xB6, 0xBE, 0xC6, 0xCE, 0xD6, 0xDE, 0xE6, 0xEE, 0xF6, 0xFE, 0x106, 0x10E, 0x116)
-function Build-ResourceCode([int]$percent, [int]$villages = 0) {
+# Fertility everywhere: the 12 fertility entries from +0xB4 (house no. 16 bits, amount 16 bits, int) get the
+# amount 50 (where a house no. is set), SZENE +0x60 (most fertilities per island, template 2) the marker
+# 'FERT'. The loader passes +0x60 as the limit to FUN_1400d0ce0 (candidate islands for a crop); the hook
+# there skips the climate check of the crop when the limit is 'FERT'. All other calls (limit 1, 2, 3 or the
+# +0x60 of other scenarios) run unchanged.
+$FertMagic = 0x54524546; $FertAmount = 50   # 'FERT'
+$FertCaveRva = 0xE5BA0; $FertHookRva = 0xD0D56; $FertAcceptRva = 0xD0D8A; $FertJumpTableRva = 0xD0DC4
+$CostMarkerRva = 0xE5BC0; $UpkeepMarkerRva = 0xE5BC8   # markers of build cost and upkeep (8 bytes each, up to 0xE5BD0)
+$FertHookOrig = '48 63 C9 41 8B 94 8F C4 0D 0D 00 49 03 D7 FF E2'
+function Add-FertilityBlock($c) {
+    foreach ($x in 0x49, 0x8D, 0xB7, 0xB4, 0x00, 0x00, 0x00) { $c.Add($x) }                    # lea rsi,[r15+0xB4]
+    foreach ($x in 0xB9, 0x0C, 0x00, 0x00, 0x00) { $c.Add($x) }                                # mov ecx,12
+    foreach ($x in 0x66, 0x83, 0x3E, 0x00) { $c.Add($x) }                                      # loop: cmp word [rsi],0
+    foreach ($x in 0x74, 0x06) { $c.Add($x) }                                                  # je skip
+    foreach ($x in 0x66, 0xC7, 0x46, 0x02) { $c.Add($x) }; foreach ($x in [BitConverter]::GetBytes([uint16]$FertAmount)) { $c.Add($x) }   # mov word [rsi+2],50
+    foreach ($x in 0x48, 0x83, 0xC6, 0x08) { $c.Add($x) }                                      # skip: add rsi,8
+    foreach ($x in 0xFF, 0xC9) { $c.Add($x) }                                                  # dec ecx
+    foreach ($x in 0x75, 0xEC) { $c.Add($x) }                                                  # jnz loop
+    foreach ($x in 0x41, 0xC7, 0x47, 0x60) { $c.Add($x) }; foreach ($x in [BitConverter]::GetBytes([int32]$FertMagic)) { $c.Add($x) }   # mov dword [r15+0x60],'FERT'
+}
+function Build-ResourceCode([int]$percent, [int]$villages = 0, [bool]$fertility = $false) {
     $c = New-Object System.Collections.Generic.List[byte]
     $label = @{}; $fixups = New-Object System.Collections.Generic.List[object]
     $E = { param([byte[]]$b) foreach ($x in $b) { $c.Add($x) } }
@@ -436,6 +505,7 @@ function Build-ResourceCode([int]$percent, [int]$villages = 0) {
             & $E 0x41, 0xC7, 0x47, 0x40; & $E ([BitConverter]::GetBytes([int32]$villages))   # mov dword [r15+0x40],villages
             & $E 0x41, 0xC7, 0x47, 0x44; & $E ([BitConverter]::GetBytes([int32]$villages))   # mov dword [r15+0x44],villages
         }
+        if ($fertility) { Add-FertilityBlock $c }
         & $E 0xC3                                                                          # ret
         return , $c.ToArray()
     }
@@ -465,6 +535,7 @@ function Build-ResourceCode([int]$percent, [int]$villages = 0) {
         & $E 0x41, 0xC7, 0x47, 0x40; & $E ([BitConverter]::GetBytes([int32]$villages))   # mov dword [r15+0x40],villages
         & $E 0x41, 0xC7, 0x47, 0x44; & $E ([BitConverter]::GetBytes([int32]$villages))   # mov dword [r15+0x44],villages
     }
+    if ($fertility) { Add-FertilityBlock $c }                         # after the scaling: fertility amounts 50
     & $E 0xC3                                                         # ret
     $list = $c.Count
     foreach ($o in $ResourceOffsets) { & $E ([BitConverter]::GetBytes([uint16]$o)) }
@@ -479,6 +550,25 @@ function Build-ResourceCode([int]$percent, [int]$villages = 0) {
 }
 $ResourcePercent = @{ Normal = 0; More = 100; Lots = 200 }[$Resources]
 $Villages = @{ Default = 0; More = 4; Lots = 7 }[$Natives]   # per climate zone (template 2)
+$FertilityAll = $Fertility -eq 'Everywhere'
+# FUN_1400d0ce0(crop, class min, class max, limit, out): after the checks island present, flag +0x44 bit 2,
+# class, count +0x47 < limit, crop bit +0x5C not yet set and crop 0x2E-0x33, it branches through a jump table
+# (RVA 0xD0DC4) by crop to the climate check (+0x1C: 0x2E/0x30/0x32 only climate 0, 0x30 and 0x32 not
+# together, 0x2F/0x31/0x33 only climate 1). The hook replaces the dispatch (RVA 0xD0D56, 16 bytes,
+# r15 = load address) by a jump to this code cave: limit 'FERT' -> take the island (RVA 0xD0D8A),
+# otherwise the original dispatch.
+function Build-FertilityCode {
+    $c = New-Object System.Collections.Generic.List[byte]
+    foreach ($x in 0x41, 0x81, 0xF9) { $c.Add($x) }; foreach ($x in [BitConverter]::GetBytes([int32]$FertMagic)) { $c.Add($x) }   # cmp r9d,'FERT'
+    foreach ($x in 0x74, 0x10) { $c.Add($x) }                                                  # je accept
+    foreach ($x in 0x48, 0x63, 0xC9) { $c.Add($x) }                                            # movsxd rcx,ecx
+    foreach ($x in 0x41, 0x8B, 0x94, 0x8F) { $c.Add($x) }; foreach ($x in [BitConverter]::GetBytes([int32]$FertJumpTableRva)) { $c.Add($x) }   # mov edx,[r15+rcx*4+0xD0DC4]
+    foreach ($x in 0x49, 0x03, 0xD7) { $c.Add($x) }                                            # add rdx,r15
+    foreach ($x in 0xFF, 0xE2) { $c.Add($x) }                                                  # jmp rdx
+    $c.Add(0xE9); foreach ($x in (Rel32 $FertAcceptRva ($FertCaveRva + $c.Count + 4))) { $c.Add($x) }   # accept: jmp 0xD0D8A
+    if ($FertCaveRva + $c.Count -gt $CostMarkerRva) { throw (Txt 'Internal error: fertility code cave too long.' 'Interner Fehler: Fruchtbarkeits-Codestueck zu lang.') }
+    , $c.ToArray()
+}
 
 # Reads the island list (entries of 16 bytes) from the SZENE section of a template.
 function Read-Template([string]$path) {
@@ -613,7 +703,7 @@ function Build-IslandTable([int]$mapW, [int]$mapH, [bool]$stretchOnly, [string]$
 }
 
 if (-not $NoIslandSpread) {
-    $withResources = ($ResourcePercent -gt 0 -or $Villages -gt 0) -and -not $StretchOnly
+    $withResources = ($ResourcePercent -gt 0 -or $Villages -gt 0 -or $FertilityAll) -and -not $StretchOnly
     $withBigMap = -not $StretchOnly
     $IslandCode = Build-IslandCode $withResources $withBigMap
     if ($withBigMap) {
@@ -625,17 +715,28 @@ if (-not $NoIslandSpread) {
     # Order matters: first the table and the code caves, then the jump (rollback in reverse).
     $Patches += @{ Name = (Txt 'Island spread (table)       ' 'Inselverteilung (Tabelle)   '); Rva = $TableRva; Original = ((@('00') * $IslandTable.Length) -join ' '); Target = $IslandTable; MemoryOnly = $true }
     if ($withResources) {
-        $ResourceCode = Build-ResourceCode $ResourcePercent $Villages
+        $ResourceCode = Build-ResourceCode $ResourcePercent $Villages $FertilityAll
         $Patches += @{ Name = (Txt 'Resources (code cave)       ' 'Rohstoffe (Codestueck)      '); Rva = $ResourceCaveRva; Original = ((@('00') * $ResourceCode.Length) -join ' '); Target = $ResourceCode; MemoryOnly = $true }
         if ($ResourcePercent -gt 0) { Write-Host ((Txt 'Resources: {0} (ore, gold, fertility and treasures with the island count x {1} %, at most 1 per island)' 'Rohstoffe: {0} (Erz, Gold, Fruchtbarkeit und Schaetze mit der Inselzahl x {1} %, hoechstens 1 je Insel)') -f (Get-ValueName $Resources), $ResourcePercent) }
         if ($Villages -gt 0) { Write-Host ((Txt 'Natives: {0} ({1} villages per climate zone instead of 2)' 'Ureinwohner: {0} ({1} Doerfer je Klimazone statt 2)') -f (Get-ValueName $Natives), $Villages) }
+        if ($FertilityAll) {
+            # Order: first the code cave, then the jump into it.
+            $FertilityCode = Build-FertilityCode
+            $Patches += @{ Name = (Txt 'Fertility (code cave)       ' 'Fruchtbarkeit (Codestueck)  '); Rva = $FertCaveRva; Original = ((@('00') * $FertilityCode.Length) -join ' '); Target = $FertilityCode; MemoryOnly = $true }
+            $Patches += @{ Name = (Txt 'Fertility (jump)            ' 'Fruchtbarkeit (Sprung)      '); Rva = $FertHookRva; Original = $FertHookOrig; Target = [byte[]](@(0xE9) + (Rel32 $FertCaveRva ($FertHookRva + 5)) + @(0x90) * 11) }
+            Write-Host ((Txt 'Fertility: {0} (every island with fertile land grows all six crops in new endless games)' 'Fruchtbarkeit: {0} (jede Insel mit fruchtbarem Land traegt in neuen Endlosspielen alle sechs Pflanzen)') -f (Get-ValueName $Fertility))
+        }
     }
-    elseif ($ResourcePercent -gt 0 -or $Villages -gt 0) { Write-Host (Txt 'Resources/natives: only work with additional islands (not with -StretchOnly); NOT set.' 'Rohstoffe/Ureinwohner: wirken nur mit zusaetzlichen Inseln (nicht mit -StretchOnly); NICHT gesetzt.') -ForegroundColor Yellow }
+    else {
+        if ($ResourcePercent -gt 0 -or $Villages -gt 0) { Write-Host (Txt 'Resources/natives: only work with additional islands (not with -StretchOnly); NOT set.' 'Rohstoffe/Ureinwohner: wirken nur mit zusaetzlichen Inseln (nicht mit -StretchOnly); NICHT gesetzt.') -ForegroundColor Yellow }
+        if ($FertilityAll) { Write-Host (Txt 'Fertility: only works with additional islands (not with -StretchOnly); NOT set.' 'Fruchtbarkeit: wirkt nur mit zusaetzlichen Inseln (nicht mit -StretchOnly); NICHT gesetzt.') -ForegroundColor Yellow }
+    }
     if ($IslandSize -ne 'Normal') { Write-Host (Txt "Island size: $IslandSize" "Inselgroesse: $(Get-ValueName $IslandSize)") }
     $Patches += @{ Name = (Txt 'Island spread (code cave)   ' 'Inselverteilung (Codestueck)'); Rva = $CaveRva; Original = ((@('00') * $IslandCode.Length) -join ' '); Target = $IslandCode }
     $Patches += @{ Name = (Txt 'Island spread (jump)        ' 'Inselverteilung (Sprung)    '); Rva = $HookRva; Original = '4C 8D 1D D0 F1 F2 FF'; Target = $Hook }
     foreach ($a in ($script:IslandPlans.Keys | Sort-Object)) { Write-Host ((Txt 'Island plan layout {0}: {1} islands' 'Inselplan Anordnung {0}: {1} Inseln') -f $a, $script:IslandPlans[$a].Count) }
 }
+elseif ($FertilityAll) { Write-Host (Txt 'Fertility: only works with the island spread (not with -NoIslandSpread); NOT set.' 'Fruchtbarkeit: wirkt nur mit der Inselverteilung (nicht mit -NoIslandSpread); NICHT gesetzt.') -ForegroundColor Yellow }
 
 # --- Pirates -------------------------------------------------------------------------------------
 # Derivation: analysis\FINDINGS.md, section "Rivals and pirates".
@@ -774,6 +875,63 @@ if ($Turbo) {
     Write-Host (Txt "Turbo: F7 = ${TurboLevel}x" "Turbo: F7 = $TurboLevel-fach")
 }
 
+# --- Mines ---------------------------------------------------------------------------------------
+# FUN_1400b9ed0, case 3 (mine): the deposit (island +0x20 + i*8: ware, x, y, -, kind +4, amount +6 in
+# tons x 32) loses haeuser.cod "Rohmenge" (+0x26 of the mine) per work step and disappears below 1 t
+# (FUN_14009eab0). Two paths: kind 1 or more than 0xEFF (human and gold excepted below 0x500 for the AI,
+# gold never) -> RVA 0xBA495 "sub r8w,[rdi+0x26]"; otherwise (only when flag 0x1405ec188 bit 3 is clear;
+# the endless templates set it) -> RVA 0xBA429 "sub word [rdx+6],ax". Both become NOPs of the same length,
+# the amount stays and the check "< 1 t" never fires.
+$MineSites = @(
+    @{ Name = (Txt 'Mines infinite (path 1)' 'Minen unendlich (Weg 1)'); Rva = 0xBA495; Original = '66 44 2B 47 26'; Target = '0F 1F 44 00 00' }
+    @{ Name = (Txt 'Mines infinite (path 2)' 'Minen unendlich (Weg 2)'); Rva = 0xBA429; Original = '66 29 42 06'; Target = '0F 1F 40 00' }
+)
+if ($Mines -eq 'Infinite') {
+    foreach ($m in $MineSites) { $Patches += @{ Name = $m.Name.PadRight(28); Rva = $m.Rva; Original = $m.Original; Target = (Bytes $m.Target) } }
+    Write-Host ((Txt 'Mines: {0} (ore and gold deposits are never used up)' 'Minen: {0} (Erz- und Goldvorkommen werden nie aufgebraucht)') -f (Get-ValueName $Mines))
+}
+
+# --- Disasters -----------------------------------------------------------------------------------
+# FUN_1400bc030 (economy tick per town): plague FUN_1400b7360 (towns from 200 citizens: rand % 400/250/180
+# <= 12; doctor and bathhouse protect), fire by a figure FUN_1400b71f0 (from 300 merchants: rand %
+# 400/250/180 <= 150; the gallows protect) and fire in small houses FUN_1400b7040 (rand % 100/150/200 <= 30,
+# rand % 100/180/250 <= 15, rand & 0xFF <= 7). FUN_14009e390 (natural events per island): drought
+# FUN_14009e320 (Demanding/Hard only, checked every (27-34) x 600 clock steps) and volcano FUN_1400715b0.
+# Off: the five calls become 5-byte NOPs (eax is not used afterwards). More: plague and the two fire
+# chances doubled (limit +1 doubled, or the divisor halved where the limit sits in eax and is reused),
+# drought checks every (13-20) x 600 clock steps.
+$DisasterOffSites = @(
+    @{ Name = (Txt 'Disasters off (plague)' 'Katastrophen aus (Pest)'); Rva = 0xBCAC3; Original = 'E8 98 A8 FF FF' }
+    @{ Name = (Txt 'Disasters off (fire 1)' 'Katastrophen aus (Feuer 1)'); Rva = 0xBCB07; Original = 'E8 E4 A6 FF FF' }
+    @{ Name = (Txt 'Disasters off (fire 2)' 'Katastrophen aus (Feuer 2)'); Rva = 0xBCBBB; Original = 'E8 80 A4 FF FF' }
+    @{ Name = (Txt 'Disasters off (drought)' 'Katastrophen aus (Duerre)'); Rva = 0x9E860; Original = 'E8 BB FA FF FF' }
+    @{ Name = (Txt 'Disasters off (volcano)' 'Katastrophen aus (Vulkan)'); Rva = 0x9E93E; Original = 'E8 6D 2C FD FF' }
+)
+$DisasterMoreSites = @(
+    @{ Rva = 0xBCABB; Original = '83 FA 0C'; Target = '83 FA 19' }          # plague: rand % n <= 12 -> 25
+    @{ Rva = 0xBCAD8; Original = 'BB B4 00 00 00'; Target = 'BB 5A 00 00 00' }   # fire 1: divisor 180 -> 90
+    @{ Rva = 0xBCAE5; Original = 'BB 90 01 00 00'; Target = 'BB C8 00 00 00' }   #         400 -> 200
+    @{ Rva = 0xBCAEA; Original = 'B8 FA 00 00 00'; Target = 'B8 7D 00 00 00' }   #         250 -> 125
+    @{ Rva = 0xBCB2E; Original = '83 FA 1E'; Target = '83 FA 3D' }          # fire 2: <= 30 -> 61
+    @{ Rva = 0xBCB4A; Original = '83 FA 1E'; Target = '83 FA 3D' }
+    @{ Rva = 0xBCB76; Original = '83 FA 0F'; Target = '83 FA 1F' }          #         <= 15 -> 31
+    @{ Rva = 0xBCB94; Original = '83 FA 0F'; Target = '83 FA 1F' }
+    @{ Rva = 0xBCBB3; Original = '83 F8 07'; Target = '83 F8 0F' }          #         rand & 0xFF <= 7 -> 15
+    @{ Rva = 0x9E875; Original = '83 C0 1B'; Target = '83 C0 0D' }          # drought: next check (27-34) -> (13-20) x 600
+)
+# Each mode also checks the sites of the other mode for their original bytes (target = original), so a
+# second run with the other mode in the same game process aborts instead of mixing both.
+if ($Disasters -eq 'Off') {
+    foreach ($s in $DisasterOffSites) { $Patches += @{ Name = $s.Name.PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes '0F 1F 44 00 00') } }
+    foreach ($s in $DisasterMoreSites) { $Patches += @{ Name = (Txt 'Disasters (check)' 'Katastrophen (Kontrolle)').PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes $s.Original) } }
+    Write-Host ((Txt 'Disasters: {0} (no new fire, plague, drought or volcanic eruption)' 'Katastrophen: {0} (kein neues Feuer, keine Pest, Duerre oder Vulkanausbruch)') -f (Get-ValueName $Disasters))
+}
+elseif ($Disasters -eq 'More') {
+    foreach ($s in $DisasterMoreSites) { $Patches += @{ Name = (Txt 'Disasters more' 'Katastrophen mehr').PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes $s.Target) } }
+    foreach ($s in $DisasterOffSites) { $Patches += @{ Name = (Txt 'Disasters (check)' 'Katastrophen (Kontrolle)').PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes $s.Original) } }
+    Write-Host ((Txt 'Disasters: {0} (fire and plague twice as likely, droughts on Demanding/Hard twice as often)' 'Katastrophen: {0} (Feuer und Pest doppelt so wahrscheinlich, Duerre bei Fordernd/Schwer doppelt so oft)') -f (Get-ValueName $Disasters))
+}
+
 # --- Residents, cargo, production ----------------------------------------------------------------
 # Residents: haeuser.cod "Maxwohn" of the population groups 0-4 (BGRUPPE), stored by the parser x 64
 # as int at RVA 0x6BA02C + no. * 0x50. Houses store their residents x 64 as 16 bits (house +6);
@@ -819,6 +977,43 @@ if ($ShipSpeed -ne 1.0) { Write-Host ((Txt 'Ship speed: x{0:0.##}' 'Schiffstempo
 $BuildingRva = 0x6BA1C0; $BuildingSize = 0x90; $StorageOffset = 0x30
 $StorageOrig = @{ 270 = 960; 271 = 1600; 272 = 2400; 273 = 3200; 401 = 320; 467 = 320; 468 = 320 }
 if ($Storage -ne 1) { Write-Host ((Txt 'Storage: x{0} (trading post I {1} t instead of 30 t)' 'Lager: x{0} (Kontor I {1} t statt 30 t)') -f $Storage, (30 * $Storage)) }
+
+# --- Build cost, upkeep, taxes, radius -----------------------------------------------------------
+# Derivation: parser FUN_140090660 (haeuser.cod), building table RVA 0x6BA1C0 + no. * 0x90:
+#   HAUS_BAUKOST: Werkzeug +0x50, Holz +0x52, Ziegel +0x54, Kanon +0x56 (16 bits, tons x 32), Money +0x58 (int).
+#     Read by the building site check FUN_14000ef50 (stock >= cost, gold check only when the cost is not 0),
+#     paid in FUN_140010390 / FUN_14000ef50, house upgrades FUN_1400b7c60, AI FUN_14002a300/FUN_14002a360.
+#   HAUS_PRODTYP: Kosten +0x2C (active) and +0x2A (paused, "_SLP"), 16 bits; Radius +0x20 (8 bits).
+#   BGRUPPE (RVA 0x6BA020 + no. * 0x50): Steuer = (int)(value x 5.333) at +0x10 (RVA 0x6BA030).
+# Build cost and upkeep touch hundreds of values: the fields of all 500 entries are checked against a
+# SHA-256 checksum of the original values (table order, field order as listed), then scaled once per game
+# process (marker = tag + factor x 100, like production). Gold and upkeep: round(v x factor), at least 1;
+# materials in whole tons, at least 1 t; factor 0: everything 0. Values that are 0 stay 0.
+$CostFields = @(@{ Offset = 0x50; Bytes = 2; Tons = $true }, @{ Offset = 0x52; Bytes = 2; Tons = $true }, @{ Offset = 0x54; Bytes = 2; Tons = $true }, @{ Offset = 0x58; Bytes = 4; Tons = $false })
+$CostHash = '01bbc1ab830c7fafbb22dec388e7152d78746d95217c70d174f4be8f7a604e6d'
+$UpkeepFields = @(@{ Offset = 0x2A; Bytes = 2; Tons = $false }, @{ Offset = 0x2C; Bytes = 2; Tons = $false })
+$UpkeepHash = 'd8b34943002b07efc753a4a6f8720dfe34b4596c441d4b45749c6ba468f09f8f'
+function Get-ScaledValue([long]$v, [double]$factor, [bool]$tons) {
+    if ($v -eq 0 -or $factor -eq 0) { return 0 }
+    if ($tons) { return 32 * [math]::Max(1, [long][math]::Round($v / 32 * $factor, [MidpointRounding]::AwayFromZero)) }
+    [math]::Max(1, [long][math]::Round($v * $factor, [MidpointRounding]::AwayFromZero))
+}
+if ($BuildCost -ne 1.0) { Write-Host ((Txt 'Build cost: x{0:0.##} (trading post I {1} gold instead of 100)' 'Baukosten: x{0:0.##} (Kontor I {1} Gold statt 100)') -f $BuildCost, (Get-ScaledValue 100 $BuildCost $false)) }
+if ($Upkeep -ne 1.0) { Write-Host ((Txt 'Upkeep: x{0:0.##} (trading post I {1} instead of 15)' 'Betriebskosten: x{0:0.##} (Kontor I {1} statt 15)') -f $Upkeep, (Get-ScaledValue 15 $Upkeep $false)) }
+# Taxes: income of a town = sum over the groups of residents x Steuer x 6 / 32 x tax rate / 128 (FUN_1400bbdc0).
+$TaxRva = 0x6BA030; $TaxOrig = @(7, 8, 11, 12, 13)
+if ($Taxes -ne 1.0) { Write-Host ((Txt 'Taxes: x{0:0.##} (income per resident)' 'Steuern: x{0:0.##} (Einnahmen je Einwohner)') -f $Taxes) }
+# Radius: territory of trading post (PRODTYP 8, at least 8) and market (7) in FUN_140095560 -> FUN_14009d730
+# (circle from the table 0x1405ec300, 128 radii, clipped at the island border, only free land changes owner);
+# supply of the houses by the public buildings in FUN_1400bea30 (also through the circle table). The AI
+# copies the circle of a radius into its 0xA0-byte task block (+0x1D94, room for 52 bytes, FUN_140007c60),
+# hence at most 48. Not changed: military, production buildings, natives.
+# No. 270-273 trading post I-IV, 461 cathedral, 462 chapel, 463 church, 464 tavern, 465 theatre, 466 bathhouse,
+# 467/468 market, 469 doctor, 470 university, 471 school, 472 fire brigade, 474 gallows.
+$RadiusOffset = 0x20; $RadiusMax = 48
+$RadiusOrig = @{ 270 = 16; 271 = 16; 272 = 16; 273 = 16; 461 = 24; 462 = 8; 463 = 21; 464 = 12; 465 = 20; 466 = 20; 467 = 16; 468 = 16; 469 = 16; 470 = 15; 471 = 12; 472 = 15; 474 = 16 }
+function Get-ScaledRadius([int]$r, [double]$factor) { [math]::Min($RadiusMax, [int][math]::Round($r * $factor, [MidpointRounding]::AwayFromZero)) }
+if ($Radius -ne 1.0) { Write-Host ((Txt 'Radius: x{0:0.##} (trading post and market {1} instead of 16)' 'Radius: x{0:0.##} (Kontor und Markt {1} statt 16)') -f $Radius, (Get-ScaledRadius 16 $Radius)) }
 foreach ($s in $Patches) { $s.Size = (Bytes $s.Original).Length }
 function Format-Patch($s, [byte[]]$b) {
     if ($s.Kind) { Format-Value $s.Kind $b[6..9] } else { Txt "set ($($b.Length) bytes)" "gesetzt ($($b.Length) Bytes)" }
@@ -841,6 +1036,39 @@ Write-Host (Txt "exe checked: version matches, all $($Patches.Count) sites found
 if ($CheckOnly) { return }
 
 # --- 2. Back up the savegames --------------------------------------------------------------------
+# Options of this run as an argument list, for saves.json: everything that changes the game, always with the map size;
+# numbers with a dot (independent of the Windows language).
+function Get-SessionArgs($bound) {
+    $list = New-Object System.Collections.Generic.List[string]
+    $list.AddRange([string[]]@('-Width', [string]$Width, '-Height', [string]$Height))
+    foreach ($k in $bound.Keys) {
+        if ($k -in 'Width', 'Height', 'CheckOnly', 'WaitMinutes', 'GameAlreadyRunning', 'GamePath', 'NoLastgameProtection', 'TestProcessId', 'TestBase') { continue }
+        $v = $bound[$k]
+        if ($v -is [System.Management.Automation.SwitchParameter]) { if ($v.IsPresent) { $list.Add("-$k") }; continue }
+        $list.Add("-$k")
+        $list.Add([string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0}', $v))
+    }
+    , $list.ToArray()
+}
+# Notes every savegame written since $since with the options in $file (JSON array, at most 500 entries).
+# Returns the number of savegames noted.
+function Save-SessionRecord([string]$saveFolder, [datetime]$since, [string[]]$sessionArgs, [string]$file) {
+    if (-not (Test-Path -LiteralPath $saveFolder)) { return 0 }
+    $written = @(Get-ChildItem -LiteralPath $saveFolder -Filter '*.gam' -File | Where-Object { $_.LastWriteTime -gt $since })
+    if (-not $written.Count) { return 0 }
+    $all = @()
+    if (Test-Path -LiteralPath $file) { $all = @(Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json | ForEach-Object { $_ }) }
+    foreach ($f in $written) {
+        $time = $f.LastWriteTime.ToString('s')
+        # Same file version already noted (e.g. the tool ran twice for one game): replace that entry.
+        $all = @($all | Where-Object { -not ($_.File -eq $f.Name -and $_.Written -eq $time) })
+        $all += [pscustomobject]@{ File = $f.Name; Written = $time; Width = $Width; Height = $Height; Args = $sessionArgs }
+    }
+    $all = @($all | Select-Object -Last 500)
+    New-Item -ItemType Directory -Force -Path (Split-Path $file) | Out-Null
+    ConvertTo-Json -InputObject $all -Depth 4 | Set-Content -LiteralPath $file -Encoding UTF8
+    $written.Count
+}
 $toolStart = Get-Date
 $saves = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Anno 1602 History Edition\Savegame'
 # Content of a folder as text: relative path, size and modification time of every file.
@@ -920,7 +1148,8 @@ function Test-Running {
 # $null = the process has exited.
 function Read-Number($e) {
     $b = Read-Mem $e.Rva $e.Bytes
-    if ($e.Bytes -eq 2) { [int][BitConverter]::ToUInt16($b, 0) } else { [BitConverter]::ToInt32($b, 0) }
+    if ($e.Bytes -eq 1) { [int]$b[0] }
+    elseif ($e.Bytes -eq 2) { [int][BitConverter]::ToUInt16($b, 0) } else { [BitConverter]::ToInt32($b, 0) }
 }
 function Set-TableValues([string]$what, $entries) {
     while ($true) {
@@ -939,7 +1168,7 @@ function Set-TableValues([string]$what, $entries) {
         Start-Sleep -Milliseconds 100
     }
     foreach ($e in $entries) {
-        $d = if ($e.Bytes -eq 2) { [BitConverter]::GetBytes([uint16]$e.Target) } else { [BitConverter]::GetBytes([int32]$e.Target) }
+        $d = if ($e.Bytes -eq 1) { [byte[]]@([byte]$e.Target) } elseif ($e.Bytes -eq 2) { [BitConverter]::GetBytes([uint16]$e.Target) } else { [BitConverter]::GetBytes([int32]$e.Target) }
         Write-Mem $e.Rva $d $false
     }
     foreach ($e in $entries) { if ((Read-Number $e) -ne $e.Target) { throw ((Txt 'Check of {0} failed (RVA 0x{1:X}).' 'Kontrolle {0} fehlgeschlagen (RVA 0x{1:X}).') -f $what, $e.Rva) } }
@@ -981,6 +1210,64 @@ function Set-Production([double]$factor) {
     Write-Mem $ProdMarkerRva $marker $true
     if ((Hex (Read-Mem $ProdMarkerRva 8)) -ne (Hex $marker)) { throw (Txt 'Check of the production marker failed.' 'Kontrolle der Produktions-Marke fehlgeschlagen.') }
     Write-Host ((Txt 'Production x{0:0.##}: {1} work intervals shortened.' 'Produktion x{0:0.##}: {1} Arbeitsintervalle verkuerzt.') -f $factor, $n) -ForegroundColor Green
+    $true
+}
+
+# Fields of all 500 building entries in table order (for the checksum of build cost and upkeep).
+function Get-FieldBytes([byte[]]$tab, $fields) {
+    $l = New-Object System.Collections.Generic.List[byte]
+    for ($i = 0; $i -lt $BuildingCount; $i++) { foreach ($f in $fields) { for ($k = 0; $k -lt $f.Bytes; $k++) { $l.Add($tab[$i * $BuildingSize + $f.Offset + $k]) } } }
+    , $l.ToArray()
+}
+function Get-Sha256Hex([byte[]]$b) { (([Security.Cryptography.SHA256]::Create().ComputeHash($b)) | ForEach-Object { '{0:x2}' -f $_ }) -join '' }
+function Get-FieldValue([byte[]]$tab, [int]$off, [int]$bytes) { if ($bytes -eq 2) { [long][BitConverter]::ToUInt16($tab, $off) } else { [long][BitConverter]::ToInt32($tab, $off) } }
+function Get-FieldData([long]$v, [int]$bytes) { if ($bytes -eq 2) { [BitConverter]::GetBytes([uint16]$v) } else { [BitConverter]::GetBytes([int32]$v) } }
+
+# Build cost / upkeep: scale the fields of all building entries once per game process. $tag: 4 letters of
+# the marker. Returns $true set, $false not set, $null = the process has exited.
+function Set-BuildingFields([string]$what, $fields, [string]$hash, [long]$markerRva, [string]$tag, [double]$factor) {
+    $signal = $BuildingRva + 270 * $BuildingSize + $StorageOffset   # storage of trading post I: haeuser.cod has been read
+    while ([BitConverter]::ToUInt16((Read-Mem $signal 2), 0) -eq 0) {
+        if (-not (Test-Running)) { return $null }
+        if ((Get-Date) -gt $script:deadline) { Write-Host ((Txt '{0}: building values not loaded yet; NOT set.' '{0}: Gebaeudewerte noch nicht geladen; NICHT gesetzt.') -f $what) -ForegroundColor Yellow; return $false }
+        Start-Sleep -Milliseconds 100
+    }
+    $marker = [byte[]]([Text.Encoding]::ASCII.GetBytes($tag) + [BitConverter]::GetBytes([int32][math]::Round($factor * 100)))
+    $actual = Hex (Read-Mem $markerRva 8)
+    if ($actual -eq (Hex $marker)) { Write-Host ((Txt '{0} x{1:0.##}: already set in this game process.' '{0} x{1:0.##}: in diesem Spielprozess schon gesetzt.') -f $what, $factor) -ForegroundColor Green; return $true }
+    if ($actual -ne (Hex ([byte[]](0, 0, 0, 0, 0, 0, 0, 0)))) {
+        Write-Host ((Txt '{0}: a different factor is already set in the game ({1}); NOT changed. Restart the game for a different factor.' '{0}: im Spiel ist schon ein anderer Faktor gesetzt ({1}); NICHT geaendert. Fuer einen anderen Faktor das Spiel neu starten.') -f $what, $actual) -ForegroundColor Yellow
+        return $false
+    }
+    # Only read once the table no longer changes (the parser might still be running).
+    $length = $BuildingCount * $BuildingSize
+    $tab = Read-Mem $BuildingRva $length
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        Start-Sleep -Milliseconds 300
+        $new = Read-Mem $BuildingRva $length
+        if ([BitConverter]::ToString($new) -eq [BitConverter]::ToString($tab)) { break }
+        $tab = $new
+    }
+    $sum = Get-Sha256Hex (Get-FieldBytes $tab $fields)
+    if ($sum -ne $hash) {
+        Write-Host ((Txt '{0}: unexpected values in the building table (checksum {1}); NOT set (the rest is active).' '{0}: unerwartete Werte in der Gebaeudetabelle (Pruefsumme {1}); NICHT gesetzt (Rest ist aktiv).') -f $what, $sum.Substring(0, 16)) -ForegroundColor Yellow
+        return $false
+    }
+    $changes = New-Object System.Collections.Generic.List[object]
+    for ($i = 0; $i -lt $BuildingCount; $i++) {
+        foreach ($f in $fields) {
+            $off = $i * $BuildingSize + $f.Offset
+            $v = Get-FieldValue $tab $off $f.Bytes
+            $t = Get-ScaledValue $v $factor $f.Tons
+            if ($t -ne $v) { $changes.Add(@{ Off = $off; Bytes = $f.Bytes; Target = $t }) }
+        }
+    }
+    foreach ($c in $changes) { Write-Mem ($BuildingRva + $c.Off) (Get-FieldData $c.Target $c.Bytes) $false }
+    $tab = Read-Mem $BuildingRva $length
+    foreach ($c in $changes) { if ((Get-FieldValue $tab $c.Off $c.Bytes) -ne $c.Target) { throw ((Txt 'Check of {0} failed (RVA 0x{1:X}).' 'Kontrolle {0} fehlgeschlagen (RVA 0x{1:X}).') -f $what, ($BuildingRva + $c.Off)) } }
+    Write-Mem $markerRva $marker $true
+    if ((Hex (Read-Mem $markerRva 8)) -ne (Hex $marker)) { throw ((Txt 'Check of the {0} marker failed.' 'Kontrolle der Marke {0} fehlgeschlagen.') -f $what) }
+    Write-Host ((Txt '{0} x{1:0.##}: {2} values changed.' '{0} x{1:0.##}: {2} Werte geaendert.') -f $what, $factor, $changes.Count) -ForegroundColor Green
     $true
 }
 
@@ -1121,6 +1408,33 @@ function Invoke-Patch($proc) {
         $r = Set-Production $Production
         if ($null -eq $r) { return $false }
     }
+
+    # --- Build cost, upkeep, taxes, radius ---------------------------------------------------------
+    if ($BuildCost -ne 1.0) {
+        $r = Set-BuildingFields (Txt 'Build cost' 'Baukosten') $CostFields $CostHash $CostMarkerRva 'BAUK' $BuildCost
+        if ($null -eq $r) { return $false }
+        if ($r) {
+            $k = $BuildingRva + 270 * $BuildingSize
+            Write-Host ((Txt '  trading post I now: {0} gold, {1} t tools, {2} t wood (originally 100, 3, 6).' '  Kontor I jetzt: {0} Gold, {1} t Werkzeug, {2} t Holz (original 100, 3, 6).') -f [BitConverter]::ToInt32((Read-Mem ($k + 0x58) 4), 0), ([BitConverter]::ToUInt16((Read-Mem ($k + 0x50) 2), 0) / 32), ([BitConverter]::ToUInt16((Read-Mem ($k + 0x52) 2), 0) / 32)) -ForegroundColor Green
+        }
+    }
+    if ($Upkeep -ne 1.0) {
+        $r = Set-BuildingFields (Txt 'Upkeep' 'Betriebskosten') $UpkeepFields $UpkeepHash $UpkeepMarkerRva 'UNTH' $Upkeep
+        if ($null -eq $r) { return $false }
+        if ($r) { Write-Host ((Txt '  trading post I now: {0} (originally 15), church {1} (originally 50).' '  Kontor I jetzt: {0} (original 15), Kirche {1} (original 50).') -f [BitConverter]::ToUInt16((Read-Mem ($BuildingRva + 270 * $BuildingSize + 0x2C) 2), 0), [BitConverter]::ToUInt16((Read-Mem ($BuildingRva + 463 * $BuildingSize + 0x2C) 2), 0)) -ForegroundColor Green }
+    }
+    if ($Taxes -ne 1.0) {
+        $e = foreach ($nr in 0..4) { @{ Rva = $TaxRva + $nr * $ResidentSize; Orig = $TaxOrig[$nr]; Target = [int][math]::Round($TaxOrig[$nr] * $Taxes, [MidpointRounding]::AwayFromZero); Bytes = 4 } }
+        $r = Set-TableValues (Txt 'Taxes' 'Steuern') $e
+        if ($null -eq $r) { return $false }
+        if ($r) { Write-Host ((Txt 'Taxes x{0:0.##}: {1} per resident group instead of 7/8/11/12/13 (5 values set).' 'Steuern x{0:0.##}: {1} je Bevoelkerungsgruppe statt 7/8/11/12/13 (5 Werte gesetzt).') -f $Taxes, (($e | ForEach-Object { $_.Target }) -join '/')) -ForegroundColor Green }
+    }
+    if ($Radius -ne 1.0) {
+        $e = foreach ($nr in ($RadiusOrig.Keys | Sort-Object)) { @{ Rva = $BuildingRva + $nr * $BuildingSize + $RadiusOffset; Orig = $RadiusOrig[$nr]; Target = (Get-ScaledRadius $RadiusOrig[$nr] $Radius); Bytes = 1 } }
+        $r = Set-TableValues (Txt 'Radius' 'Radius') $e
+        if ($null -eq $r) { return $false }
+        if ($r) { Write-Host ((Txt 'Radius x{0:0.##}: trading post and market {1}, church {2}, doctor {3} ({4} values set).' 'Radius x{0:0.##}: Kontor und Markt {1}, Kirche {2}, Arzt {3} ({4} Werte gesetzt).') -f $Radius, (Get-ScaledRadius 16 $Radius), (Get-ScaledRadius 21 $Radius), (Get-ScaledRadius 16 $Radius), @($e).Count) -ForegroundColor Green }
+    }
     $true
 }
 
@@ -1191,4 +1505,10 @@ if ($TestProcessId -eq 0 -and -not $NoLastgameProtection) {
         Write-Host (Txt '"Continue game" thus loads no big world without the tool. To play on: start the tool, then load this savegame.' '"Spiel fortsetzen" laedt so ohne Werkzeug keine grosse Welt. Weiterspielen: Werkzeug starten, dann diesen Spielstand laden.')
     }
     else { Write-Host (Txt 'Game exited; lastgame.gam was not written in this session.' 'Spiel beendet; lastgame.gam wurde in dieser Sitzung nicht geschrieben.') }
+    # Remember the options of every savegame written in this session (launcher tab "Continue").
+    try {
+        $n = Save-SessionRecord $saves $toolStart (Get-SessionArgs $PSBoundParameters) (Join-Path $env:APPDATA 'Anno1602-Extensions\saves.json')
+        if ($n) { Write-Host ((Txt 'Options noted for {0} savegame(s) - the launcher tab "Continue" starts them with the same settings.' 'Optionen fuer {0} Spielstand/Spielstaende gemerkt - die Registerkarte "Weiterspielen" startet sie mit denselben Einstellungen.') -f $n) -ForegroundColor Green }
+    }
+    catch { Write-Host ((Txt 'Could not note the options of the savegames: {0}' 'Optionen der Spielstaende konnten nicht gemerkt werden: {0}') -f $_.Exception.Message) -ForegroundColor Yellow }
 }

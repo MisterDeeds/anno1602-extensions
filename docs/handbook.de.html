@@ -72,6 +72,9 @@ td:first-child { font-weight: 600; white-space: nowrap; }
 .chapter .no { font-family: var(--f-title); font-size: 2rem; color: var(--brass); line-height: 1; }
 .chapter .content { display: grid; gap: 6px; min-width: 0; }
 .chapter .goal { color: var(--ink-2); }
+.chapter .story { font-style: italic; }
+.chapter .hint { font-size: 0.92rem; color: var(--ink-2); border-left: 2px solid var(--brass); padding-left: 10px; }
+.chapter .hint b { color: var(--brass); font-weight: 700; margin-right: 4px; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font-size: 0.78rem; font-weight: 600; padding: 1px 8px; border: 1px solid var(--sea); color: var(--sea); border-radius: 999px; white-space: nowrap; }
 .tag.danger { border-color: var(--warn); color: var(--warn); }
@@ -100,16 +103,17 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
   <header class="sheet masthead">
     <div class="topline"><span class="course">Logbuch · Stand 12. November 2026</span><a class="lang-link" href="handbook.html" hreflang="en" lang="en">English</a></div>
     <h1>Anno 1602 Erweiterungen</h1>
-    <p class="lead">Grössere Welten, stärkere Gegner, mehr Leben auf See und zwei Kampagnen mit Geschichte. Alles läuft im Arbeitsspeicher, keine Spieldatei wird verändert.</p>
+    <p class="lead">Grössere Welten, stärkere Gegner, günstigeres Bauen, mehr Leben auf See, drei Kampagnen mit Geschichte, Zufallsabenteuer und ein Logbuch neben dem Spiel. Alles läuft im Arbeitsspeicher, keine Spieldatei wird verändert.</p>
   </header>
 
   <section class="sheet section" aria-labelledby="start">
     <h2 id="start">In See stechen</h2>
     <ol class="steps">
       <li><span>Auf dem Desktop <strong>„Anno 1602 – Erweiterungen“</strong> öffnen.</span></li>
-      <li><span>Optionen wählen oder einen Knopf nehmen: <strong>Alles gross</strong> (maximal), <strong>Für Kampagnen</strong> (Kampagnen wie vorgesehen) oder <strong>Alles auf Standard</strong>.</span></li>
+      <li><span>Auf der Registerkarte <strong>Neues Spiel</strong> Optionen wählen oder eine Vorlage nehmen: <strong>Alles gross</strong> (maximal), <strong>Für Kampagnen</strong> (Kampagnen wie vorgesehen), <strong>Gemütlich</strong> (in Ruhe bauen), <strong>Harte Probe</strong> (Gegner und Piraten in Höchstform) oder <strong>Alles auf Standard</strong>.</span></li>
       <li><span><strong>Mit Erweiterungen spielen</strong>. Im Spiel <em>Einzelspieler → Neues Spiel</em>: oben das Endlosspiel, ganz unten unter <em>Eigene Szenarien</em> die Kampagnen.</span></li>
       <li><span>Mit <kbd>F7</kbd> auf bis zu 16-fache Geschwindigkeit. Nach Angriffsmeldungen schaltet das Spiel selbst zurück, dann F7 erneut drücken.</span></li>
+      <li><span>Später weiterspielen: Registerkarte <strong>Weiterspielen</strong>, Spielstand auswählen, <strong>Mit diesen Einstellungen spielen</strong>, dann im Spiel <em>Spiel laden</em>. Der Spielstand wird mit genau den Optionen geladen, mit denen er entstanden ist.</span></li>
     </ol>
   </section>
 
@@ -124,16 +128,23 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
           <tr><td>Inselgrösse</td><td>Grosse oder fast nur riesige Inseln</td><td>Normal · Gross · Riesig</td></tr>
           <tr><td>Rohstoffe</td><td>Erz, Gold, Fruchtbarkeit, Schätze mitwachsend</td><td>Vorlage · Mehr · Viele</td></tr>
           <tr><td>Ureinwohner</td><td>Dörfer je Klimazone (Nord + Süd)</td><td>2+2 · 4+4 · 7+7</td></tr>
+          <tr><td>Fruchtbarkeit</td><td>Jede Pflanze auf jeder Insel (neue Endlosspiele, nicht die Szenarien)</td><td>Wie Vorlage · Jede Pflanze auf jeder Insel</td></tr>
           <tr><td>Freie Händler</td><td>Händlerschiffe auf der Karte</td><td>× 1 · × 2 · × 3, höchstens 24</td></tr>
           <tr><td>Computergegner</td><td>Rüsten und bauen wie auf „Schwer“</td><td>Wie Schwierigkeit · Immer Schwer</td></tr>
           <tr><td>Gold der Gegner</td><td>Startgold der drei Rivalen</td><td>bis 100 000</td></tr>
           <tr><td>Piraten</td><td>Greifen an, mit voller Kanonenzahl oder gar nicht</td><td>Wie Schwierigkeit · Aktiv · Stark · Aus</td></tr>
           <tr><td>Piratenflotte</td><td>Grösse der Piratenflotte</td><td>bis 4 · bis 8 · bis 12 Schiffe</td></tr>
+          <tr><td>Katastrophen</td><td>Feuer, Pest, Dürre und Vulkan</td><td>Normal · Keine · Häufiger</td></tr>
           <tr><td>Dein Startgold</td><td>Gold bei neuen Spielen</td><td>bis 100 000</td></tr>
           <tr><td>Einwohner je Haus</td><td>Grössere Städte</td><td>× 1 bis × 5 (bis 200 je Haus)</td></tr>
           <tr><td>Turbo (F7)</td><td>Geschwindigkeit der Taste F7</td><td>4 · 8 · 12 · 16-fach</td></tr>
           <tr><td>Produktionstempo</td><td>Alle Betriebe arbeiten schneller</td><td>× 1 bis × 3</td></tr>
           <tr><td>Lager je Ware</td><td>Kontore und Märkte fassen mehr</td><td>× 1 bis × 5</td></tr>
+          <tr><td>Baukosten</td><td>Gold, Werkzeug, Holz und Ziegel je Gebäude (auch für die Gegner)</td><td>Normal · × 0,75 · Halb · Ein Viertel · Gratis</td></tr>
+          <tr><td>Betriebskosten</td><td>Unterhalt aller Gebäude</td><td>Normal · × 0,75 · Halb · Ein Viertel · Keine</td></tr>
+          <tr><td>Steuereinnahmen</td><td>Steuern je Einwohner</td><td>× 1 bis × 3</td></tr>
+          <tr><td>Einflussradius</td><td>Kontor, Markt und öffentliche Bauten reichen weiter</td><td>× 1 · × 1,5 · × 2</td></tr>
+          <tr><td>Erz- und Goldminen</td><td>Vorkommen erschöpfen sich nie</td><td>Normal · Unerschöpflich</td></tr>
           <tr><td>Schiffstempo</td><td>Alle Schiffe fahren schneller</td><td>× 1 bis × 3</td></tr>
           <tr><td>Laderaum</td><td>Tonnen je Laderaum der baubaren Schiffe</td><td>× 1 bis × 3</td></tr>
         </tbody>
@@ -167,19 +178,79 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
     </div>
   </section>
 
+  <section class="sheet section" aria-labelledby="stormsea">
+    <span class="course">Kampagne · der Reihe nach spielen · neu</span>
+    <h2 id="stormsea">Die Sturmsee</h2>
+    <p>Ein Sturm treibt Euren Konvoi auf die Riffe der Sturmsee. Mit einem einzigen angeschlagenen Schiff baut Ihr eine Kolonie auf, gewinnt den Handel der Inseln, wehrt Piraten und ein verräterisches Handelshaus ab und eint am Ende die Inseln unter einer Krone. Jedes Kapitel verlangt etwas anderes. Neu im November 2026: Die Schwierigkeit ist in Anlehnung an die gemessenen Kapitel ausgelegt und noch nicht durchgespielt.</p>
+    <div class="chapters" data-group="stormsea">
+      <div class="chapter" data-id="ss1"><span class="no">1</span><div class="content"><h3>Schiffbruch</h3><p class="story">Nur die „Morgenstern“ hat den Sturm überstanden – mit halb leerem Laderaum und kaum Gold. Die Schiffbrüchigen der anderen Schiffe warten an einer fremden Küste.</p><p class="goal">Stadt mit 200 Einwohnern, davon 100 Siedler. Eine zweite Siedlung auf einer anderen Insel für die Schiffbrüchigen. Bilanz im Plus.</p><p class="hint"><b>Tipp</b>Nur 10 000 Gold, 20 t Werkzeug, 12 t Holz und 8 t Nahrung. Zuerst Försterhäuser bauen – sie kosten kein Holz. Fehlt Werkzeug, im Kontor auf Einkauf stellen; die freien Händler bringen es.</p><div class="tags"><span class="level" aria-label="Durchschnittlich"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Wenig Gold</span></div></div><label class="done"><input type="checkbox" id="k-ss1"> erledigt</label></div>
+      <div class="chapter" data-id="ss2"><span class="no">2</span><div class="content"><h3>Tabak und Kakao</h3><p class="story">In Europas Kaffeehäusern reisst man sich um Tabak und Trinkschokolade – und in der Sturmsee gedeiht beides nur auf wenigen Inseln. Wer sie alle besitzt, bestimmt die Preise.</p><p class="goal">Tabakmonopol und Kakaomonopol: eine eigene Siedlung auf jeder Insel, auf der Tabak oder Kakao wächst, und keine fremde dort. Dazu eine Stadt mit 600 Einwohnern, davon 300 Bürger.</p><p class="hint"><b>Tipp</b>Sofort erkunden und die Fruchtbarkeit im Inselinfo prüfen. Dörfer der Ureinwohner stören ein Monopol nicht, Siedlungen der Rivalen schon – und die Rivalen sind diesmal gerissener.</p><div class="tags"><span class="level" aria-label="Durchschnittlich"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Doppeltes Monopol</span><span class="tag">Rivalen: Fordernd</span></div></div><label class="done"><input type="checkbox" id="k-ss2"> erledigt</label></div>
+      <div class="chapter" data-id="ss3"><span class="no">3</span><div class="content"><h3>Der Freihafen</h3><p class="story">Die Kompanie will einen Freihafen, in dem Händler aus aller Welt kaufen und verkaufen. Einwohnerzahlen zählen diesmal nicht – nur die Zahlen in den Kontobüchern.</p><p class="goal">Handelsbilanz +400: Die Verkäufe müssen die Einkäufe deutlich übersteigen. 40 t Tabakwaren und 40 t Kakao im Lager.</p><p class="hint"><b>Tipp</b>Verkauft, was Ihr im Überfluss habt, und kauft nur, was Ihr wirklich braucht. Die „Hoffnung“ hat 50 t Stoffe und 50 t Alkohol geladen – im Kontor zum Verkauf stellen.</p><div class="tags"><span class="level" aria-label="Fordernd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">Handel</span><span class="tag">+ grosses Handelsschiff</span></div></div><label class="done"><input type="checkbox" id="k-ss3"> erledigt</label></div>
+      <div class="chapter" data-id="ss4"><span class="no">4</span><div class="content"><h3>Die Rote Flagge</h3><p class="story">Piraten unter roter Flagge überfallen jedes Schiff zwischen den Inseln, und man munkelt, ein mächtiges Handelshaus bezahle sie.</p><p class="goal">Mindestens 3 Siedlungen – und jede davon mit 300 Einwohnern, davon 100 Bürger. Auch kleine Aussenposten zählen.</p><p class="hint"><b>Tipp</b>Nur Siedlungen gründen, die Ihr auch zu Städten ausbauen wollt. Ein Wachturm braucht 2 t Kanonen; 10 t sind an Bord, dazu 50 t Werkzeug, 40 t Holz und 30 t Ziegel. Handelsschiffe nie ohne Geleit fahren lassen.</p><div class="tags"><span class="level" aria-label="Fordernd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Piraten</span><span class="tag">+ 2 kleine Kriegsschiffe</span></div></div><label class="done"><input type="checkbox" id="k-ss4"> erledigt</label></div>
+      <div class="chapter" data-id="ss5"><span class="no">5</span><div class="content"><h3>Verrat</h3><p class="story">Ein gefangener Piratenkapitän hat geredet: Das Haus Valcourt hat die Überfälle bezahlt. Die beiden anderen Häuser erklären sich für neutral – in diesen Gewässern ein dehnbarer Begriff.</p><p class="goal">Das Haus Valcourt besiegen: keine Siedlung und kein Schiff mehr. Ihr erkennt es an seinem Flaggschiff, der „Valcourts Stolz“. Die beiden anderen Rivalen dürfen bleiben. Dazu eine Stadt mit 1000 Einwohnern, davon 400 Kaufleute.</p><p class="hint"><b>Tipp</b>Alle Rivalen planen wie auf „Schwer“, und Valcourt startet mit 60 000 Gold. Sichert Euch Erz für Kanonen und Musketen, bevor Ihr angreift, und lasst Euch nicht in einen zweiten Krieg ziehen.</p><div class="tags"><span class="level" aria-label="Fordernd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Rivalen: Schwer</span><span class="tag">+ grosses und kleines Kriegsschiff</span></div></div><label class="done"><input type="checkbox" id="k-ss5"> erledigt</label></div>
+      <div class="chapter" data-id="ss6"><span class="no">6</span><div class="content"><h3>Das Goldene Zeitalter</h3><p class="story">Valcourt ist gefallen, die Piraten sind zerstreut. Der König sucht einen Herrscher, der die Inseln eint – doch die übrigen Häuser greifen selbst nach der Krone, und die Piraten sammeln sich ein letztes Mal.</p><p class="goal">Residenz mit 2000 Einwohnern, davon 800 Aristokraten. Zweite Stadt 1200 (500 Kaufleute). Zusammen 4000 Einwohner, 40 t Schmuck im Lager, Bilanz +800.</p><p class="hint"><b>Tipp</b>Die „Morgenstern II“ bringt 50 t Werkzeug, 50 t Ziegel und 40 t Holz, die „Admiral“ schützt Eure Küsten. Gold für den Schmuck gibt es nur auf wenigen Inseln – sichert Euch früh eine.</p><div class="tags"><span class="level" aria-label="Schwer"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag danger">Piraten</span><span class="tag">+ grosses Handelsschiff</span><span class="tag">+ grosses Kriegsschiff</span></div></div><label class="done"><input type="checkbox" id="k-ss6"> erledigt</label></div>
+    </div>
+  </section>
+
   <section class="sheet section" aria-labelledby="challenges">
     <span class="course">Einzelne Szenarien</span>
     <h2 id="challenges">Herausforderungen</h2>
+    <p>Archipel, Kontinente, Handelsflotte und Seemacht sind neu (November 2026) und noch nicht durchgespielt.</p>
     <div class="chapters">
       <div class="chapter" data-id="h1"><span class="no">◆</span><div class="content"><h3>Inselreich</h3><p class="goal">8 eigene Siedlungen mit zusammen 3000 Einwohnern.</p><div class="tags"><span class="level" aria-label="Durchschnittlich"><i class="on"></i><i class="on"></i><i></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h1"> erledigt</label></div>
       <div class="chapter" data-id="h2"><span class="no">◆</span><div class="content"><h3>Handelsimperium</h3><p class="goal">50 t Schmuck und 80 t Kleidung im Lager. Handelsbilanz +300: Verkäufe müssen die Einkäufe deutlich übersteigen.</p><div class="tags"><span class="level" aria-label="Fordernd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h2"> erledigt</label></div>
       <div class="chapter" data-id="h3"><span class="no">◆</span><div class="content"><h3>Goldrausch</h3><p class="goal">60 t Gold und 40 t Schmuck im Lager.</p><div class="tags"><span class="level" aria-label="Fordernd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Piraten</span><span class="tag">+ kleines Kriegsschiff</span></div></div><label class="done"><input type="checkbox" id="k-h3"> erledigt</label></div>
+      <div class="chapter" data-id="h4"><span class="no">◆</span><div class="content"><h3>Archipel</h3><p class="goal">Dutzende kleiner Inseln: mindestens 10 Siedlungen, und jede davon mit 100 Einwohnern, davon 40 Siedler. Auch ein Kontor ohne Häuser zählt als Siedlung.</p><p class="hint"><b>Tipp</b>Zusätzliches Werkzeug, Holz und Ziegel sind an Bord, und der „Inselspringer“ bringt mehr. Jede kleine Stadt braucht ihren eigenen Marktplatz.</p><div class="tags"><span class="level" aria-label="Durchschnittlich"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Neu</span><span class="tag">+ kleines Handelsschiff</span></div></div><label class="done"><input type="checkbox" id="k-h4"> erledigt</label></div>
+      <div class="chapter" data-id="h5"><span class="no">◆</span><div class="content"><h3>Kontinente</h3><p class="goal">Wenige riesige Inseln: eine Metropole mit 1500 Einwohnern, davon 400 Aristokraten. Zusammen 3000 Einwohner, Bilanz +300.</p><p class="hint"><b>Tipp</b>Die Wege sind weit: Marktplätze so setzen, dass sie die ganze Stadt abdecken, und den Rivalen keine Bucht lassen, in der sie sich festsetzen können.</p><div class="tags"><span class="level" aria-label="Fordernd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">Neu</span></div></div><label class="done"><input type="checkbox" id="k-h5"> erledigt</label></div>
+      <div class="chapter" data-id="h6"><span class="no">◆</span><div class="content"><h3>Handelsflotte</h3><p class="goal">Nur 15 000 Gold, aber vier Schiffe: mindestens 4 Siedlungen, 60 t Gewürze und 60 t Kakao im Lager.</p><p class="hint"><b>Tipp</b>Stoffe, Alkohol und Tabakwaren der „Merkur“ für das erste Gold verkaufen, dann Handelsrouten einrichten, die die Ernte aus dem Süden heimbringen.</p><div class="tags"><span class="level" aria-label="Durchschnittlich"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Neu</span><span class="tag">+ 2 grosse Handelsschiffe</span><span class="tag">+ kleines Kriegsschiff</span></div></div><label class="done"><input type="checkbox" id="k-h6"> erledigt</label></div>
+      <div class="chapter" data-id="h7"><span class="no">◆</span><div class="content"><h3>Seemacht</h3><p class="goal">Alle drei Rivalen besiegen: keine Siedlung und kein Schiff mehr. Sie sind arm (10 000 Gold), Ihr startet mit 60 000.</p><p class="hint"><b>Tipp</b>„Dreizack“ und „Donnerkeil“ haben Kanonen und Schwerter geladen. Schlagt zu, bevor die Rivalen Burgen bauen.</p><div class="tags"><span class="level" aria-label="Fordernd"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">Neu</span><span class="tag">+ 2 grosse Kriegsschiffe</span><span class="tag">+ kleines Kriegsschiff</span></div></div><label class="done"><input type="checkbox" id="k-h7"> erledigt</label></div>
     </div>
+  </section>
+
+  <section class="sheet section" aria-labelledby="adventures">
+    <span class="course">Registerkarte „Abenteuer“ · neu</span>
+    <h2 id="adventures">Zufallsabenteuer</h2>
+    <p>Eine neue Inselwelt mit neuem Auftrag, wann immer Ihr wollt – gebaut vom selben Baukasten wie die Kampagnen, mit einer kurzen Geschichte und dem Rat des Steuermanns.</p>
+    <ol class="steps">
+      <li><span>Im Startfenster die Registerkarte <strong>Abenteuer</strong> öffnen.</span></li>
+      <li><span>Schwierigkeit wählen: Einfach, Durchschnittlich, Fordernd oder Schwer. Freiwillig eine Nummer von 0 bis 999 999 eingeben; ohne Nummer wird eine gewürfelt.</span></li>
+      <li><span><strong>Abenteuer würfeln</strong>. Das Feld zeigt den Namen, zum Beispiel „Abenteuer 4711“, und Euren Auftrag. Im Spiel wartet es unter <em>Eigene Szenarien</em>.</span></li>
+    </ol>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Gewürfelt</th><th>Möglichkeiten</th></tr></thead>
+        <tbody>
+          <tr><td>Karte</td><td>Klassisch (einige Inseln grösser), ein Archipel aus 26 bis 30 kleinen Inseln (die grössten 50 × 52, damit auch die Gegner siedeln können) oder wenige riesige Kontinente</td></tr>
+          <tr><td>Hauptziel</td><td>Städte, ein Inselreich aus vielen Siedlungen, Handel (Waren und Handelsbilanz), ein Monopol oder Eroberung (nicht auf Einfach)</td></tr>
+          <tr><td>Zusatzziele</td><td>Keine auf Einfach, bis zwei auf Schwer: Bilanz, Handelsbilanz, eine Ware im Lager, Einwohner insgesamt, eine weitere Stadt</td></tr>
+          <tr><td>Welt</td><td>Erz, Gold und Pflanzen passend zum Auftrag, Ureinwohnerdörfer, Startgold für Euch und die Rivalen, Stärke der Rivalen</td></tr>
+          <tr><td>Piraten</td><td>Nie auf Einfach, immer auf Schwer, dazwischen manchmal</td></tr>
+          <tr><td>Schiffe</td><td>Reiche Startladung auf Einfach, auf Schwer manchmal knappe Ladung; zusätzliche Schiffe, wo der Auftrag sie braucht</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>Dieselbe Nummer mit derselben Schwierigkeit ergibt immer dasselbe Abenteuer, deutsch wie englisch – eine Karte nochmals spielen oder die Nummer einem Freund geben. Dieselbe Nummer mit einer anderen Schwierigkeit ersetzt die Datei.</p>
+  </section>
+
+  <section class="sheet section" aria-labelledby="logbook">
+    <span class="course">Knopf „Logbuch öffnen“ · neu</span>
+    <h2 id="logbook">Das Logbuch</h2>
+    <p>Ein kleines Fenster neben dem Spiel. Es liest nur den Arbeitsspeicher des Spiels und verändert nie etwas; es darf vor, während und nach dem Spiel laufen und verbindet sich von selbst. Im Fenstermodus spielen oder das Logbuch auf einen zweiten Bildschirm legen.</p>
+    <div class="tips">
+      <div class="tip"><strong>Auftrag</strong><span>Jedes Ziel mit laufendem Fortschrittsbalken, grün, wenn erfüllt – dieselbe Prüfung wie im Spiel. Im Wettlauf auch, wie nahe die Rivalen sind.</span></div>
+      <div class="tip"><strong>Dein Reich</strong><span>Gold, Bilanz und Handelsbilanz, Städte, Einwohner je Stufe, Arbeiter und Schiffe.</span></div>
+      <div class="tip"><strong>Gegner</strong><span>Beste Stadt, Einwohner, Städte, Schiffe und Gold jedes Rivalen.</span></div>
+      <div class="tip"><strong>Erfolge</strong><span>24 Meilensteine, mit Datum und Partie in <code>logbook.json</code> gespeichert. Gewonnene Aufträge erscheinen auch auf der Registerkarte „Abenteuer“ des Startfensters.</span></div>
+    </div>
+    <div class="tags" aria-label="Die 24 Erfolge">
+      <span class="tag" title="Gründe deine erste Stadt.">Land in Sicht</span><span class="tag" title="Die ersten Siedler ziehen ein.">Erste Siedler</span><span class="tag" title="Die ersten Bürger in deinem Reich.">Bürgerstolz</span><span class="tag" title="Die ersten Kaufleute.">Pfeffersäcke</span><span class="tag" title="Die ersten Aristokraten.">Blaues Blut</span><span class="tag" title="1 000 Einwohner insgesamt.">Tausend Seelen</span><span class="tag" title="5 000 Einwohner insgesamt.">Blühendes Inselreich</span><span class="tag" title="10 000 Einwohner insgesamt.">Zehntausend Untertanen</span><span class="tag" title="Eine Stadt mit 2 500 Einwohnern.">Metropole</span><span class="tag" title="1 000 Aristokraten.">Hofstaat</span><span class="tag" title="3 eigene Städte.">Inselhüpfer</span><span class="tag" title="5 eigene Städte.">Kolonialmacht</span><span class="tag" title="10 eigene Städte.">Herr der Inseln</span><span class="tag" title="250 000 Gold in der Kasse.">Volle Truhen</span><span class="tag" title="1 000 000 Gold in der Kasse.">Millionär</span><span class="tag" title="5 eigene Schiffe.">Kleine Flotte</span><span class="tag" title="10 eigene Schiffe.">Armada</span><span class="tag" title="Eine Bilanz von mindestens +500.">Schwarze Zahlen</span><span class="tag" title="10 Spielstunden in einer Partie.">Sitzleder</span><span class="tag" title="50 Spielstunden in einer Partie.">Ewiger Regent</span><span class="tag" title="Spiele im Turbo (8-fach oder schneller).">Volle Fahrt voraus</span><span class="tag" title="Besiege einen Gegner.">Bezwinger</span><span class="tag" title="Gewinne ein Szenario.">Auftrag erfüllt</span><span class="tag" title="Gewinne einen Wettlauf gegen die Computergegner.">Erster im Ziel</span>
+    </div>
+    <p>„Im Vordergrund“ hält das Fenster über dem Spiel, „Kompakt“ zeigt nur Titel, Ziele und eine Zeile Zahlen. Mit der Maus auf einen Erfolg zeigen, um seine Bedingung zu sehen.</p>
   </section>
 
   <section class="sheet section" aria-labelledby="maps">
     <h2 id="maps">Kleine und grosse Karten</h2>
-    <p>Jedes Szenario hat zwei Fassungen. Mit <strong>Original starten</strong> gilt die klassische Karte mit 17 bis 20 Inseln. Mit <strong>Mit Erweiterungen spielen</strong>, Kartengrösse 1000 × 700 oder grösser und <em>Mehr Inseln</em> gilt die grosse Fassung: bis 50 Inseln, mehr Rohstoffe und Ureinwohner. Ein Häkchen oben speichert nur in diesem Browser, welche Kapitel Ihr geschafft habt.</p>
+    <p>Jedes Szenario und jedes Zufallsabenteuer hat zwei Fassungen. Mit <strong>Original starten</strong> gilt die klassische Karte mit meist 17 bis 20 Inseln. Mit <strong>Mit Erweiterungen spielen</strong>, Kartengrösse 1000 × 700 oder grösser und <em>Mehr Inseln</em> gilt die grosse Fassung: bis 50 Inseln, mehr Rohstoffe und Ureinwohner. Ein Häkchen oben speichert nur in diesem Browser, welche Kapitel Ihr geschafft habt.</p>
   </section>
 
   <section class="sheet section" aria-labelledby="advice">
@@ -187,13 +258,14 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
     <div class="tips">
       <div class="tip danger"><strong>Früh einen Kontor bauen</strong><span>Mit starken Piraten ist das Spiel vorbei, sobald Euer einziges Schiff sinkt und Ihr keine Siedlung habt.</span></div>
       <div class="tip"><strong>Gold-Optionen und Kampagnen</strong><span>Startgold und Gold der Gegner ersetzen das Gold des Szenarios. Der Knopf „Für Kampagnen“ stellt beides auf „Wie Schwierigkeit“.</span></div>
-      <div class="tip danger"><strong>Spielstände der grossen Welt</strong><span>Nur mit „Mit Erweiterungen spielen“ und derselben Kartengrösse laden. Das schwarze Fenster offen lassen, bis das Spiel beendet ist.</span></div>
+      <div class="tip danger"><strong>Spielstände der grossen Welt</strong><span>Nur mit den Erweiterungen und derselben Kartengrösse laden – am einfachsten über die Registerkarte <em>Weiterspielen</em>. Das schwarze Fenster offen lassen, bis das Spiel beendet ist: Erst dann werden die Optionen des Spielstands gemerkt.</span></div>
+      <div class="tip"><strong>Gemütlich und Harte Probe</strong><span>Beide Vorlagen sind für das Endlosspiel gedacht. In einem Szenario ersetzen ihre Gold-Einstellungen das Gold des Szenarios, und „Jede Pflanze auf jeder Insel“ wirkt dort nicht. Für Kampagnen „Für Kampagnen“ nehmen.</span></div>
       <div class="tip"><strong>Auf einen anderen PC</strong><span>Das ZIP von GitHub (<em>Code → Download ZIP</em>) entpacken, <code>install.cmd</code> doppelklicken.</span></div>
     </div>
   </section>
 
   <footer class="foot">
-    <p>Gebaut mit Reverse Engineering der History Edition. Geprüft: 456 automatische Tests am geladenen Spielcode, dazu Läufe im echten Spiel (50 Inseln, 14 Dörfer, bis 12 Piratenschiffe, Wettlauf, Siegbedingungen, Startflotte) und ein Dauerlauf über 14,5 Spielstunden bei 16-fach mit allen Optionen: immer reagierend, 430 bis 490 MB Speicher.</p>
+    <p>Gebaut mit Reverse Engineering der History Edition. Geprüft: 556 automatische Tests am geladenen Spielcode, dazu Läufe im echten Spiel (50 Inseln, 14 Dörfer, bis 12 Piratenschiffe, Wettlauf, Siegbedingungen, Startflotte) und ein Dauerlauf über 14,5 Spielstunden bei 16-fach mit allen Optionen: immer reagierend, 430 bis 490 MB Speicher. Die neuen Optionen, die Sturmsee, die vier neuen Herausforderungen, die Zufallsabenteuer und das Logbuch sind ohne Spiel geprüft (alle 23 Szenarien in beiden Sprachen, 128 Zufallsabenteuer, 73 Selbsttests des Logbuchs) und im laufenden Spiel getestet; die Balance der neuen Szenarien ist noch nicht durchgespielt.</p>
     <p>Nur für das Einzelspiel und die Ubisoft-Connect-Version. Nach einem Spiel-Update bricht das Werkzeug ab, ohne etwas zu ändern.</p>
   </footer>
 </main>

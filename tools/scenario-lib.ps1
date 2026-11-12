@@ -8,6 +8,8 @@
     Write-Scenario <path> <list>         -> write the file (section = 16-byte name, int32 length, data)
     New-Mission @{...}                   -> 0x8C4 bytes (AUFTRAG4 entry)
     Set-Islands <SZENE> <list>           -> island list (up to 50 entries of 16 bytes from +0x174)
+    New-CargoBytes <cargo> <ship type>   -> cargo block of a SHIP4 entry (0x40 bytes from +0x174)
+    Set-FixedString <bytes> <o> <size> <text> -> zero-terminated Windows-1252 text in a fixed field
   The template is only read. How the fields were worked out: analysis\FINDINGS.md, section on
   custom scenarios.
 
@@ -28,9 +30,48 @@
     +0x868/+0x86C goods: byte 0 good, bytes 2-3 amount (x 32 = tons)
     +0x870/+0x87C/+0x888 town 1-3: total residents, stage (0 pioneers ... 4 aristocrats), of which at least
     +0x8AC all towns at least (bit 8), +0x8B8 town of the supported player (bit 0x10)
+
+  SHIP4 entry (0x1B4 bytes; loader FUN_14008e4f0): +0x00 name (0x18 bytes), +0x1C/+0x1E x/y (int16),
+  +0x3C capacity per hold x 32, +0x42 cannons, +0x46 slot, +0x48 figure type, +0x4B owner,
+  +0x174 cargo: 8 holds of 8 bytes = uint16 house no. of the PRODUCING building (Id - 20000 in
+  haeuser.cod; the loader maps it through the building table to the good, building +0x21), uint16 amount
+  x 32 (14 bits, rounded down to whole tons), uint32 flags (0). Soldiers use 9901 + 4 x kind + owner.
+  Same scheme in all 131 original scenarios (e.g. start ship of the endless game: 515 tools 50 t,
+  2001 wood 30 t, 1075 food 10 t). PLAYER4 entry (0x430 bytes): +0x3C0 player name (0x40 bytes).
 #>
 
 $Cp1252 = [Text.Encoding]::GetEncoding(1252)
+
+# Ship cargo: good -> house no. of the producing building. Only numbers that the original scenarios use.
+$CargoHouse = [ordered]@{
+    Tools = 515; Wood = 2001; Food = 1075; Bricks = 513; Cloth = 507; Liquor = 519; TobaccoGoods = 525; Swords = 517
+    Cannons = 527; Iron = 521; Ore = 2401; Gold = 2405; Spices = 1501; Cocoa = 1509; Tobacco = 1507; Wool = 1505
+}
+# Ship types (figure no.): holds, tons per hold (figuren.cod "Maxware" / 32), cannons.
+$ShipTypes = @{ 21 = @(4, 50, 6); 23 = @(6, 80, 10); 25 = @(3, 65, 8); 27 = @(8, 120, 14) }
+
+# Cargo block (0x40 bytes) from @(@{ Good = 'Tools'; Tons = 20 }, ...), checked against the ship type.
+function New-CargoBytes($cargo, [int]$shipType) {
+    $r = New-Object byte[] 0x40
+    $items = @($cargo | Where-Object { $_ })
+    $holds = $ShipTypes[$shipType]
+    if (-not $holds) { throw "Unknown ship type $shipType." }
+    if ($items.Count -gt $holds[0]) { throw "Ship type $shipType has only $($holds[0]) holds." }
+    for ($i = 0; $i -lt $items.Count; $i++) {
+        $g = [string]$items[$i].Good; $t = [int]$items[$i].Tons
+        if (-not $CargoHouse.Contains($g)) { throw "Unknown cargo good '$g'." }
+        if ($t -lt 1 -or $t -gt $holds[1]) { throw "Cargo $g $t t: 1 to $($holds[1]) t per hold." }
+        Set-U16 $r (8 * $i) $CargoHouse[$g]; Set-U16 $r (8 * $i + 2) ($t * 32)
+    }
+    , $r
+}
+
+# Zero-terminated Windows-1252 text in a fixed field (cleared first).
+function Set-FixedString([byte[]]$b, [int]$o, [int]$size, [string]$text) {
+    $t = $Cp1252.GetBytes($text)
+    if ($t.Length -ge $size) { throw "Text too long for $size bytes: $text" }
+    [Array]::Clear($b, $o, $size); [Array]::Copy($t, 0, $b, $o, $t.Length)
+}
 
 function Read-Scenario([string]$path) {
     $d = [IO.File]::ReadAllBytes($path); $o = 0

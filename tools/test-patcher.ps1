@@ -59,8 +59,23 @@
     Z  Big campaign maps: extended SZENE section ('GROS' + second block) in the image;
        1000 x 700 and 2000 x 1400 -> big version (stretched), 750 x 525 and 500 x 350 -> small
        version, wrong marker / too short -> small version. H: without the big map code cave.
+  The cases below (2 letters) run the game's own haeuser.cod parser FUN_140090660 (and FUN_140092e00)
+  in the helper process: its CRT imports are resolved there and it runs in the game folder, so the
+  building table and the population groups hold exactly the values of the running game.
+    AA -BuildCost: checksum of the originals, every cost field of all 500 entries scaled (whole tons,
+       at least 1), everything else unchanged, marker, second run, other factor, wrong original, 0 = free.
+    AB -Upkeep: the same for the running costs (+0x2A/+0x2C).
+    AC -Taxes: the 5 tax values, second run, other factor, German message.
+    AD -Radius: 17 radii (at most 48), all other radius bytes unchanged, second run, unexpected value.
+    AE -Fertility Everywhere: code cave and hook; function test of the resource code cave with the real
+       templates (with and without -Resources/-Natives) and of the patched FUN_1400d0ce0 with test islands
+       (unchanged for the limits 1-3, climate ignored for 'FERT'); -StretchOnly/-NoIslandSpread: nothing.
+    AF -Mines Infinite: both subtractions NOPs, neighbours unchanged, falsified site -> abort.
+    AG -Disasters Off/More: 5 calls NOPs or 10 limits changed; other mode in the same process -> abort.
+    AH Everything together: all options, code caves and markers do not overlap, production x2 shortens
+       exactly the 125 intervals counted in the game (2026-11-10).
   Expected bytes and plans come from the same functions in anno-patcher.ps1 (loaded via
-  the syntax tree).
+  the syntax tree); the expected scaled values are computed separately in this test.
 #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
@@ -119,8 +134,8 @@ $CodeKind = @{ 'Width start' = 'Width'; 'Height start' = 'Height'; 'Range start'
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$null, [ref]$null)
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
-    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode)\b') -or
-        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker)\b') { . ([scriptblock]::Create($txt)) }
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode)\b') -or
+        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites)\b') { . ([scriptblock]::Create($txt)) }
 }
 $PirateHookOrig = '0F 29 05 B7 B3 4F 00'
 $PirateHookTarget = Hex ([byte[]](@(0xE9) + (Rel32 $PirateCaveRva ($TimersHookRva + 5)) + @(0x66, 0x90)))
@@ -250,7 +265,7 @@ function Invoke-PirateCode($a, [int]$flagsBefore, [int]$clock = 30000, [int]$gol
 
 # Calls a function in the image of the helper process (thread) and returns eax as the result.
 # Stub: [mov edx,<edx>] / sub rsp,0x28 / mov rax,<address> / call rax / add rsp,0x28 / [mov eax,edx] / ret
-function Invoke-InImage($a, [long]$rva, [int]$edx = 0, [bool]$returnEdx = $false) {
+function Invoke-InImage($a, [long]$rva, [int]$edx = 0, [bool]$returnEdx = $false, [uint32]$timeoutMs = 5000) {
     $s = New-Object System.Collections.Generic.List[byte]
     $s.Add(0xBA); $s.AddRange([BitConverter]::GetBytes([int32]$edx))
     $s.AddRange([byte[]](0x48, 0x83, 0xEC, 0x28, 0x48, 0xB8)); $s.AddRange([BitConverter]::GetBytes([long]($a.Base + $rva)))
@@ -264,7 +279,7 @@ function Invoke-InImage($a, [long]$rva, [int]$edx = 0, [bool]$returnEdx = $false
     $tid = [uint32]0
     $t = [TestMem]::CreateRemoteThread($a.H, [IntPtr]::Zero, [IntPtr]::Zero, $stub, [IntPtr]::Zero, 0, [ref]$tid)
     if ($t -eq [IntPtr]::Zero) { throw "CreateRemoteThread failed ($([Runtime.InteropServices.Marshal]::GetLastWin32Error()))." }
-    $wait = [TestMem]::WaitForSingleObject($t, 5000)
+    $wait = [TestMem]::WaitForSingleObject($t, $timeoutMs)
     $ec = [uint32]0; [void][TestMem]::GetExitCodeThread($t, [ref]$ec)
     [void][TestMem]::CloseHandle($t)
     if ($wait -ne 0) { throw "Thread did not finish (wait $wait)." }
@@ -278,7 +293,9 @@ function Assert-Check([string]$what, [bool]$ok) {
     if ($ok) { Write-Host "  OK    $what" -ForegroundColor Green } else { Write-Host "  FAILED $what" -ForegroundColor Red; $script:failed++ }
 }
 
-function Start-ImageProcess {
+# -Crt: additionally resolve the imports of the C runtime and kernel32 in the helper process and start it
+# in the game folder, so that code of the game which reads files (haeuser.cod parser) can run there.
+function Start-ImageProcess([switch]$Crt) {
     $out = Join-Path $tmp "image-$([guid]::NewGuid().ToString('N')).txt"
     $cmd = @"
 Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class L { [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)] public static extern IntPtr LoadLibraryExW(string p, IntPtr f, uint fl); }'
@@ -287,8 +304,38 @@ if (`$m -eq [IntPtr]::Zero) { 'ERROR ' + [Runtime.InteropServices.Marshal]::GetL
 `$m.ToInt64().ToString() | Set-Content '$out'
 Start-Sleep -Seconds 600
 "@
+    if ($Crt) {
+        # Import directory: for every DLL api-ms-win-crt-*, VCRUNTIME140 and KERNEL32 GetProcAddress by name
+        # into the IAT (other DLLs stay unresolved; the code run in the tests does not call them).
+        $cmd = @"
+Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class L { [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)] public static extern IntPtr LoadLibraryExW(string p, IntPtr f, uint fl); [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)] public static extern IntPtr LoadLibraryW(string p); [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Ansi)] public static extern IntPtr GetProcAddress(IntPtr m, string n); [DllImport("kernel32.dll", SetLastError=true)] public static extern bool VirtualProtect(IntPtr a, IntPtr s, uint p, out uint o); }'
+`$m = [L]::LoadLibraryExW('$exe', [IntPtr]::Zero, 1)
+if (`$m -eq [IntPtr]::Zero) { 'ERROR ' + [Runtime.InteropServices.Marshal]::GetLastWin32Error() | Set-Content '$out'; exit 1 }
+`$b = `$m.ToInt64(); `$miss = 0
+function Get-ImageI32([long]`$o) { [Runtime.InteropServices.Marshal]::ReadInt32([IntPtr](`$b + `$o)) }
+function Get-ImageI64([long]`$o) { [Runtime.InteropServices.Marshal]::ReadInt64([IntPtr](`$b + `$o)) }
+`$d = Get-ImageI32 ((Get-ImageI32 0x3C) + 24 + 120)
+while ((Get-ImageI32 (`$d + 12)) -ne 0) {
+    `$dll = [Runtime.InteropServices.Marshal]::PtrToStringAnsi([IntPtr](`$b + (Get-ImageI32 (`$d + 12))))
+    if (`$dll -like 'api-ms-win-crt-*' -or `$dll -eq 'VCRUNTIME140.dll' -or `$dll -eq 'KERNEL32.dll') {
+        `$h = [L]::LoadLibraryW(`$dll); `$ilt = Get-ImageI32 `$d; `$iat = Get-ImageI32 (`$d + 16); `$k = 0
+        while ((`$v = Get-ImageI64 (`$ilt + 8 * `$k)) -ne 0) {
+            `$p = [IntPtr]::Zero
+            if (`$v -gt 0 -and `$h -ne [IntPtr]::Zero) { `$p = [L]::GetProcAddress(`$h, [Runtime.InteropServices.Marshal]::PtrToStringAnsi([IntPtr](`$b + `$v + 2))) }
+            if (`$p -ne [IntPtr]::Zero) { `$a = [IntPtr](`$b + `$iat + 8 * `$k); `$o = [uint32]0; [void][L]::VirtualProtect(`$a, [IntPtr]8, 4, [ref]`$o); [Runtime.InteropServices.Marshal]::WriteInt64(`$a, `$p.ToInt64()); [void][L]::VirtualProtect(`$a, [IntPtr]8, `$o, [ref]`$o) } else { `$miss++ }
+            `$k++
+        }
+    }
+    `$d += 20
+}
+if (`$miss) { 'ERROR ' + `$miss + ' imports not resolved' | Set-Content '$out'; exit 1 }
+`$m.ToInt64().ToString() | Set-Content '$out'
+Start-Sleep -Seconds 600
+"@
+    }
     $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
-    $p = Start-Process powershell -ArgumentList '-NoProfile', '-EncodedCommand', $enc -WindowStyle Hidden -PassThru
+    $p = if ($Crt) { Start-Process powershell -ArgumentList '-NoProfile', '-EncodedCommand', $enc -WindowStyle Hidden -PassThru -WorkingDirectory $GameFolder }
+    else { Start-Process powershell -ArgumentList '-NoProfile', '-EncodedCommand', $enc -WindowStyle Hidden -PassThru }
     for ($i = 0; $i -lt 100 -and -not (Test-Path $out); $i++) { Start-Sleep -Milliseconds 100 }
     Start-Sleep -Milliseconds 200
     $txt = (Get-Content $out -Raw).Trim()
@@ -334,6 +381,83 @@ function Invoke-SimulatedStart($a) {
     Write-Image $a $Var.Height (Read-Image $a ($Code['Height start'] + 6) 4)
     Write-Image $a $Var.Range (Read-Image $a ($Code['Range start'] + 6) 4)
     Write-Image $a $Var.InvHeight (Read-Image $a 0xEB8F8 4)
+}
+
+# --- Helpers for the cases AA-AH -------------------------------------------------------------------
+# Runs the game's haeuser.cod parser in the image (helper process from Start-ImageProcess -Crt), then the
+# follow-up FUN_140092e00 as at the program start (FUN_1400dbc60). Returns the result of the parser (1 = ok).
+function Invoke-HaeuserParser($a) {
+    $r = Invoke-InImage $a 0x90660 0 $false 30000
+    [void](Invoke-InImage $a 0x92E00 0 $false 30000)
+    $r
+}
+# Expected scaled value (independent of the tool): 0 stays 0, factor 0 -> 0, otherwise round half up, at
+# least 1; $tons: in whole tons (x 32).
+function Get-ExpectedScaled([long]$v, [double]$f, [bool]$tons) {
+    if ($v -eq 0 -or $f -eq 0) { return [long]0 }
+    $x = if ($tons) { $v / 32.0 * $f } else { $v * $f }
+    $n = [long][math]::Floor($x + 0.5); if ($n -lt 1) { $n = 1 }
+    if ($tons) { 32 * $n } else { $n }
+}
+function Get-TestSha256([byte[]]$b) { [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($b)).Replace('-', '').ToLower() }
+# Bytes of the given fields (offset, length) of all 500 building entries in table order.
+function Get-TestFieldBytes([byte[]]$tab, $fields) {
+    $l = New-Object System.Collections.Generic.List[byte]
+    for ($i = 0; $i -lt 500; $i++) { foreach ($f in $fields) { $l.AddRange([byte[]]$tab[($i * 0x90 + $f[0])..($i * 0x90 + $f[0] + $f[1] - 1)]) } }
+    , $l.ToArray()
+}
+$TestCostFields = @(@(0x50, 2, $true), @(0x52, 2, $true), @(0x54, 2, $true), @(0x58, 4, $false))
+$TestUpkeepFields = @(@(0x2A, 2, $false), @(0x2C, 2, $false))
+function Get-TestField([byte[]]$tab, [int]$off, [int]$n) { if ($n -eq 4) { [long][BitConverter]::ToInt32($tab, $off) } else { [long][BitConverter]::ToUInt16($tab, $off) } }
+# Compares a table after the tool with the original: the fields must be scaled, every other byte unchanged.
+# Returns @{ Wrong = fields with a wrong value; Changed = changed fields; Other = other changed bytes }.
+function Compare-ScaledTable([byte[]]$before, [byte[]]$after, $fields, [double]$f) {
+    $wrong = 0; $changed = 0; $mask = New-Object bool[] $before.Length
+    for ($i = 0; $i -lt 500; $i++) {
+        foreach ($fd in $fields) {
+            $off = $i * 0x90 + $fd[0]
+            for ($k = 0; $k -lt $fd[1]; $k++) { $mask[$off + $k] = $true }
+            $v = Get-TestField $before $off $fd[1]; $t = Get-TestField $after $off $fd[1]
+            if ($t -ne (Get-ExpectedScaled $v $f $fd[2])) { $wrong++ }
+            if ($t -ne $v) { $changed++ }
+        }
+    }
+    $other = 0; for ($j = 0; $j -lt $before.Length; $j++) { if (-not $mask[$j] -and $before[$j] -ne $after[$j]) { $other++ } }
+    @{ Wrong = $wrong; Changed = $changed; Other = $other }
+}
+# Test island in the island table of the image (0x14062ddc0, 50 x 0x2CC8): number, climate +0x1C, class +0x18,
+# flags +0x44, fertility count +0x47, crop bits +0x5C, grid pointer +0x2CB0 (only "not 0" matters).
+function Set-TestIsland($a, [int]$i, [int]$climate, [int]$class, [int]$flags, [int]$count, [int]$bits, [bool]$present = $true) {
+    $o = 0x62DDC0 + $i * 0x2CC8
+    Write-Image $a $o (I32 $i); Write-Image $a ($o + 0x1C) ([byte[]]@([byte]$climate)); Write-Image $a ($o + 0x18) ([BitConverter]::GetBytes([uint16]$class))
+    Write-Image $a ($o + 0x44) ([byte[]]@([byte]$flags)); Write-Image $a ($o + 0x47) ([byte[]]@([byte]$count)); Write-Image $a ($o + 0x5C) (I32 $bits)
+    Write-Image $a ($o + 0x2CB0) ([BitConverter]::GetBytes([long]$(if ($present) { 1 } else { 0 })))
+}
+# Calls FUN_1400d0ce0(crop, class min, class max, limit, out) in the image; returns the island numbers found.
+function Invoke-CandidateIslands($a, [int]$ware, [int]$min, [int]$max, [int]$limit) {
+    $buf = [TestMem]::VirtualAllocEx($a.H, [IntPtr]::Zero, [IntPtr]4096, 0x3000, 0x04)
+    $stub = [TestMem]::VirtualAllocEx($a.H, [IntPtr]::Zero, [IntPtr]4096, 0x3000, 0x40)
+    $s = New-Object System.Collections.Generic.List[byte]
+    $s.AddRange([byte[]](0x48, 0x83, 0xEC, 0x38, 0x48, 0xB8)); $s.AddRange([BitConverter]::GetBytes([long]$buf.ToInt64()))   # sub rsp,0x38 / mov rax,out
+    $s.AddRange([byte[]](0x48, 0x89, 0x44, 0x24, 0x20))                                                                     # mov [rsp+0x20],rax
+    $s.Add(0xB9); $s.AddRange([BitConverter]::GetBytes([int32]$ware)); $s.Add(0xBA); $s.AddRange([BitConverter]::GetBytes([int32]$min))
+    $s.AddRange([byte[]](0x41, 0xB8)); $s.AddRange([BitConverter]::GetBytes([int32]$max)); $s.AddRange([byte[]](0x41, 0xB9)); $s.AddRange([BitConverter]::GetBytes([int32]$limit))
+    $s.AddRange([byte[]](0x48, 0xB8)); $s.AddRange([BitConverter]::GetBytes([long]($a.Base + 0xD0CE0)))
+    $s.AddRange([byte[]](0xFF, 0xD0, 0x48, 0x83, 0xC4, 0x38, 0xC3))                                                         # call rax / add rsp,0x38 / ret
+    $done = [IntPtr]::Zero; $b = $s.ToArray()
+    [void][TestMem]::WriteProcessMemory($a.H, $stub, $b, [IntPtr]$b.Length, [ref]$done)
+    $tid = [uint32]0
+    $t = [TestMem]::CreateRemoteThread($a.H, [IntPtr]::Zero, [IntPtr]::Zero, $stub, [IntPtr]::Zero, 0, [ref]$tid)
+    if ($t -eq [IntPtr]::Zero) { throw "CreateRemoteThread failed ($([Runtime.InteropServices.Marshal]::GetLastWin32Error()))." }
+    $wait = [TestMem]::WaitForSingleObject($t, 5000)
+    $ec = [uint32]0; [void][TestMem]::GetExitCodeThread($t, [ref]$ec)
+    [void][TestMem]::CloseHandle($t)
+    if ($wait -ne 0) { throw "Thread did not finish (wait $wait)." }
+    $r = New-Object byte[] 64
+    [void][TestMem]::ReadProcessMemory($a.H, $buf, $r, [IntPtr]64, [ref]$done)
+    [void][TestMem]::VirtualFreeEx($a.H, $buf, [IntPtr]::Zero, 0x8000)
+    [void][TestMem]::VirtualFreeEx($a.H, $stub, [IntPtr]::Zero, 0x8000)
+    (@(for ($k = 0; $k -lt [int]$ec; $k++) { $r[$k] }) -join ',')
 }
 
 $orig = Get-ExpectedValues 500 350
@@ -898,6 +1022,268 @@ try {
     Assert-Check ("Y code caves do not overlap ({0})" -f (($ranges | ForEach-Object { '{0} 0x{1:X}+{2}' -f $_[0], $_[1], $_[2].Length }) -join ', ')) ($ok -and $PirateCaveRva + $pc.Length -le 0xE6000)
     foreach ($b in $ranges) { if ($b[0] -ne 'Marker') { Assert-Check "Y $($b[0]) in memory as built" ((Hex (Read-Image $a $b[1] $b[2].Length)) -eq (Hex $b[2])) } }
     Assert-Check 'Y helper process still alive' (-not $a.Proc.HasExited)
+    Stop-ImageProcess $a
+
+    Write-Host 'AA -BuildCost (real haeuser.cod, parsed in the image by FUN_140090660)'
+    $tabLen = 500 * 0x90
+    $a = Start-ImageProcess -Crt
+    Invoke-SimulatedStart $a
+    $p = Invoke-HaeuserParser $a
+    $t0 = Read-Image $a $BuildingRva $tabLen
+    $maxwohn = (0..4 | ForEach-Object { [BitConverter]::ToInt32((Read-Image $a ($ResidentRva + $_ * $ResidentSize) 4), 0) }) -join '/'
+    Assert-Check "AA parser result $p, storage trading post I $([BitConverter]::ToUInt16($t0, 270 * 0x90 + 0x30)), Maxwohn $maxwohn (as read in the game)" ($p -eq 1 -and [BitConverter]::ToUInt16($t0, 270 * 0x90 + 0x30) -eq 960 -and $maxwohn -eq '128/384/960/1600/2560')
+    Assert-Check "AA trading post I costs 100 gold, 3 t tools, 6 t wood (as paid in the game)" ([BitConverter]::ToInt32($t0, 270 * 0x90 + 0x58) -eq 100 -and [BitConverter]::ToUInt16($t0, 270 * 0x90 + 0x50) -eq 96 -and [BitConverter]::ToUInt16($t0, 270 * 0x90 + 0x52) -eq 192)
+    $sumCost = Get-TestSha256 (Get-TestFieldBytes $t0 $TestCostFields); $sumUpkeep = Get-TestSha256 (Get-TestFieldBytes $t0 $TestUpkeepFields)
+    Assert-Check "AA checksum build cost of the real table = tool ($($sumCost.Substring(0, 16)))" ($sumCost -eq $CostHash)
+    Assert-Check "AA checksum upkeep of the real table = tool ($($sumUpkeep.Substring(0, 16)))" ($sumUpkeep -eq $UpkeepHash)
+    $rWrong = @($RadiusOrig.Keys | Where-Object { $t0[$_ * 0x90 + $RadiusOffset] -ne $RadiusOrig[$_] })
+    Assert-Check "AA the 17 radius originals of the tool match the real table ($($rWrong -join ','))" ($rWrong.Count -eq 0 -and $RadiusOrig.Count -eq 17)
+    $taxNow = (0..4 | ForEach-Object { [BitConverter]::ToInt32((Read-Image $a ($TaxRva + $_ * $ResidentSize) 4), 0) }) -join '/'
+    Assert-Check "AA tax originals of the tool match the real groups ($taxNow)" ($taxNow -eq ($TaxOrig -join '/'))
+    $maxR = 0; for ($i = 0; $i -lt 500; $i++) { if ($t0[$i * 0x90 + $RadiusOffset] -gt $maxR) { $maxR = $t0[$i * 0x90 + $RadiusOffset] } }
+    Assert-Check "AA largest radius in the table $maxR (x2 fits into the AI buffer of 52 bytes)" ($maxR -eq 24 -and 2 * $maxR -le $RadiusMax)
+    $r = Invoke-Tool $a @('-BuildCost', '0.5')
+    $t1 = Read-Image $a $BuildingRva $tabLen
+    $cmp = Compare-ScaledTable $t0 $t1 $TestCostFields 0.5
+    Assert-Check "AA x0.5: exit code $($r.Code), $($cmp.Changed) values changed, $($cmp.Wrong) wrong, $($cmp.Other) other bytes changed" ($r.Code -eq 0 -and $cmp.Wrong -eq 0 -and $cmp.Other -eq 0 -and $cmp.Changed -gt 200 -and $r.Text -match "Build cost x0[.,]5: $($cmp.Changed) values changed")
+    Assert-Check "AA x0.5: trading post I 50 gold, 2 t tools, 3 t wood (message)" ([BitConverter]::ToInt32($t1, 270 * 0x90 + 0x58) -eq 50 -and [BitConverter]::ToUInt16($t1, 270 * 0x90 + 0x50) -eq 64 -and [BitConverter]::ToUInt16($t1, 270 * 0x90 + 0x52) -eq 96 -and $r.Text -match 'trading post I now: 50 gold, 2 t tools, 3 t wood')
+    $c56 = @(0..499 | Where-Object { [BitConverter]::ToUInt16($t0, $_ * 0x90 + 0x56) -ne [BitConverter]::ToUInt16($t1, $_ * 0x90 + 0x56) }).Count
+    Assert-Check "AA cannons (+0x56) untouched ($c56 changed)" ($c56 -eq 0)
+    Assert-Check "AA marker $(Hex (Read-Image $a $CostMarkerRva 8))" ((Hex (Read-Image $a $CostMarkerRva 8)) -eq '42 41 55 4B 32 00 00 00')
+    $r = Invoke-Tool $a @('-BuildCost', '0.5')
+    Assert-Check "AA second run: exit code $($r.Code), already set, table unchanged" ($r.Code -eq 0 -and $r.Text -match 'Build cost x0[.,]5: already set' -and [BitConverter]::ToString((Read-Image $a $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t1))
+    $r = Invoke-Tool $a @('-BuildCost', '0.25') 'de'
+    Assert-Check "AA other factor in the same process (de): exit code $($r.Code), German note, nothing changed" ($r.Code -eq 0 -and $r.Text -match 'Baukosten: im Spiel ist schon ein anderer Faktor gesetzt' -and $r.Text -match 'NICHT geaendert' -and [BitConverter]::ToString((Read-Image $a $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t1))
+    Stop-ImageProcess $a
+    $a = Start-ImageProcess -Crt
+    Invoke-SimulatedStart $a
+    [void](Invoke-HaeuserParser $a)
+    Write-Image $a ($BuildingRva + 463 * 0x90 + 0x58) (I32 1301)
+    $tw = Read-Image $a $BuildingRva $tabLen
+    $r = Invoke-Tool $a @('-BuildCost', '0')
+    Assert-Check "AA wrong original (church 1301 gold): exit code $($r.Code), note, nothing changed, no marker" ($r.Code -eq 0 -and $r.Text -match 'Build cost: unexpected values in the building table \(checksum [0-9a-f]{16}\); NOT set' -and [BitConverter]::ToString((Read-Image $a $BuildingRva $tabLen)) -eq [BitConverter]::ToString($tw) -and (Hex (Read-Image $a $CostMarkerRva 8)) -eq '00 00 00 00 00 00 00 00')
+    Write-Image $a ($BuildingRva + 463 * 0x90 + 0x58) (I32 ([BitConverter]::ToInt32($t0, 463 * 0x90 + 0x58)))
+    $r = Invoke-Tool $a @('-BuildCost', '0') 'de'
+    $t2 = Read-Image $a $BuildingRva $tabLen
+    $cmp = Compare-ScaledTable $t0 $t2 $TestCostFields 0
+    $left = @(0..499 | Where-Object { $i = $_; @($TestCostFields | Where-Object { (Get-TestField $t2 ($i * 0x90 + $_[0]) $_[1]) -ne 0 }).Count -gt 0 }).Count
+    Assert-Check "AA 0 = free (de): exit code $($r.Code), $($cmp.Changed) values 0, $left entries with costs left, $($cmp.Other) other bytes changed" ($r.Code -eq 0 -and $left -eq 0 -and $cmp.Wrong -eq 0 -and $cmp.Other -eq 0 -and $r.Text -match "Baukosten x0: $($cmp.Changed) Werte geaendert" -and $r.Text -match 'Kontor I jetzt: 0 Gold, 0 t Werkzeug, 0 t Holz')
+    Assert-Check "AA 0: marker $(Hex (Read-Image $a $CostMarkerRva 8))" ((Hex (Read-Image $a $CostMarkerRva 8)) -eq '42 41 55 4B 00 00 00 00')
+    Stop-ImageProcess $a
+
+    Write-Host 'AB -Upkeep'
+    $a = Start-ImageProcess -Crt
+    Invoke-SimulatedStart $a
+    [void](Invoke-HaeuserParser $a)
+    $r = Invoke-Tool $a @('-Upkeep', '0.5')
+    $t1 = Read-Image $a $BuildingRva $tabLen
+    $cmp = Compare-ScaledTable $t0 $t1 $TestUpkeepFields 0.5
+    Assert-Check "AB x0.5: exit code $($r.Code), $($cmp.Changed) values changed, $($cmp.Wrong) wrong, $($cmp.Other) other bytes changed" ($r.Code -eq 0 -and $cmp.Wrong -eq 0 -and $cmp.Other -eq 0 -and $cmp.Changed -gt 80 -and $r.Text -match "Upkeep x0[.,]5: $($cmp.Changed) values changed")
+    Assert-Check "AB x0.5: trading post I 8/8 (active/paused), church 25, chapel 3 (message)" ([BitConverter]::ToUInt16($t1, 270 * 0x90 + 0x2C) -eq 8 -and [BitConverter]::ToUInt16($t1, 270 * 0x90 + 0x2A) -eq 8 -and [BitConverter]::ToUInt16($t1, 463 * 0x90 + 0x2C) -eq 25 -and [BitConverter]::ToUInt16($t1, 462 * 0x90 + 0x2C) -eq 3 -and $r.Text -match 'trading post I now: 8 \(originally 15\), church 25')
+    Assert-Check "AB marker $(Hex (Read-Image $a $UpkeepMarkerRva 8)), build cost marker empty" ((Hex (Read-Image $a $UpkeepMarkerRva 8)) -eq '55 4E 54 48 32 00 00 00' -and (Hex (Read-Image $a $CostMarkerRva 8)) -eq '00 00 00 00 00 00 00 00')
+    $r = Invoke-Tool $a @('-Upkeep', '0.5', '-BuildCost', '0.5')
+    $t2 = Read-Image $a $BuildingRva $tabLen
+    Assert-Check "AB second run with build cost: exit code $($r.Code), upkeep already set and unchanged, build cost set" ($r.Code -eq 0 -and $r.Text -match 'Upkeep x0[.,]5: already set' -and (Get-TestSha256 (Get-TestFieldBytes $t2 $TestUpkeepFields)) -eq (Get-TestSha256 (Get-TestFieldBytes $t1 $TestUpkeepFields)) -and (Compare-ScaledTable $t0 $t2 $TestCostFields 0.5).Wrong -eq 0)
+    Stop-ImageProcess $a
+    $a = Start-ImageProcess -Crt
+    Invoke-SimulatedStart $a
+    [void](Invoke-HaeuserParser $a)
+    Write-Image $a ($BuildingRva + 270 * 0x90 + 0x2C) ([BitConverter]::GetBytes([uint16]16))
+    $r = Invoke-Tool $a @('-Upkeep', '0')
+    Assert-Check "AB wrong original (trading post I 16): exit code $($r.Code), note, no marker" ($r.Code -eq 0 -and $r.Text -match 'Upkeep: unexpected values in the building table' -and (Hex (Read-Image $a $UpkeepMarkerRva 8)) -eq '00 00 00 00 00 00 00 00' -and [BitConverter]::ToUInt16((Read-Image $a ($BuildingRva + 463 * 0x90 + 0x2C) 2), 0) -eq 50)
+    Write-Image $a ($BuildingRva + 270 * 0x90 + 0x2C) ([BitConverter]::GetBytes([uint16]15))
+    $r = Invoke-Tool $a @('-Upkeep', '0') 'de'
+    $t1 = Read-Image $a $BuildingRva $tabLen
+    $cmp = Compare-ScaledTable $t0 $t1 $TestUpkeepFields 0
+    $left = @(0..499 | Where-Object { [BitConverter]::ToUInt16($t1, $_ * 0x90 + 0x2A) -ne 0 -or [BitConverter]::ToUInt16($t1, $_ * 0x90 + 0x2C) -ne 0 }).Count
+    Assert-Check "AB 0 (de): exit code $($r.Code), no running costs left ($left), $($cmp.Other) other bytes changed" ($r.Code -eq 0 -and $left -eq 0 -and $cmp.Wrong -eq 0 -and $cmp.Other -eq 0 -and $r.Text -match "Betriebskosten x0: $($cmp.Changed) Werte geaendert")
+    Stop-ImageProcess $a
+
+    Write-Host 'AC -Taxes'
+    function Get-Taxes($a) { (0..4 | ForEach-Object { [BitConverter]::ToInt32((Read-Image $a ($TaxRva + $_ * $ResidentSize) 4), 0) }) -join '/' }
+    foreach ($case in @(@('1.5', '11/12/17/18/20'), @('2', '14/16/22/24/26'), @('3', '21/24/33/36/39'))) {
+        $a = Start-ImageProcess -Crt
+        Invoke-SimulatedStart $a
+        [void](Invoke-HaeuserParser $a)
+        $g0 = Read-Image $a 0x6BA020 (5 * 0x50)
+        $r = Invoke-Tool $a @('-Taxes', $case[0])
+        $g1 = Read-Image $a 0x6BA020 (5 * 0x50)
+        $otherG = 0; for ($j = 0; $j -lt $g0.Length; $j++) { if (($j % 0x50) -lt 0x10 -or ($j % 0x50) -ge 0x14) { if ($g0[$j] -ne $g1[$j]) { $otherG++ } } }
+        Assert-Check "AC x$($case[0]): exit code $($r.Code), taxes $(Get-Taxes $a) (expected $($case[1])), $otherG other group bytes changed" ($r.Code -eq 0 -and (Get-Taxes $a) -eq $case[1] -and $otherG -eq 0 -and $r.Text -match "Taxes x$($case[0].Replace(".", "[.,]")): $($case[1]) per resident group")
+        if ($case[0] -eq '2') {
+            $r = Invoke-Tool $a @('-Taxes', '2') 'de'
+            Assert-Check "AC second run (de): exit code $($r.Code), $(Get-Taxes $a) not doubled again, German message" ($r.Code -eq 0 -and (Get-Taxes $a) -eq '14/16/22/24/26' -and $r.Text -match 'Steuern x2: 14/16/22/24/26 je Bevoelkerungsgruppe')
+            $r = Invoke-Tool $a @('-Taxes', '3')
+            Assert-Check "AC other factor in the same process: exit code $($r.Code), note, unchanged $(Get-Taxes $a)" ($r.Code -eq 0 -and $r.Text -match 'Taxes: unexpected value 14 instead of 7' -and (Get-Taxes $a) -eq '14/16/22/24/26')
+        }
+        Stop-ImageProcess $a
+    }
+
+    Write-Host 'AD -Radius'
+    foreach ($f in 1.5, 2) {
+        $a = Start-ImageProcess -Crt
+        Invoke-SimulatedStart $a
+        [void](Invoke-HaeuserParser $a)
+        $r = Invoke-Tool $a @('-Radius', "$f")
+        $t1 = Read-Image $a $BuildingRva $tabLen
+        $wrong = @(); $other = 0; $maxR = 0
+        for ($i = 0; $i -lt 500; $i++) {
+            $o = $i * 0x90 + $RadiusOffset; $v0 = $t0[$o]; $v1 = $t1[$o]
+            if ($v1 -gt $maxR) { $maxR = $v1 }
+            if ($RadiusOrig.ContainsKey($i)) { if ($v1 -ne [math]::Min(48, [int][math]::Floor($v0 * $f + 0.5))) { $wrong += "$i=$v1" } }
+            elseif ($v1 -ne $v0) { $other++ }
+        }
+        $sameElse = $true; for ($j = 0; $j -lt $tabLen; $j++) { if (($j % 0x90) -ne $RadiusOffset -and $t0[$j] -ne $t1[$j]) { $sameElse = $false; break } }
+        Assert-Check "AD x${f}: exit code $($r.Code), trading post $($t1[270 * 0x90 + 0x20]), market $($t1[467 * 0x90 + 0x20]), cathedral $($t1[461 * 0x90 + 0x20]), church $($t1[463 * 0x90 + 0x20]); wrong $($wrong -join ' '), $other other radii changed, largest $maxR" ($r.Code -eq 0 -and $wrong.Count -eq 0 -and $other -eq 0 -and $maxR -le 48 -and $sameElse -and $r.Text -match "Radius x${f}: trading post and market $([int][math]::Floor(16 * $f + 0.5))")
+        $r = Invoke-Tool $a @('-Radius', "$f")
+        Assert-Check "AD x${f} second run: exit code $($r.Code), unchanged" ($r.Code -eq 0 -and [BitConverter]::ToString((Read-Image $a $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t1))
+        Stop-ImageProcess $a
+    }
+    $a = Start-ImageProcess -Crt
+    Invoke-SimulatedStart $a
+    [void](Invoke-HaeuserParser $a)
+    Write-Image $a ($BuildingRva + 469 * 0x90 + $RadiusOffset) ([byte[]]@(17))
+    $r = Invoke-Tool $a @('-Radius', '2') 'de'
+    Assert-Check "AD unexpected value (doctor 17, de): exit code $($r.Code), German note, nothing set" ($r.Code -eq 0 -and $r.Text -match 'Radius: unerwarteter Wert 17 statt 16' -and $r.Text -match 'NICHT gesetzt' -and (Read-Image $a ($BuildingRva + 270 * 0x90 + $RadiusOffset) 1)[0] -eq 16)
+    Stop-ImageProcess $a
+
+    Write-Host 'AE -Fertility Everywhere'
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    # Test islands: no., climate, class, flags, fertilities, crop bits (bit = crop - 0x2D), present
+    Set-TestIsland $a 0 0 2 4 0 0
+    Set-TestIsland $a 1 1 3 4 0 0
+    Set-TestIsland $a 2 0 1 4 1 0x20            # grapes already (bit 5): no sugar cane there originally
+    Set-TestIsland $a 3 1 4 0 0 0               # no fertile land (flag bit 2 clear)
+    Set-TestIsland $a 4 0 2 4 0 0 $false        # island not present
+    Set-TestIsland $a 5 0 2 4 2 0               # already two fertilities
+    Set-TestIsland $a 6 1 0 4 0 0x04            # spices already (bit 2)
+    $calls = @(@(0x2F, 0, 4, 2), @(0x30, 0, 4, 2), @(0x2E, 2, 3, 2), @(0x33, 0, 4, 1), @(0x32, 1, 4, 3), @(0x31, 0, 4, 2))
+    $before = foreach ($cl in $calls) { Invoke-CandidateIslands $a $cl[0] $cl[1] $cl[2] $cl[3] }
+    Assert-Check "AE original FUN_1400d0ce0 with the test islands: $($before -join ' | ')" (($before -join '|') -eq '1|0|0|1,6|0,5|1,6')
+    $r = Invoke-Tool $a @('-Fertility', 'Everywhere')
+    Assert-Check "AE exit code $($r.Code), message" ($r.Code -eq 0 -and $r.Text -match 'Fertility: Everywhere \(every island with fertile land grows all six crops')
+    $fc = Build-FertilityCode
+    Assert-Check "AE fertility code cave set ($($fc.Length) bytes, ends before the markers)" ((Hex (Read-Image $a $FertCaveRva $fc.Length)) -eq (Hex $fc) -and $FertCaveRva + $fc.Length -le $CostMarkerRva)
+    $hookT = [byte[]](@(0xE9) + (Rel32 $FertCaveRva ($FertHookRva + 5)) + @(0x90) * 11)
+    Assert-Check "AE jump in FUN_1400d0ce0 set ($(Hex (Read-Image $a $FertHookRva 16))), surroundings unchanged" ((Hex (Read-Image $a $FertHookRva 16)) -eq (Hex $hookT) -and (Hex (Read-Image $a 0xD0D4E 8)) -eq '8D 4F D2 83 F9 05 77 41' -and (Hex (Read-Image $a 0xD0D66 4)) -eq '80 78 D8 00')
+    $rc = Build-ResourceCode 0 0 $true
+    Assert-Check "AE resource code cave: fertility block only ($($rc.Length) bytes), island code with call" ((Hex (Read-Image $a $ResourceCaveRva $rc.Length)) -eq (Hex $rc) -and (Hex (Read-Image $a $IslandCodeRva (Build-IslandCode $true $true).Length)) -eq (Hex (Build-IslandCode $true $true)))
+    $after = foreach ($cl in $calls) { Invoke-CandidateIslands $a $cl[0] $cl[1] $cl[2] $cl[3] }
+    Assert-Check "AE patched FUN_1400d0ce0 with limits 1-3: unchanged ($($after -join ' | '))" (($after -join '|') -eq ($before -join '|'))
+    $magic = foreach ($cl in $calls) { Invoke-CandidateIslands $a $cl[0] $cl[1] $cl[2] $FertMagic }
+    Assert-Check "AE limit 'FERT': climate ignored ($($magic -join ' | '))" (($magic -join '|') -eq '0,1,2,5|0,1,2,5,6|0,1,5|0,1,2,5,6|0,1,5|0,1,2,5,6')
+    $none = Invoke-CandidateIslands $a 0x34 0 4 $FertMagic
+    Assert-Check "AE limit 'FERT', grass (0x34, not a crop): no island ('$none')" ($none -eq '')
+    function Get-FertileScene([byte[]]$scene, $plan, [int]$percent, [int]$villages) {
+        $old = [BitConverter]::ToInt32($scene, 0x64); $new = $plan.Count
+        $e = [byte[]]$scene.Clone(); [Array]::Copy((I32 $new), 0, $e, 0x64, 4)
+        for ($i = 0; $i -lt 50; $i++) { $q = if ($i -lt $new) { $plan[$i] } else { New-Object byte[] 16 }; [Array]::Copy($q, 0, $e, 0x174 + 16 * $i, 16) }
+        if ($percent -gt 0) { foreach ($o in $ResourceOffsets) { $m = [int][BitConverter]::ToUInt16($scene, $o); [Array]::Copy([BitConverter]::GetBytes([uint16][math]::Min($new, [int][math]::Truncate($m * $new * $percent / ($old * 100)))), 0, $e, $o, 2) } }
+        if ($villages -gt 0) { [Array]::Copy((I32 $villages), 0, $e, 0x40, 4); [Array]::Copy((I32 $villages), 0, $e, 0x44, 4) }
+        for ($k = 0; $k -lt 12; $k++) { if ([BitConverter]::ToUInt16($scene, 0xB4 + 8 * $k) -ne 0) { [Array]::Copy([BitConverter]::GetBytes([uint16]50), 0, $e, 0xB6 + 8 * $k, 2) } }
+        [Array]::Copy((I32 $FertMagic), 0, $e, 0x60, 4)
+        , $e
+    }
+    foreach ($file in '[[48]]00.szs', '[[48]]21.szs', '[[48]]32.szs') {
+        $scene = Read-Scene $file; $plan = $exp1000.Plans[[int][string]$file[7]]
+        $actual = Invoke-IslandCode $a $scene 1000 700
+        $nf = @(0..11 | Where-Object { [BitConverter]::ToUInt16($actual, 0xB4 + 8 * $_) -ne 0 -and [BitConverter]::ToUInt16($actual, 0xB6 + 8 * $_) -eq 50 }).Count
+        Assert-Check ("AE {0}: {1} islands, {2} crop amounts 50, +0x60 = 0x{3:X}, all 1172 bytes as expected" -f $file, [BitConverter]::ToInt32($actual, 0x64), $nf, [BitConverter]::ToInt32($actual, 0x60)) ((Hex $actual) -eq (Hex (Get-FertileScene $scene $plan 0 0)) -and $nf -eq 6)
+    }
+    Assert-Check 'AE helper process still alive' (-not $a.Proc.HasExited)
+    Stop-ImageProcess $a
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    $r = Invoke-Tool $a @('-Fertility', 'Everywhere', '-Resources', 'Lots', '-Natives', 'More')
+    $rc = Build-ResourceCode 200 4 $true
+    Assert-Check "AE with -Resources Lots -Natives More: exit code $($r.Code), code cave $($rc.Length) bytes set" ($r.Code -eq 0 -and (Hex (Read-Image $a $ResourceCaveRva $rc.Length)) -eq (Hex $rc) -and $ResourceCaveRva + $rc.Length -le $ResourceCaveEnd)
+    foreach ($file in '[[48]]10.szs', '[[48]]22.szs') {
+        $scene = Read-Scene $file; $plan = $exp1000.Plans[[int][string]$file[7]]
+        $actual = Invoke-IslandCode $a $scene 1000 700
+        Assert-Check ("AE {0} with resources Lots and villages 4: ore {1}, treasure {2}, crops 50, villages {3}/{4}, all 1172 bytes as expected" -f $file, [BitConverter]::ToUInt16($actual, 0x96), [BitConverter]::ToUInt16($actual, 0x116), [BitConverter]::ToInt32($actual, 0x40), [BitConverter]::ToInt32($actual, 0x44)) ((Hex $actual) -eq (Hex (Get-FertileScene $scene $plan 200 4)))
+    }
+    Stop-ImageProcess $a
+    foreach ($case in @(@('-StretchOnly', 'not with -StretchOnly'), @('-NoIslandSpread', 'not with -NoIslandSpread'))) {
+        $a = Start-ImageProcess
+        Invoke-SimulatedStart $a
+        $r = Invoke-Tool $a @('-Fertility', 'Everywhere', $case[0])
+        Assert-Check "AE $($case[0]): exit code $($r.Code), note, jump and code cave untouched" ($r.Code -eq 0 -and $r.Text -match ([regex]::Escape($case[1]) + '\); NOT set') -and (Hex (Read-Image $a $FertHookRva 16)) -eq $FertHookOrig -and (Hex (Read-Image $a $FertCaveRva 8)) -eq '00 00 00 00 00 00 00 00')
+        Stop-ImageProcess $a
+    }
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    $r = Invoke-Tool $a @('-Fertility', 'Everywhere') 'de'
+    Assert-Check "AE de: exit code $($r.Code), German message" ($r.Code -eq 0 -and $r.Text -cmatch 'Fruchtbarkeit: Ueberall \(jede Insel mit fruchtbarem Land' -and $r.Text -cnotmatch 'Everywhere')
+    Stop-ImageProcess $a
+
+    Write-Host 'AF -Mines Infinite'
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    foreach ($m in $MineSites) { Assert-Check ("AF before 0x{0:X} = {1}" -f $m.Rva, (Hex (Read-Image $a $m.Rva ((Bytes $m.Original).Length)))) ((Hex (Read-Image $a $m.Rva ((Bytes $m.Original).Length))) -eq $m.Original) }
+    $around = Hex (Read-Image $a 0xBA400 0xC0)
+    $r = Invoke-Tool $a @('-Mines', 'Infinite')
+    Assert-Check "AF exit code $($r.Code), message" ($r.Code -eq 0 -and $r.Text -match 'Mines: Infinite \(ore and gold deposits are never used up\)')
+    foreach ($m in $MineSites) { Assert-Check ("AF 0x{0:X} = {1} (NOP of the same length)" -f $m.Rva, (Hex (Read-Image $a $m.Rva ((Bytes $m.Target).Length)))) ((Hex (Read-Image $a $m.Rva ((Bytes $m.Target).Length))) -eq $m.Target -and (Bytes $m.Target).Length -eq (Bytes $m.Original).Length) }
+    $now = Read-Image $a 0xBA400 0xC0; $exp = Bytes $around
+    foreach ($m in $MineSites) { $tb = Bytes $m.Target; for ($k = 0; $k -lt $tb.Length; $k++) { $exp[$m.Rva - 0xBA400 + $k] = $tb[$k] } }
+    Assert-Check 'AF the rest of FUN_1400b9ed0 around the sites unchanged (192 bytes)' ((Hex $now) -eq (Hex $exp))
+    $r = Invoke-Tool $a @('-Mines', 'Infinite') 'de'
+    Assert-Check "AF second run (de): exit code $($r.Code), German message" ($r.Code -eq 0 -and $r.Text -cmatch 'Minen: Unendlich \(Erz- und Goldvorkommen werden nie aufgebraucht\)')
+    Stop-ImageProcess $a
+    $a = Start-ImageProcess
+    Write-Image $a 0xBA429 ([byte[]](0x66, 0x29, 0x42, 0x07)) $true
+    $r = Invoke-Tool $a @('-Mines', 'Infinite')
+    Assert-Check "AF falsified site: abort (exit code $($r.Code)), the other site unchanged" ($r.Code -ne 0 -and $r.Text -match 'unexpected bytes' -and (Hex (Read-Image $a 0xBA495 5)) -eq '66 44 2B 47 26')
+    Stop-ImageProcess $a
+
+    Write-Host 'AG -Disasters Off / More'
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    $snap = @{}; foreach ($rv in 0x9E800, 0xBCA80) { $snap[$rv] = Read-Image $a $rv 0x180 }
+    $r = Invoke-Tool $a @('-Disasters', 'Off')
+    Assert-Check "AG Off: exit code $($r.Code), message" ($r.Code -eq 0 -and $r.Text -match 'Disasters: Off \(no new fire, plague, drought or volcanic eruption\)')
+    foreach ($s in $DisasterOffSites) { Assert-Check ("AG Off {0} 0x{1:X} = {2}" -f $s.Name, $s.Rva, (Hex (Read-Image $a $s.Rva 5))) ((Hex (Read-Image $a $s.Rva 5)) -eq '0F 1F 44 00 00' -and $s.Original -like 'E8 *') }
+    $diff = 0; foreach ($rv in $snap.Keys) { $now = Read-Image $a $rv 0x180; for ($k = 0; $k -lt 0x180; $k++) { if ($now[$k] -ne $snap[$rv][$k]) { $diff++ } } }
+    Assert-Check "AG Off: exactly 25 bytes changed in the two functions ($diff)" ($diff -eq 25)
+    $r = Invoke-Tool $a @('-Disasters', 'More')
+    Assert-Check "AG More against Off in the same process: abort (exit code $($r.Code)), More not set" ($r.Code -ne 0 -and $r.Text -match 'unexpected bytes' -and (Hex (Read-Image $a 0xBCABB 3)) -eq '83 FA 0C')
+    Stop-ImageProcess $a
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    $r = Invoke-Tool $a @('-Disasters', 'More') 'de'
+    Assert-Check "AG More (de): exit code $($r.Code), German message" ($r.Code -eq 0 -and $r.Text -cmatch 'Katastrophen: Mehr \(Feuer und Pest doppelt so wahrscheinlich')
+    foreach ($s in $DisasterMoreSites) { $n = (Bytes $s.Target).Length; Assert-Check ("AG More 0x{0:X} = {1}" -f $s.Rva, (Hex (Read-Image $a $s.Rva $n))) ((Hex (Read-Image $a $s.Rva $n)) -eq $s.Target) }
+    foreach ($s in $DisasterOffSites) { Assert-Check ("AG More: call 0x{0:X} untouched" -f $s.Rva) ((Hex (Read-Image $a $s.Rva 5)) -eq $s.Original) }
+    Stop-ImageProcess $a
+
+    Write-Host 'AH Everything together (real haeuser.cod)'
+    $a = Start-ImageProcess -Crt
+    Invoke-SimulatedStart $a
+    [void](Invoke-HaeuserParser $a)
+    foreach ($nr in $ShipSpeedOrig.Keys) { Write-Image $a ($FigureRva + $nr * $FigureSize + $SpeedOffset) (Bytes $ShipSpeedOrig[$nr]) }
+    foreach ($nr in $CargoOrig.Keys) { Write-Image $a ($FigureRva + $nr * $FigureSize + $CargoOffset) ([BitConverter]::GetBytes([uint16]$CargoOrig[$nr])) }
+    $all = @('-IslandSize', 'Huge', '-Resources', 'Lots', '-Natives', 'Lots', '-Rivals', 'Hard', '-PirateFleet', 'Huge', '-Traders', 'Lots',
+        '-Pirates', 'Strong', '-StartGold', '50000', '-RivalGold', '60000', '-Residents', '5', '-Turbo', '-TurboLevel', '16', '-Production', '2', '-Storage', '5', '-ShipSpeed', '2', '-Cargo', '3',
+        '-BuildCost', '0.25', '-Upkeep', '0.5', '-Taxes', '3', '-Radius', '2', '-Fertility', 'Everywhere', '-Mines', 'Infinite', '-Disasters', 'Off')
+    $r = Invoke-Tool $a $all
+    Assert-Check "AH all options: exit code $($r.Code), production x2 shortens the 125 intervals counted in the game" ($r.Code -eq 0 -and $r.Text -match 'Production x2: 125 work intervals shortened' -and $r.Text -match 'Storage x5' -and $r.Text -match 'Residents x5' -and $r.Text -match 'Ship speed x2' -and $r.Text -match 'Cargo x3')
+    if ($r.Code -ne 0) { Write-Host $r.Text }
+    $t1 = Read-Image $a $BuildingRva $tabLen
+    Assert-Check "AH build cost x0.25, upkeep x0.5, taxes x3, radius x2 all set" ((Compare-ScaledTable $t0 $t1 $TestCostFields 0.25).Wrong -eq 0 -and (Compare-ScaledTable $t0 $t1 $TestUpkeepFields 0.5).Wrong -eq 0 -and (Get-Taxes $a) -eq '21/24/33/36/39' -and $t1[270 * 0x90 + 0x20] -eq 32 -and $t1[461 * 0x90 + 0x20] -eq 48)
+    $tabH = Build-IslandTable 1000 700 $false 'Huge'
+    $rc = Build-ResourceCode 200 7 $true; $fc = Build-FertilityCode
+    $ranges = @(@('IslandTable', $TableRva, $tabH), @('Fertility', $FertCaveRva, $fc), @('BuildCostMarker', $CostMarkerRva, (New-Object byte[] 8)), @('UpkeepMarker', $UpkeepMarkerRva, (New-Object byte[] 8)), @('Resources', $ResourceCaveRva, $rc),
+        @('PirateFleet', $FleetCaveRva, (Build-FleetCode 3)), @('Traders', $TraderCaveRva, (Build-TraderCode 3)), @('BigMap', $BigMapCaveRva, (Build-BigMapCode)), @('ProductionMarker', $ProdMarkerRva, (New-Object byte[] 8)), @('TIMERS', $PirateCaveRva, (Build-PirateCode 'Strong' 50000 60000)))
+    $ok = $true
+    for ($i = 0; $i -lt $ranges.Count - 1; $i++) { if ($ranges[$i][1] + $ranges[$i][2].Length -gt $ranges[$i + 1][1]) { $ok = $false } }
+    Assert-Check ("AH code caves, tables and markers do not overlap ({0})" -f (($ranges | ForEach-Object { '{0} 0x{1:X}+{2}' -f $_[0], $_[1], $_[2].Length }) -join ', ')) ($ok -and $PirateCaveRva + $ranges[-1][2].Length -le 0xE6000 -and $TableRva + $tabH.Length -le $TableRva + $TableMax)
+    foreach ($b in $ranges) { if ($b[0] -notlike '*Marker') { Assert-Check "AH $($b[0]) in memory as built" ((Hex (Read-Image $a $b[1] $b[2].Length)) -eq (Hex $b[2])) } }
+    Assert-Check "AH markers: build cost $(Hex (Read-Image $a $CostMarkerRva 8)), upkeep $(Hex (Read-Image $a $UpkeepMarkerRva 8)), production $(Hex (Read-Image $a $ProdMarkerRva 8))" ((Hex (Read-Image $a $CostMarkerRva 8)) -eq '42 41 55 4B 19 00 00 00' -and (Hex (Read-Image $a $UpkeepMarkerRva 8)) -eq '55 4E 54 48 32 00 00 00' -and (Hex (Read-Image $a $ProdMarkerRva 8)) -eq '4E 55 46 52 C8 00 00 00')
+    $r = Invoke-Tool $a $all
+    $t2 = Read-Image $a $BuildingRva $tabLen
+    Assert-Check "AH second run with all options: exit code $($r.Code), building table unchanged" ($r.Code -eq 0 -and [BitConverter]::ToString($t2) -eq [BitConverter]::ToString($t1))
+    Assert-Check 'AH helper process still alive' (-not $a.Proc.HasExited)
     Stop-ImageProcess $a
 
     Write-Host 'F  Process exits while the tool waits for the start'

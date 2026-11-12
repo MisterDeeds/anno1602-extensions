@@ -23,7 +23,7 @@ gloss in parentheses on first use.
 | Git | 2.56.0 | winget |
 
 Decrypt/encrypt `.cod` files: `tools/cod.ps1` (every byte negated).
-Map size: `tools/anno-patcher.ps1`, start together with the game: `tools/start-big-world.cmd`, offline test `tools/test-patcher.ps1`, island plan as an image `tools/show-island-plan.ps1`, player guide `tools/README.txt` (German: `tools/README.de.txt`).
+Map size and all game options: `tools/anno-patcher.ps1`, start together with the game: the launcher window `tools/launcher.ps1` or `tools/start-big-world.cmd`, offline test `tools/test-patcher.ps1`, island plan as an image `tools/show-island-plan.ps1`, scenarios `tools/build-scenarios.ps1` with `tools/scenario-lib.ps1` (check: `tools/check-scenarios.ps1`), random adventures `tools/random-adventure.ps1`, logbook window `tools/logbook.ps1`, read-only checks of the running game `tools/check-game.ps1` and `tools/check-islands.ps1`, installer `tools/install.ps1`, player guide `tools/README.txt` (German: `tools/README.de.txt`).
 Ghidra helper scripts: `AnnoAsm.java` (instructions from an address), `AnnoPatchDis.java` (put bytes into Ghidra's in-memory program only and disassemble them).
 Note: `tools/ghidra-scan.cmd` needs `GHIDRA_INSTALL_DIR` and `JAVA_HOME` in the process environment. If the shell was started before the variables were set, they are missing ("Das System kann den angegebenen Pfad nicht finden", the system cannot find the path specified); in that case take them over from the user or system variables first.
 
@@ -329,7 +329,7 @@ Found with REA/Ghidra (`analysis/scan/all-functions.c`: all 1,275 functions deco
 
 **Implementation `-Resources More|Lots`:** code stub at RVA `0xE5C00` (102 bytes), called with `call` from the island spreading directly after the island list has been copied (endless templates only).
 - For the 17 quantities +0x96 … +0x116: `min(new, quantity × new × percent / (old × 100))`, with percent = 100 or 200.
-- Island code stub with the call: 204 instead of 199 bytes; the island table may now extend up to `0xE5C00`.
+- Island code stub with the call: 204 instead of 199 bytes; the island table may now extend up to `0xE5C00` (since 2026-11-12 only up to `0xE5BA0`, see the memory layout in "Rivals, pirate fleet, natives, traders, 50 islands").
 
 **Island size (O):**
 - Island files of class lar: `NORD` 6, `SUED` 7, `NORDNAT`/`SUEDNAT` 0 (big: 68/64/37/40).
@@ -390,7 +390,7 @@ Assembler excerpts: `analysis/scan/schwierigkeit.txt`, `haendler.txt`, `neue-pat
 
 **50 islands (O):** SZENE section, island table and grid have 50 slots; 48 was only caution. `0x31` appears in the code as a goods ID, not as "no island"; islands are not created anew at runtime. Density of the extra islands 0.7 instead of 0.6: at 1000 × 700 now 50/50/47 instead of 43/48/40.
 
-**Memory layout at the end of .text:** 0xE5100 island code (204) · 0xE5200 island table (2,452) · 0xE5C00 raw materials/villages (up to 118) · 0xE5E00 pirate fleet (17) · 0xE5E20 traders (14) · 0xE5F70 marker NUFR (8) · 0xE5F80 TIMERS (up to 83).
+**Memory layout at the end of .text** (updated 2026-11-12, checked by offline case AH): 0xE5100 island code (up to 209) · 0xE5200 island table (2,452; limit now 0xE5BA0) · 0xE5BA0 fertility code stub (30) · 0xE5BC0 marker BAUK (8) · 0xE5BC8 marker UNTH (8) · 0xE5BD0–0xE5BFF free · 0xE5C00 raw materials/villages/fertility (up to 158) · 0xE5E00 pirate fleet (17) · 0xE5E20 traders (14) · 0xE5E40 big campaign maps (200) · 0xE5F70 marker NUFR (8) · 0xE5F80 TIMERS (up to 83).
 
 **Offline test:** new cases U (four AI places; natural events and pirate cannons untouched), V (the pirate fleet code stub calls the real `FUN_1400185f0` in the image; levels 0–4 set through the player flags → 0/2/4/6/8 or 0/3/6/9/12; waiting times 500/333), W (traders: 0, 1, 4, 5, 8, 12, 13, 30 → ×2 or ×3, at most 24), X (villages 4/4 or 7/7 with the real templates, with and without raw materials), Y (50 islands; all options together, code stubs do not overlap). Total **415 of 415**.
 
@@ -483,7 +483,7 @@ Assembler excerpts: `analysis/scan/schwierigkeit.txt`, `haendler.txt`, `neue-pat
 - Implementation: `Get-IslandPlan` receives the start points (read from the SHIP4 section of `[[48]]1<layout>.szs`) and neither enlarges nor places an island closer than 2 tiles to them. The plans for 1000 × 700 layout 0/1 and all plans for 2000 × 1400 stay the same byte for byte; layout 2 (1000 × 700 Normal/Huge) and some 750 × 525 plans change. Offline case T now checks all 27 plans (3 sizes × 3 island sizes × 3 layouts): **456 of 456**.
 - Campaigns: the islands are mirrored or newly planned, the ships are not. In 10 of 13 scenarios at least one version had ships inside an island. `build-scenarios.ps1` now looks, per scenario, for a water point that is 10 tiles away from every island in all six versions (small × 1/1.5/2/4, big × 1/2), as close as possible to the start point of the template, and moves all four ships there. `check-scenarios.ps1` checks this for all 13: clear.
 
-**Start fleet:** extra ships for the human = copy of his SHIP4 entry with a new name, slot (+0x46 = next one), figure type (+0x48: 23 large trading ship, 25/27 small/large warship), cargo space (+0x3C: 2,560/2,080/3,840) and full number of cannons (+0x42: 10/8/14; cannons = ship +0x2AE, cf. message 0x19), without cargo, 7–9 tiles next to the start point (for this the start point is 14 tiles from every island). Schwarze Segel and Goldrausch: small warship; Eroberer: large warship; Krone: large trading ship.
+**Start fleet:** extra ships for the human = copy of his SHIP4 entry with a new name, slot (+0x46 = next one), figure type (+0x48: 23 large trading ship, 25/27 small/large warship), cargo space (+0x3C: 2,560/2,080/3,840) and full number of cannons (+0x42: 10/8/14; cannons = ship +0x2AE, cf. message 0x19), without cargo (since 2026-11-12 optionally with cargo, see "Ship cargo" below), 7–9 tiles next to the start point (for this the start point is 14 tiles from every island). Schwarze Segel and Goldrausch: small warship; Eroberer: large warship; Krone: large trading ship.
 
 **Launcher:** button "Für Kampagnen" (For campaigns) (1000 × 700, more islands, turbo 16-fold, gold "Wie Schwierigkeit" (as per difficulty), everything else default). A note on the own scenarios at the top of the window.
 
@@ -491,7 +491,409 @@ Assembler excerpts: `analysis/scan/schwierigkeit.txt`, `haendler.txt`, `neue-pat
 
 **In game after the corrections (O):** "Der Eroberer" (big version): own large warship "Königsadler" in slot 4, figure type 27, 14 cannons, next to the start ship; 50 islands. "Wettlauf 4" (big version, ships previously inside a 100×90 island): all ships in open water.
 
-**Scenarios now (13):** Smaragdinseln 1–6, Wettlauf 1–4 (Erster Hafen, Bürgerstolz, Kaufmannsrepublik, Die Krone – First Harbour, Citizens' Pride, Merchant Republic, The Crown; goals from 300/150 settlers up to 1,500/600 aristocrats, adjusted after measuring, see above), challenges Inselreich (8 towns, 3,000 residents in total), Handelsimperium (50 t jewellery, 80 t clothes, trade balance +300), Goldrausch (60 t gold, 40 t jewellery). `tools/check-scenarios.ps1` checks all of them: sections, mission, race setting, both maps (boundaries, overlaps), raw materials, villages, gold, flags.
+**Scenarios now (23 per language, since 2026-11-12):** Smaragdinseln 1–6, Wettlauf 1–4 (Erster Hafen, Bürgerstolz, Kaufmannsrepublik, Die Krone – English file names First Harbour, Civic Pride, Merchant Republic, The Crown; goals from 300/150 settlers up to 1,500/600 aristocrats, adjusted after measuring, see above), challenges Inselreich (8 towns, 3,000 residents in total), Handelsimperium (50 t jewellery, 80 t clothes, trade balance +300), Goldrausch (60 t gold, 40 t jewellery); new on 2026-11-12: campaign Sturmsee 1–6 and the challenges Archipel, Kontinente, Handelsflotte, Seemacht (section "Third campaign …" below; not yet played in game). `tools/check-scenarios.ps1` checks all of them: sections, mission, race setting, both maps (boundaries, overlaps), raw materials, villages, gold, flags.
+
+### Gameplay options: building costs, running costs, taxes, radius, fertility, mines, disasters (2026-11-12)
+
+Seven new options in `tools/anno-patcher.ps1` (changed as well: `tools/test-patcher.ps1`, `tools/check-game.ps1`). Evidence outside the repository (parser prototype, dumps, Ghidra listings, a copy of the Ghidra project). **Not yet checked in the running game**: everything below comes from the code and the offline tests; the in-game test plan is at the end of this section.
+
+**Method: the game's own `haeuser.cod` parser in the image (O).**
+- `FUN_140090660` (parser) and `FUN_140092e00` (follow-up at program start) run in the test helper process (exe loaded with `LoadLibraryEx(DONT_RESOLVE_DLL_REFERENCES)`) once the 103 imports of `api-ms-win-crt-*`, `VCRUNTIME140` and `KERNEL32` are written into the IAT by hand and the process runs in the game folder (`fopen("haeuser.cod")` is relative). Return value 1.
+- The result matches every value read in the running game so far: storage Kontor I 960, Maxwohn 128/384/960/1600/2560, Kontor I costs 100 gold / 3 t tools / 6 t wood (paid in game on 2026-11-09), and `-Production 2` shortens exactly **125** intervals (the number the tool reported in game on 2026-11-10).
+- **I** The table in the image therefore equals the table in the game. `FUN_140092e00` only rewrites the interval of PRODTYP kind 10 (growth level) and the group fields +4/+8, none of the fields used below.
+- Test helpers: `Start-ImageProcess -Crt`, `Invoke-HaeuserParser` in `tools/test-patcher.ps1`.
+
+**Building table (O, parser `FUN_140090660`):** 500 entries of 0x90 bytes from `0x1406ba1c0`; object `HAUS` (index = Nummer) and its sub-objects `HAUS_PRODTYP` / `HAUS_BAUKOST` (index = parent Nummer).
+
+| Offset | Size | Keyword | Note |
+|---|---|---|---|
+| +0x00 | int | Id | 2xxxx; `0x1405b9e80[Id − 20000]` = table index |
+| +0x04 | int | kind (HAUS) | 0x23 Kontor, 0x24 shipyard, 0xE building … |
+| +0x1C | int | kind (PRODTYP) | 1 HANDWERK, 2 PLANTAGE, 3 BERGWERK, 7 MARKT, 8 KONTOR, 0xD WOHNUNG, 0x11 tavern, 0x12 chapel, 0x13 church, 0x14 bathhouse, 0x15 theatre, 0x16 doctor, 0x17 school, 0x18 university, 0x19 gallows, 0x1A fire brigade ("BRUNNEN"), 0x1B castle |
+| +0x20 | byte | Radius | |
+| +0x21 | byte | Ware | |
+| +0x22 / +0x23 | byte | Rohstoff / Workstoff | |
+| +0x24 / +0x26 / +0x28 | short | Prodmenge / Rohmenge / Workmenge | × 32 |
+| +0x2A / +0x2C | short | Kosten | +0x2A paused (`KOST_*_SLP`), +0x2C active |
+| +0x2E / +0x2F | byte | BGruppe / Bauinfra | |
+| +0x30 | short | Maxlager | × 32 |
+| +0x32 … +0x3A | short | Maxprodcnt / Arbeiter / Maxnorohst / Erntesmp / Interval | |
+| +0x50 / +0x52 / +0x54 / +0x56 | short | BAUKOST Werkzeug / Holz / Ziegel / Kanon | tons × 32 |
+| +0x58 | int | BAUKOST Money | |
+| +0x72 | byte | flags | PlaceFlg 4, NoShot 0x10, Strand 0x20, Ausbau 0x40, Destroy 0x80 |
+
+Population groups (`BGRUPPE`, 5 × 0x50 bytes from `0x1406ba020`): +0x00 Prozent, +0x04 number of goods, +0x08 Prozent × number, +0x0C Maxwohn × 64 (= `0x1406ba02c`, see "Extensions"), **+0x10 Steuer** = (int)(value × 5.3333) (double at `0x1400eb9b0`) = 7/8/11/12/13, +0x14 Hiscore, +0x18 … consumption of 8 goods.
+
+**Implementation** (the usual pattern: wait until the table is loaded, check the originals, a marker against applying twice, clean abort on unexpected bytes):
+
+| Option (launcher values) | Location | Method |
+|---|---|---|
+| `-BuildCost F` (1, 0.75, 0.5, 0.25, 0) | building table +0x50/+0x52/+0x54 (16 bits) and +0x58 (int), 500 entries | SHA-256 of the original fields must match; every value × F; marker `BAUK` + F × 100 at RVA `0xE5BC0` |
+| `-Upkeep F` (1, 0.75, 0.5, 0.25, 0) | building table +0x2A/+0x2C | the same; marker `UNTH` + F × 100 at RVA `0xE5BC8` |
+| `-Taxes F` (1, 1.5, 2, 3) | population groups +0x10 (5 ints) | originals 7/8/11/12/13 or the target values |
+| `-Radius F` (1, 1.5, 2) | building table +0x20 (8 bits), 17 entries | originals known, at most 48 |
+| `-Fertility Everywhere` | resource code stub (RVA `0xE5C00`) + hook RVA `0xD0D56` → code stub RVA `0xE5BA0` | new endless games with island spreading only |
+| `-Mines Infinite` | RVA `0xBA429`, `0xBA495` | two subtractions → NOPs |
+| `-Disasters Off` / `More` | 5 calls (Off) or 10 limits (More) | code sites, all or nothing |
+
+Pass decimals with a dot (`-BuildCost 0.5`). The patcher accepts any value in the ranges `[0, 1]` (build cost, upkeep), `[1, 3]` (taxes), `[1, 2]` (radius); the launcher offers the values above.
+
+**Building costs (`-BuildCost`):**
+- **O** Readers: building-site check `FUN_14000ef50` (sums the costs of the placed buildings and compares them with the warehouse stock +0x132 tools, +0x13E wood, +0x14A bricks, +0xC6 cannons; gold only `if cost != 0`), payment `FUN_140010390` (gold) and `FUN_1400b6420` (goods: stock − amount), house upgrade `FUN_1400b7c60` (tools/wood/bricks of the next house type), AI `FUN_14002a300`/`FUN_14002a360` and the AI planners (`cost × 64 + cost < gold`). No division by a cost field.
+- **I** 0 is safe: all checks are `<=`/`<`, the gold check skips 0 explicitly, and many original buildings already cost 0 of some material. Free building therefore needs no minimum.
+- **O** Real table: 174 entries with gold, 252 material values (all multiples of 32).
+- Values: factor 0 → 0; otherwise round(v × F) half up, at least 1 gold; materials in whole tons, at least 1 t (the display shows whole tons). Cannons (+0x56) unchanged. Before writing, the SHA-256 over +0x50…+0x55 and +0x58…+0x5B of all 500 entries must be `01bbc1ab…4e6d` (checksum of the real parse). ×0.5 changes 408 values (1 t stays 1 t), ×0 sets all 426 to 0.
+- **I** Applies to the computer rivals (same table) and to house upgrades.
+
+**Running costs (`-Upkeep`):**
+- **O** `Kosten: a, b` = active / paused running costs (constants `KOST_*` and `KOST_*_SLP` in `haeuser.cod`). A town (75 records of 600 bytes from `0x140622dc0`) keeps running sums: production buildings at +0x1D8 (`FUN_1400b9160` when a production record is created; switching active/paused adjusts by +0x2A/+0x2C), +0x1DC from `FUN_1400b4b60` (houses and public buildings according to this analysis; the logbook notes call +0x1DC the costs of military buildings – **?**), workers at +0x218.
+- **O** Economy tick `FUN_1400bc030`: gold += (taxes (`FUN_1400bbdc0`) − (+0x1D8 [+ +0x1DC for the human])) / 6. The AI pays no +0x1DC.
+- **O** The town saver `FUN_1400c3250` does not write +0x1D8/+0x1DC; the `PRODLIST2` loader `FUN_1400c0960` rebuilds +0x1D8 from the current table. **I** The sums are recomputed on load, so a savegame loaded with another factor gets consistent sums (no drift, no negative costs). **?** Not yet confirmed in game (test plan 7).
+- Values as for the building costs; SHA-256 over +0x2A…+0x2D must be `d8b34943…9f8f`; 107 values (×0.5 changes all non-zero ones). Ships and soldiers keep their costs.
+
+**Taxes (`-Taxes`):**
+- **O** `FUN_1400bbdc0` (income of a town) = Σ over the 5 groups of residents (+0x220 + 4g) × Steuer × 6 >> 5 × tax rate (byte +0x24D + g) >> 7; the same formula in the town window (`FUN_140057980`). No other reader.
+- **I** The factor multiplies the income linearly at any tax rate. Overflow: with ×3 (39) and 500,000 residents of one group in one town still below 2^31.
+- Values (round half up): ×1.5 11/12/17/18/20, ×2 14/16/22/24/26, ×3 21/24/33/36/39. Applies to the AI too; balance goals become easier.
+
+**Influence radius (`-Radius`):**
+- **O** Readers: territory `FUN_140095560` (PRODTYP 8 Kontor, radius at least 8; PRODTYP 7 market) → `FUN_14009d730` (circle from the profile table `0x1405ec300`, built for radius 0–127 in `FUN_1400b2550`; clipped at the island edge; only free land (owner 7) changes owner); supply of the houses `FUN_1400bea30` (house flags tavern 0x10, chapel 4, church 8, bathhouse 0x40, theatre 0x80, doctor 0x200, school 0x20, university 0x100, gallows 0x800, fire brigade 0x1000); placement helpers `FUN_1400c04d0`, `FUN_1400a3080`; overlays `FUN_1400149b0`, `FUN_1400c6500`/`FUN_1400c5670` (all via the profile table).
+- **O** Limit: the AI copies the circle profile (radius + 1 bytes, `FUN_140007c60`) into its 0xA0-byte task block at +0x1D94 (`FUN_1400203f0`/`FUN_140020490`, memset 0x1D28…0x1DC7); nothing else in 0x1D95…0x1DC7 is accessed → radius ≤ 51. Largest original radius 24 (cathedral) → factor at most 2, hard cap 48.
+- 17 entries with known originals: 270–273 Kontor I–IV (16), 461 cathedral (24), 462 chapel (8), 463 church (21), 464 tavern (12), 465 theatre (20), 466 bathhouse (20), 467/468 market (16), 469 doctor (16), 470 university (15), 471 school (12), 472 fire brigade (15), 474 gallows (16). Not changed: military (castle 15, towers 8), production buildings (catchment area), natives, ruins 274–277.
+- **I** Territory is assigned when a Kontor or market is built (stored in the island tiles of a savegame); the supply of the houses is computed all the time, so larger radii of public buildings also work in loaded games.
+- **?** Do market carts follow the larger market radius over longer roads (path finding)?
+
+**Fertility (`-Fertility Everywhere`):**
+- **O** Crops 0x2E TABAKBAUM, 0x2F GEWUERZBAUM, 0x30 ZUCKERROHR, 0x31 BAUMWOLLE, 0x32 WEINTRAUBEN, 0x33 KAKAOBAUM. Island record (`0x14062ddc0` + i × 0x2CC8): +0x00 number, +0x18 class, +0x1C climate, +0x20 deposits (8 bytes each, count +0x41), +0x44 flags (bit 2 = can get fertility), +0x45 drought level, +0x47 number of crops, +0x5C crop bits (bit = ware − 0x2D).
+- **O** SZENE loader `FUN_1400d0de0`: 12 fertility entries from +0xB4 (house no. = Id − 20000 of a raw-material building whose Ware is the crop, amount); pass 1 classes 3–4 with limit 1, pass 2 classes 1–2 with limit 1, then repeated with the limit SZENE +0x60 (0 → 2) until nothing is assigned, then class 0 with limit 2. Candidates from `FUN_1400d0ce0(crop, class min, class max, limit, out)`: island present, flag bit 2, class, count < limit, bit not yet set, and the climate: 0x2E/0x30/0x32 only climate 0 (0x30 and 0x32 exclusive), 0x2F/0x31/0x33 only climate 1. Templates: 6 entries used (+0xB4…+0xDC), amounts 2–5, +0x60 = 2.
+- **O** Growth: `FUN_14009db40` gives 0x80 (100 %) with the crop bit, 0x40 for a crop of the island's climate without the bit, 0 otherwise; field growth `FUN_1400998b0` uses it, minus the drought level (+0x45).
+- Implementation: in the resource code stub (endless templates, after the island list) every fertility amount with a house no. → 50 and SZENE +0x60 → `FERT` (0x54524546). Hook at RVA `0xD0D56` (16 bytes `48 63 C9 41 8B 94 8F C4 0D 0D 00 49 03 D7 FF E2`: movsxd/mov/add/jmp of the jump-table dispatch, r15 = load address) → `jmp 0xE5BA0` (`E9 45 4E 01 00` …); code stub (30 bytes): `cmp r9d,'FERT'; je accept; <original dispatch>; accept: jmp 0xD0D8A`. All calls with the limits 1–3 or another +0x60 run unchanged (offline case AE: identical results before/after with test islands).
+- **I** Every island with flag bit 2 ends with all six bits set (+0x47 = 6) → 100 % for every crop; the AI sees the bits too. The town window shows the 6 crop icons in fixed slots (`FUN_14005a3c0`), no overflow.
+- Scope: new endless games with island spreading only (the resource code stub runs only for the three endless layouts). Not with `-StretchOnly`/`-NoIslandSpread`, not for own scenarios and random adventures (monopoly goals such as "Gewürzfieber" would break) and not for savegames (the bits are stored in the island data; a world generated with the option keeps its fertility even without the tool).
+
+**Mines (`-Mines Infinite`):**
+- **O** `FUN_1400b9ed0` case 3 (BERGWERK): deposit from `FUN_14009ebb0` (island +0x20 entry: ware, x, y, –, kind +4, amount +6 in tons × 32). Missing deposit or amount < Rohmenge → message 0x2D "mine exhausted" (human only). Path 1 (kind 1 or amount > 0xEFF): produce; gold never decreases; for the AI only above 0x4FF; otherwise `sub r8w,[rdi+0x26]` (RVA `0xBA495`), and below 0x20 `FUN_14009eab0` removes the deposit. Path 2: only with Erzbergnr (+0x3F) 0; decreases (`sub word [rdx+6],ax`, RVA `0xBA429`) only when flag `0x1405ec188` bit 3 is clear (the endless templates set it: TIMERS +0xA8 = 9/9/8/8).
+- Implementation: `0xBA495` `66 44 2B 47 26` → `0F 1F 44 00 00`, `0xBA429` `66 29 42 06` → `0F 1F 40 00`. The amount never changes, the "< 1 t" branch never fires. Savegames untouched (amounts stay as they are).
+
+**Disasters (`-Disasters Off|More`):**
+- **O** Messages (`Text.cod` `[MELDUNG]`): 1 "Die Pest …" (plague), 2 "Ein Feuer ist ausgebrochen!" (a fire has broken out), 3 "Die Trockenheit …" (drought), "Ein Vulkan ist ausgebrochen!" (volcano). `FUN_1400b5120(…, kind 1 = plague / 2 = fire, duration)`.
+- **O** `FUN_1400bc030` per town and economy cycle: plague `FUN_1400b7360` (citizens ≥ 200: rand % 400/250/180 ≤ 12, then table `0x1400ea3a0` by doctor/bathhouse cover), fire through a figure `FUN_1400b71f0` (merchants ≥ 300: rand % 400/250/180 ≤ 150, gallows cover lowers it to 2/8), fire in pioneer/settler houses `FUN_1400b7040` (rand % 100/150/200 ≤ 30, % 100/180/250 ≤ 15, rand & 0xFF ≤ 7; wooden houses more often). `FUN_14009e390` per island: drought `FUN_14009e320` (only difficulty ≥ 2 and flag bit 2 clear, every (27–34) × 600 clock steps, table `0x1400ea230`), volcano `FUN_1400715b0` (islands with volcano spots +0x40, flag bit 8 clear).
+- **O** Flags `0x1405ec188` (TIMERS +0xA8, stored in savegames): bit 0 pirates only sighted, bit 1 skips the party loop `FUN_14003dc40` (AI and pirates), bit 2 no drought, bit 3 path-2 deposits do not run out, bit 6 no new traders, bit 8 no volcano. **?** bit 4 (set by `FUN_1400bdb00`, read by `FUN_140077210`), bit 5 (`FUN_14003b7e0`, `FUN_1400af980`), bit 9 (AI functions).
+
+  | RVA | Original | Off | More |
+  |---|---|---|---|
+  | 0xBCAC3 | `E8 98 A8 FF FF` call plague | `0F 1F 44 00 00` | – |
+  | 0xBCB07 | `E8 E4 A6 FF FF` call fire (figure) | `0F 1F 44 00 00` | – |
+  | 0xBCBBB | `E8 80 A4 FF FF` call fire (houses) | `0F 1F 44 00 00` | – |
+  | 0x9E860 | `E8 BB FA FF FF` call drought | `0F 1F 44 00 00` | – |
+  | 0x9E93E | `E8 6D 2C FD FF` call volcano | `0F 1F 44 00 00` | – |
+  | 0xBCABB | `83 FA 0C` plague ≤ 12 | – | `83 FA 19` (≤ 25) |
+  | 0xBCAD8 / 0xBCAE5 / 0xBCAEA | fire figure divisors 180 / 400 / 250 | – | 90 / 200 / 125 |
+  | 0xBCB2E, 0xBCB4A | `83 FA 1E` house fire ≤ 30 | – | `83 FA 3D` (≤ 61) |
+  | 0xBCB76, 0xBCB94 | `83 FA 0F` house fire ≤ 15 | – | `83 FA 1F` (≤ 31) |
+  | 0xBCBB3 | `83 F8 07` rand & 0xFF ≤ 7 | – | `83 F8 0F` (≤ 15) |
+  | 0x9E875 | `83 C0 1B` next drought check (27–34) × 600 | – | `83 C0 0D` ((13–20) × 600) |
+
+- eax is not used after the 5 calls (checked in the listing). The fire-figure limit 150 sits in eax and is reused after the call, so More changes the divisors instead. Each mode also checks the sites of the other mode for the original bytes, so Off and More cannot be mixed in one game process. Code patches only, nothing is stored in savegames (unlike the flag bits).
+- **?** Is `FUN_1400b71f0` (figure 0x5C via `FUN_140080da0`, protected by the gallows) really an arsonist? The fire itself is started by the figure (`FUN_140070fd0` → `FUN_1400b5120(…, 2, …)`).
+
+**Savegames:** building costs, running costs, taxes, radius, mines and disasters act on the running process only (nothing stored; the running-cost sums are recomputed on load, I). Fertility changes only newly generated worlds (stored in their islands). The territory of Kontore and markets built with a larger radius stays in the island tiles.
+
+**Offline test (O):** `tools/test-patcher.ps1` 461 checks before the change, afterwards **556 of 556** (95 new checks in the cases AA–AH; the table cases use the real parse): AA building costs (checksum, every field scaled, marker, second run, other factor, wrong original, 0 = free), AB running costs, AC taxes, AD radius (17 radii, all other radius bytes unchanged), AE fertility (code stub and hook; function test of the resource code stub with the real templates and of the patched `FUN_1400d0ce0` with test islands; `-StretchOnly`/`-NoIslandSpread`: nothing), AF mines (falsified site → abort), AG disasters (other mode in the same process → abort), AH everything together (code stubs, tables and markers do not overlap; production ×2 shortens exactly the 125 intervals counted in the game). The `-CheckOnly` output of the old and the new patcher is identical for 5 combinations of the old options. Every new byte sequence disassembled with Ghidra (`AnnoPatchDis`): hook `JMP 0x1400e5ba0`, code stubs and NOPs decode as intended.
+
+**In-game test plan (not yet done):** start with `-BuildCost 0.5 -Upkeep 0.5 -Taxes 2 -Radius 2 -Fertility Everywhere -Mines Infinite -Disasters Off` (plus the size options), German UI.
+1. Console: every site set; "Baukosten x0.5: 408 Werte geaendert" and "Kontor I jetzt: 50 Gold, 2 t Werkzeug, 3 t Holz"; "Betriebskosten x0.5: 107 Werte geaendert" and "Kontor I jetzt: 8 (original 15), Kirche 25"; "Steuern x2: 14/16/22/24/26"; "Radius x2: Kontor und Markt 32, Kirche 42, Arzt 32 (17 Werte gesetzt)". No yellow "unerwartete Werte" line (that would mean the table in the game differs from the parse in the image).
+2. Main menu, `tools/check-game.ps1 -Short`: markers `BAUK x0.5` and `UNTH x0.5`, Kontor I 50 gold / 2 t / 3 t, running costs 8 and 25, taxes 14/16/22/24/26, radius 32/32/42/32, fertility jump `E9 45 4E 01 00`, mines `0F 1F 40 00` / `0F 1F 44 00 00`, disasters Off.
+3. New endless game: "islands with all six crops" in `check-game.ps1` = almost every island (all with flag bit 2). "Insel erkunden": six crop icons at 100 %, also those of the other climate; a cotton plantation on a northern island grows.
+4. First Kontor from the ship: gold −50 (not −100), ship −2 t tools, −3 t wood; the dotted building area is about twice as wide (radius 32); market radius 32.
+5. Chapel: houses up to 16 tiles away (original 8) count as supplied (faith need met).
+6. Town window: running costs about half; taxes of player 0 doubled compared with a run without `-Taxes` at the same tax rate and population.
+7. Save, quit, restart with the same options, load: running costs equal before/after; loaded without `-Upkeep`: back to the original sums.
+8. Ore mine on a deposit, 30+ minutes at F7: the deposit amount stays constant (without the option it falls for kind-1 or > 119 t deposits).
+9. Disasters Off: a town with > 300 citizens/merchants for an hour at 16×: no plague or fire; on Fordernd/Schwer no drought. Disasters More (separate start): more plague and fire messages than normal.
+10. The rivals keep building and growing; no crash at 16× with all options for 30 minutes. `-BuildCost 0`: building with an empty warehouse works.
+11. `-BuildCost 0 -Upkeep 0`: construction free, running costs 0, balance = taxes.
+
+**Open (?):** market cart range with radius ×2; identity of `FUN_1400b71f0`; running-cost sums rebuilt on load (plan 7). Fertility is deliberately not applied to own scenarios (monopoly goals); it could be offered for random adventures later (SZENE +0x60 = `FERT` and amounts 50 in the generated file, hook active).
+
+### Third campaign "Die Sturmsee", four challenges, English scenarios, ship cargo, random adventures (2026-11-12)
+
+Files: `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1`, `tools/check-scenarios.ps1`, new `tools/random-adventure.ps1`. **None of the 10 new scenarios and no random adventure has been loaded or played in game yet**; their difficulty is designed by analogy with the measured chapters.
+
+**Ship cargo (SHIP4 +0x174) (O, loader `FUN_14008e4f0`, cargo loop from `param_2 + 0x184`, 2 × 4 entries):** 8 holds of 8 bytes from the SHIP4 entry +0x174.
+- dword A: bits 0–15 = **house no. of the producing building** (`Id` − 20000 in `haeuser.cod`), bits 16–29 = amount × 32, rounded down to whole tons (`amount − (amount & 0x1F)`).
+- dword B: flags (10 bits, end up in bits 22–31 of the memory dword); 0 in every original file.
+- The house no. goes through the table `0x1405b9e80` (id < 0xDAD → building index) to the building table; the good is the building's byte +0x21 (`0x1406ba1e1`, its `Ware`). The trader loader `FUN_14008e1f0` (`HANDLER`) uses the same scheme.
+- Ids 9901–9950 are soldiers (good code 0x19 + id − 9901 = wSOLDAT1 …); in the originals 9901 + 4 × kind + owner, amount always 1,600. Not used by us.
+- **O Evidence:** start ship of the endless templates = 515 (tool smithy) 1,600 = 50 t tools, 2001 (forester) 960 = 30 t wood, 1075 (fishery) 320 = 10 t food – the start cargo seen in game. The AI start ships carry 50/50/10 t.
+- **O All 131 original scenarios with SHIP4** (`Szenes\*.szs|*.szm`) use the house numbers 507 cloth, 513 bricks, 515 tools, 517 swords, 519 liquor, 521 iron, 525 tobacco goods, 527 cannons, 1075 food, 1501 spices, 1505 wool (cotton plantation), 1507 tobacco, 1509 cocoa, 2001 wood, 2401 ore, 2405 gold, 9901–9916 soldiers. Highest used hold per ship type 21: 3, 23: 5, 25: 2, 27: 7 (= 4/6/3/8 holds, matches `figuren.cod`). Never more than 50 t per hold (although the holds of 23/25/27 take 80/65/120 t); whole tons except one entry; flags always 0.
+- **O Goods and raw-material codes** (string list in the exe at file offset 0xE7920, from `NOWARE` = 0; consistent with `GETREIDE` = 0x2D and the AUFTRAG4 goods): NOWARE 0, ALLWARE 1, EISENERZ 2, GOLD 3, WOLLE 4, ZUCKER 5, TABAK 6, FLEISCH 7, KORN 8, MEHL 9, EISEN 10, SCHWERTER 11, MUSKETEN 12, KANONEN 13, NAHRUNG 14, TABAKWAREN 15, GEWUERZE 16, KAKAO 17, ALKOHOL 18, STOFFE 19, KLEIDUNG 20, SCHMUCK 21, WERKZEUG 22, HOLZ 23, ZIEGEL 24, wSOLDAT1 … (25–44), GETREIDE 0x2D, TABAKBAUM 0x2E, GEWUERZBAUM 0x2F, ZUCKERROHR 0x30, BAUMWOLLE 0x31, WEINTRAUBEN 0x32, KAKAOBAUM 0x33, GRAS 0x34, BAUM 0x35, STEINE 0x36, ERZE 0x37, WILD 0x38, FISCHE 0x39, SCHATZ 0x3A.
+- **I Memory:** ship record `0x1401d8bb0` + slot × 0x328, cargo at +0x300 + 4 × hold: byte 0 = good code, bits 8–21 = amount × 32, bits 22–31 = flags; e.g. 20 t tools = `0x00028016`. **?** Not yet read in game.
+- Implementation: `scenario-lib.ps1` `$CargoHouse` (only the 16 house numbers the originals use), `$ShipTypes` (holds, tons per hold, cannons), `New-CargoBytes` (checks holds and capacity). Scenario keys `Cargo` (the human's start ship; replaces the template's 50/30/10 t) and `Fleet[].Cargo`. `check-scenarios.ps1` decodes the written files: same 8-byte layout as the templates, e.g. Sturmsee 1 `03 02 80 02 00 00 00 00 | D1 07 80 01 … | 33 04 00 01 …` = 20 t tools, 12 t wood, 8 t food.
+- Not used (not seen in the originals, so not verified): 529 muskets, 505 clothes, 533 jewellery, 1511 sugar, 1513 cattle, 1503 grain, 501 flour, 1515 wool from sheep.
+
+**Player names, rival ships (O):**
+- PLAYER4 entry (0x430 bytes) +0x3C0: player name (0x40 bytes), copied with `strcpy_s` to the player table +8 (`0x1405f0968`); +0x400: a second string (0x20 bytes) → player table +0x48 (loader `FUN_1400b1020`; its branch for the older 0xAC-byte entries reads +0x3C/+0x7C instead). +7 colour index.
+- The templates differ: `[[48]]1x` has the rivals "Roter / Gelber / Weißer Spieler" (red / yellow / white player), `[[48]]2x` "Roter / Blauer / Gelber Spieler". The colour of a slot is therefore not fixed across templates.
+- Scenario key `Rivals = @(@{ Player = 1–3; Gold; Name; Ship })` sets gold, PLAYER4 name and the name of the rival's start ship (SHIP4 entry with owner +0x4B = player); `ShipName` renames the human's start ship.
+- **?** Whether and where the game shows the name of a computer rival (diplomacy, status, warehouse info). The texts therefore also name the rival's start ship, which is visible for sure (SHIP4 name → ship +0x296).
+
+**Rules for the goal design (O, `FUN_1400ae010` / `FUN_1400ceea0`; the complete mission entry is in "Logbook" below):**
+- Town goals 1–3 are assigned greedily per settlement in slot order (goal 1, else 2, else 3); one settlement satisfies only one town goal. Keep them in descending order (`check-scenarios.ps1` checks this; the loader sorts them anyway).
+- "Every own town at least" (bit 8, file +0x8AC): every own settlement must meet it, including warehouse-only outposts; with no settlement at all it is trivially true. The texts warn about outposts. **?** Outpost case not checked in game.
+- Monopoly 1 and 2: at the start `FUN_1400ceea0` replaces the island count of **both** (bits 0x4000/0x8000) with the number of islands that carry the crop. Check: own settlements on such islands ≥ count, and no settlement of a human or AI player (kind 0/0xC) on such an island; native villages do not matter. Codes 0x2D–0x3A test the island's fertility bit (code − 0x2D), other codes its deposits. **I** A crop that lands on no island gives count 0, so the goal is met at once.
+- Goods: sum over the own settlements of settlement +0x2A + good × 0xC (× 32). Cargo on ships does not count, unloading it does, so `check-scenarios.ps1` rejects goal goods in the human's start cargo.
+- Defeat: player kind 9. Defeating more rivals than required does no harm.
+
+**Scenario builder:**
+- `build-scenarios.ps1 -Language de|en` (default: `$env:ANNO_EXTENSIONS_LANG`, otherwise the UI culture), `-OutFolder`, `-Library` (or plain dot-sourcing: functions and `$Scenarios` only, nothing is built); `-Install` copies only the files of this run.
+- Every definition is bilingual (`Title`, `Text`, fleet `Name` as `@{ de; en }`). German output of the 13 old scenarios at the time of the change: SHA-256 identical to `tools\kampagne` (13/13). Afterwards the German "Smaragdinseln 2" text was changed on purpose: "Es ist nur eine Handvoll." instead of "drei oder vier" (spices on 2 islands since 2026-11-11, big version 3); this one file no longer equals the build of 2026-11-11.
+- English file names: Emerald Isles 1–6 (Landfall, Spice Fever, Two Colonies, Black Sails, The Conqueror, Crown of the Isles), Race 1–4 (First Harbour, Civic Pride, Merchant Republic, The Crown), Challenge - Island Realm / Trade Empire / Gold Rush / Archipelago / Continents / Merchant Fleet / Sea Power, Storm Sea 1–6 (Shipwreck, Tobacco and Cocoa, The Free Port, The Red Flag, Betrayal, The Golden Age). English texts are plain ASCII.
+- New map keys: `MaxClass` (shrink the islands), `AddIslands` (fill the gaps up to n islands, 14 tiles apart, deterministic LCG from Number + GameId), `Continents = @{ Lar; Big; Small }` (template positions become 100×90 / 70×60 islands around their centre, at most 10 lar), `GameId` (overrides 0x53D00000 + Number).
+- Start point: 14 tiles from every island in all 6 map versions as before; only if none exists 12, then 10 (extra ships then 5 tiles from the start instead of 7–9). All 23 scenarios found 14.
+
+**New scenarios (10 per language):**
+
+| No. | German / English | Template, map | Difficulty | Start | Goals |
+|---|---|---|---|---|---|
+| 31 | Sturmsee 1 - Schiffbruch / Storm Sea 1 - Shipwreck | `[[48]]12` X, 17 islands (big 47) | 1 | 10,000 gold (rivals 20,000); "Morgenstern" with only 20 t tools, 12 t wood, 8 t food; 3 + 3 villages | town 200 (100 settlers+), 2 own settlements, balance ≥ 0 |
+| 32 | Sturmsee 2 - Tabak und Kakao / Tobacco and Cocoa | `[[48]]10` XY, 18 (50) | 1, AI 2 | 30,000 / 25,000; tobacco 2, cocoa 2 islands (big 3/3) | tobacco monopoly + cocoa monopoly, town 600 (300 citizens+) |
+| 33 | Sturmsee 3 - Der Freihafen / The Free Port | `[[48]]21` XY, 20 (50, Large) | 2 | large trading ship "Hoffnung" with 50 t cloth, 50 t liquor | trade only: trade balance ≥ +400, 40 t tobacco goods, 40 t cocoa |
+| 34 | Sturmsee 4 - Die Rote Flagge / The Red Flag | `[[48]]22` Y, 17 (47, Large) | 2, pirates | cargo 50 t tools, 40 t wood, 30 t bricks, 10 t cannons; 2 small warships | ≥ 3 settlements, EVERY settlement ≥ 300 (100 citizens+) |
+| 35 | Sturmsee 5 - Verrat / Betrayal | `[[48]]20` Y, 18 (50, Large) | 2, AI 3 | rival 2 = "Haus Valcourt", 60,000 gold, ship "Valcourts Stolz"; the others 20,000; large + small warship | defeat player 2 only, town 1,000 (400 merchants+) |
+| 36 | Sturmsee 6 - Das Goldene Zeitalter / The Golden Age | `[[48]]31` Y, 20 (50, Huge) | 3, pirates | 50,000 / 50,000; large trading ship (50 t tools, 50 t bricks, 40 t wood) + large warship | town 2,000 (800 aristocrats), town 1,200 (500 merchants+), 4,000 in total, 40 t jewellery, balance ≥ +800 |
+| 24 | Herausforderung - Archipel / Challenge - Archipelago | `[[48]]11` X, max. class med (was mit until the game test, see "In-game tests of phase 2") + filled: 30 islands, big 50 (20 med / 16 mit / 14 lit) | 1 | cargo 50 t tools, 50 t wood, 20 t food, 20 t bricks + small trading ship "Inselspringer" | ≥ 10 settlements, EVERY settlement ≥ 100 (40 settlers+) |
+| 25 | Herausforderung - Kontinente / Challenge - Continents | `[[48]]20` Y, 5 lar + 4 big + 3 lit = 12 (big 33: 10 lar, 23 big) | 2, AI 2 | 35,000 / 35,000 | town 1,500 (400 aristocrats), 3,000 in total, balance ≥ +300 |
+| 26 | Herausforderung - Handelsflotte / Challenge - Merchant Fleet | `[[48]]12` XY, 17 (47, Large) | 1 | 15,000 gold; 2 large trading ships (cloth/liquor/tobacco goods; tools/wood/bricks) + small warship | ≥ 4 settlements, 60 t spices, 60 t cocoa |
+| 27 | Herausforderung - Seemacht / Challenge - Sea Power | `[[48]]21` XY, 20 (50) | 2, AI 1 | 60,000 gold, rivals 10,000; 2 large warships (cannons, swords) + small warship | defeat all three rivals (quickly; the rivals are weak) |
+
+Difficulty = template (0 Einfach … 3 Schwer); "AI n" = rival strength set separately (TIMERS +0xA6). Every goal type known to be verified is used at least once: towns with stage, number of towns, every town at least, total residents, balance, trade balance, 2 goods, 2 monopolies, defeat specific rivals, start fleet, start cargo, pirates, natives, AI key, gold. No new race chapters.
+
+**Random adventures (`tools/random-adventure.ps1`):**
+- Parameters: `-Seed 0…999999` (default random, printed), `-Difficulty Easy|Average|Demanding|Hard` (default Average), `-Language de|en`, `-OutFolder` (default `tools\scenarios`), `-Install`, `-GamePath`. File "Abenteuer <seed>" / "Adventure <seed>". The same seed with another difficulty gives the same file name and overwrites the file.
+- `SZENE_GAMEID` = 0x53000000 + difficulty << 20 + seed; `check-scenarios.ps1 -Reproduce` regenerates the file from it.
+- Random numbers: Park-Miller (48271, 2^31 − 1), seeded from the seed (and the attempt number, 0 unless a build fails). Both languages draw the same numbers, so de and en give the same map and mission.
+- Map: layout 0–2 × mirroring (X / Y / XY). Classic: enlarge 1–4, big version Normal/Large/Huge. Archipelago: max. class 2 (med; class 1 made the rivals drop out, see "In-game tests of phase 2"), 26–30 islands, big Normal. Continents: 4–5 lar, 3–4 big, 2–3 small, big Large/Huge.
+- World: ore 4–6 / 7–10, gold 2–3, treasure 4–12; at least 6/9 ore for weapon goods or conquest, 3 gold for jewellery/gold goods. Crops at least 3 for goods goals; monopoly crop 1–2 (big +1). Villages 1–4 per climate, big 4–6. Gold: Easy 40–50k, Average 30–40k, Demanding 25–35k, Hard 20–30k (+5k realm, +10/15k conquest); rivals 10–20k / 20–30k / 30–40k / 40–50k. AI 0–1 / 1–2 / 2–3 / 3. Pirates 0 / 35 / 70 / 100 %.
+- Ships: Easy rich cargo (50 t tools, 50 t wood, 20 t bricks, 20 t food); Hard 50 % lean cargo (30/20/10); extra ship for realm/trade (Easy, Average), warships for conquest, 50 % escort with pirates from Demanding on.
+- Main goal weights (Easy/Average/Demanding/Hard): towns 40/30/25/25, realm 25/20/20/15, trade 20 each, monopoly 15 each, conquest 0/15/20/25. The map kind follows the goal: no big towns, trade or conquest on archipelagos; no realm on continents.
+- Main goal values: towns 250–400 settlers … 1,500–2,500 aristocrats, second/third town from Average on; realm 3–8 settlements with 600–3,500 in total, or 5–6 settlements with "every settlement 150/60 settlers" or "250/80 citizens"; trade 2 goods 30–80 t + trade balance 100–400; monopoly 1–2 crops of spices/tobacco/cocoa/sugar/wine + a town; conquest: Average 1 poor named rival + town 400, Demanding 2 named rivals or 1 rich one + town 800, Hard all three.
+- Add-ons: 0 / 1 / 1–2 / 2 (one fewer for conquest, and for monopoly from Demanding on): balance 0–1,000, trade balance 100–500, one good (thematic for monopolies), total residents, a town.
+- Text blocks: opening per map kind (2–3 variants), motive per goal (1–2), twists (pirates, rival strength, natives, cargo, extra ships), goals, the helmsman's advice per goal plus pirates/cargo/ore/gold, closing line.
+
+**Offline tests (O, 2026-11-12):**
+- German build: 13/13 old files SHA-256 identical to `tools\kampagne` (before the Smaragdinseln 2 text change above); 23 files de + 23 files en built.
+- New checks in `check-scenarios.ps1`: goal bits known; town goals descending; every goal number written in the text; language recognised; English texts and file names ASCII; no CR; goods/monopoly codes valid, defeat only players 1–3; ship type, cargo space, cannons; cargo house no. known, whole tons, holds ≤ type, flags 0; goal good not in the human's start cargo; adventure game id = seed/difficulty; `-Reproduce`.
+- Results: all 13 (`tools\kampagne`) OK; all 23 de and all 23 en OK; 128 adventures (16 seeds × 4 difficulties × 2 languages, all 5 goal types and 3 map kinds) all OK; `-Reproduce` in a separate process 128 of 128 byte-identical; 20 random seeds generated twice: 20 of 20 identical; combined folder "All 174 scenarios OK", exit 0.
+- Negative test (corrupted copy): all 5 errors found (non-ASCII in the English text, goal number missing in the text, 645/32 t, goal good cocoa in the start cargo, game id), exit 1.
+- Not tested by the agent: `-Install` (writing to Documents was off-limits).
+
+**Open (?):**
+- **?** In game: cargo of non-default goods (cannons, swords, cloth, liquor, tobacco goods, bricks) appears in the ship window and can be unloaded.
+- **?** Whether the PLAYER4 name of a rival is shown anywhere in the game.
+- **?** "Every town at least" with a warehouse-only outpost (from the code: it fails the goal).
+- **?** Monopoly crop amount 1 (Demanding adventures): the crop might land on no island, and then the goal is met at once.
+- **?** Ore mountains on lit/mit islands (archipelago); the generator avoids ore and gold goods there.
+- ~~`install.ps1` copies every `*.szs` in `tools\scenarios` (both languages and adventures after a language switch).~~ Fixed: the installer builds into a fresh temp folder (see "Launcher" below).
+- `build-scenarios.ps1` takes `Get-IslandPlan` from `anno-patcher.ps1` through the syntax tree; the planner itself is unchanged.
+
+### Logbook companion window (2026-11-12)
+
+`tools/logbook.ps1` (WinForms, UTF-8 with BOM, about 1,900 lines incl. C# and self-test). **Nothing in this section has been measured in the real game yet**; "O (test)" = checked in the offline tests (synthetic memory images and a helper process that maps the exe copy as an image). Addresses marked I come from the decompiled code (`analysis/scan/alle-funktionen.c`).
+
+**The tool:**
+- Start: `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File tools\logbook.ps1` or the launcher button "Logbuch öffnen" (Open logbook). One instance at a time (mutex `Local\Anno1602-Extensions-Logbook`; a second start activates the first window by its title "Logbuch – Anno 1602" / "Logbook – Anno 1602" and exits 0).
+- Attaches to the newest `Anno1602.exe` (base from `MainModule`), checks the SHA-256 of the exe file (`7731972f…b7a1`, as the patcher; another version → "Unbekannte Spielversion" (unknown game version), nothing is read) and opens the process with `PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` (0x410) only. Never writes. Refresh every 2.5 s. The process end is detected with `GetExitCodeProcess` (also the Ubisoft Connect quick restart) → "Warte auf Anno 1602 …" (waiting for Anno 1602), then it re-attaches. `MainModule` failing for > 10 refreshes → "Kein Zugriff" (no access).
+- Window: title (scenario or game name, game time, speed), AUFTRAG / MISSION (goals with live bars), DEIN REICH / YOUR EMPIRE (gold, balance · trade balance, towns and the largest, ships, residents per stage as a stacked bar, workers), GEGNER / RIVALS (best town, total residents, towns, ships, gold; race progress bars in races), ERFOLGE / ACHIEVEMENTS (24 badges, tooltips with date and game). Footer: status, "Im Vordergrund" (On top, TopMost), "Kompakt" (Compact: title, goals and one line gold/residents/towns). An unlock shows a gold banner for 8 s, plays the system sound (Asterisk) and highlights the badge.
+- Parameters: `-SelfTest [-SelfTestFolder]`; hidden for tests: `-FunctionsOnly`, `-Dump`, `-PreviewImage <png>`, `-TestProcessId`/`-TestBase`, `-AppDataFolder`, `-TestTicks n -TestLog file`.
+- Refresh cost (O, test): about 128 ms in the worst case (75 settlements, 200 ships, monopoly goal → 573,600-byte island read), the snapshot alone about 10 ms.
+
+**Memory read** (RVA = VA − 0x140000000, all in `.data` RVA 0xF9000–0x913D28, O: PE section table):
+
+| RVA | Size | Content | Source |
+|---|---|---|---|
+| 0xF99F8 | int | game speed 1/2/4 (8/12/16 with turbo); command 0x0F | "Extensions", I: `FUN_14008cef0` |
+| 0x1D8BB0 | 200 × 0x328 | ships: byte 0 = 0x50 in use, +0x28 owner | "Rivals and pirates" |
+| 0x5C0E50 | 0x54 | "new game" parameter block, see "Scenario name" | I |
+| 0x5EBF68 | int | **end-of-game lock** (1 = game over) | I, see below |
+| 0x5EC0F8 | int | game clock | "Ships, money" |
+| 0x5EC1A8 | int | **time limit** (game clock); reached → message 0x5A (lost) | I: `FUN_1400af980`, `FUN_1400b0000` |
+| 0x5EC1C0 | int | difficulty | "Rivals and pirates" |
+| 0x5EC720 | 4 × 0x108C | missions | below |
+| 0x5F0960 | 7 × 0x280 | players | "Players and parties" + below |
+| 0x5F1D60 | int | number of the local (human) player (0 in single player) | I: `FUN_14000ef40`, `FUN_1400af980` |
+| 0x622DC0 | 75 × 600 | settlements | below |
+| 0x62DDC0 | 50 × 0x2CC8 | islands (only for monopoly goals) | below |
+| 0x6BA02C | 5 × 0x50 | population groups: +4 tax per resident | I: `FUN_1400bbdc0` |
+| 0x6D7E60, 0x6D80A4/A8/AC/B0 | int | upkeep per unit kind (balance) | I: `FUN_1400ad5d0` |
+
+**Player record (0x280), additions to "Players and parties" (I):**
+- +0x08 name, char[0x40] (`FUN_1400a87f0`; the PLAYER4 loader copies it from the file, see "Player names" above); +0x48 second string (0x20).
+- +0x68 player number = slot index (the PLAYER4 loader indexes the table by it); settlements and ships store this number as owner.
+- +0x74 purchases, +0x78 sales (uint, × 480); each check period both decay × 179/180 (`FUN_1400af980`). Trade balance = +0x78/480 − +0x74/480.
+- +0x81 byte (natives: player they are allied with?), +0x86 byte (number of settlements?; with +0x9A ships = 0 the human loses).
+- **+0x84 = mission fulfilled flag**: set in `FUN_1400b0000` case 0x3E for the sender and for every other player whose mission check also passes; the score screen's mission bonus is `+0x84 ? 100 : 0` (`FUN_1400ad760`). Cleared by the player-table reset of command 0x36.
+- +0x87 / +0x88 bytes: flags for the goal bits 0x20000 / 0x40000 (meaning **?**).
+- +0x8E ushort: number of defeated rivals (goal bit 0x200; incremented in `FUN_1400b0000` case 0x57).
+- +0xA4, +0xA8, +0xAA, +0xAC, +0xAE ushort: unit counts, × upkeep 0x6D7E60 / 0x6D80A4 / 0x6D80A8 / 0x6D80AC / 0x6D80B0 (only for kind 0).
+
+**Settlement record (600 bytes):**
+- **I** +0x00 name char[0x18] (`FUN_14009a9f0`: every new settlement gets a name from the list at 0x5C1B00); +0x18 island index (0xFF = free), +0x1A owner; +0x2A + good × 12: stock (ushort, 1/32 t); +0x1D8 / +0x1DC running costs (see "Running costs" above), +0x1E0 founding clock + 600; +0x216 number of buildings, **+0x218 workers** (sum of building table +0x34 of the settlement's production and public buildings, `FUN_1400b3a90` & co.; the game counts them in the town total = +0x218 + stages); +0x220 … +0x230 residents per stage (pioneers … aristocrats), +0x24D … +0x251 tax rate per stage (128 = 100 %), +0x254 own index.
+- **O** (race logs of 2026-11-12) rival towns with stages `[0/0/0/0/0]` still had 63–124 residents → that is +0x218.
+- Logbook rule (decision): a slot counts if +0x18 ≠ 0xFF **and** the name is not empty (before the first game the table is all zeros, and +0x18 = 0 would look "in use" for owner 0). The game itself only checks +0x18.
+
+**Island record (0x2CC8) (I):** `FUN_14009dbe0` (island has raw material m): m 0x2D–0x3A → bit (m − 0x2D) of the uint +0x5C (fertility); otherwise deposits: count byte +0x41, entry i: material byte +0x20 + 8i, quantity ushort +0x26 + 8i, must be > 0x1F.
+
+**Mission entry in memory (0x108C) (I: loader `FUN_1400b1780` AUFTRAG4 branch, check `FUN_1400ae010`):**
+
+| Offset | Content |
+|---|---|
+| +0x00 | goal bits |
+| +0x04 | "protect" condition bits (1: the supported player keeps a town ≥ the +0x1080 triple, 2: keeps ≥ +0x24 towns) |
+| +0x08 | supported player (7 = any) |
+| +0x09 | number of rivals to defeat (bit 0x200, compared with player +0x8E) |
+| +0x0A … +0x10 | must-defeat flag per player 0–6 (bit 0x400) |
+| +0x11/+0x12, +0x13/+0x14 | monopoly 1/2: raw material, island count (bits 0x4000/0x8000) |
+| +0x1C | towns (0x20) · +0x20 ? · +0x24 supported player's towns (sub-bit 2) |
+| +0x28 / +0x30 / +0x34 / +0x38 | total residents (0x80) / balance (0x100) / trade balance (0x10000) / voice message |
+| +0x3C | mission text, 0x800 bytes as in the file · **+0x83C the same text with the `[[n]]` tags replaced** (`MaxnetOnlineOverlayReplaceTextTags`) |
+| +0x103C/+0x103E, +0x1040/+0x1042 | goods 1/2: good byte, quantity ushort × 32 (0x1000/0x2000) |
+| +0x1044 / +0x1050 / +0x105C | town 1–3: total, level, of which (bits 1/2/4; **the loader sorts the three by total, descending**, and sets bits 1/2/4 for non-zero totals) |
+| +0x1068 | every own town at least: total, level, of which (bit 0x08) |
+| +0x1074 | a town of the supported player: total, level, of which (bit 0x10) |
+| +0x1080 | protect condition (sub-bit 1): total, level, of which |
+
+**How the game checks a mission (`FUN_1400ae010(player, mission, &protectFailed)`), mirrored 1:1 by the logbook (I):**
+- Only for kind 0, or for any kind if bit 0x800 (race). Start value of the result bits 0xCD08: 0x08, 0x100, 0x400, 0x4000, 0x8000 (and 0x800) are "met until disproved".
+- Settlements in table order; own ones (owner = player +0x68): a settlement can satisfy **only one** town goal: `if (!met1 && fits1) met1 else if (bit2) { if (!met2 && fits2) met2 else if (bit4 && !met4 && fits4) met4 }`. "fits": of which (uint) ≤ residents of the level **and all higher levels**, and total ≤ town total (incl. workers).
+- 0x08 is cleared by any own town that misses the "every town" triple (no towns → stays met).
+- Goods: sum of the stock of all own settlements. Monopoly: count own settlements on islands with the material; cleared if a settlement of a kind-0 or kind-0xC player (not natives) sits on such an island; count < required → cleared.
+- 0x400: every must-defeat player must be kind 9, or natives (kind 0xB) with +0x86 = 0 and +0x81 = this player.
+- 0x100 (balance) is only evaluated when all other bits are met: `FUN_1400ad5d0` field 6 = taxes + (sales/480 − purchases/480 − costs − unit upkeep). Taxes per settlement (`FUN_1400bbdc0`): Σ trunc(trunc(residents_k × tax_k × 6 / 32) × rate_k / 128). Costs: +0x1D8, plus +0x1DC if the owner is kind 0.
+- Protect conditions (+0x04) not satisfied → `FUN_1400af980` makes the human lose at once.
+- Check frequency: `FUN_1400af980` is skipped while the lock 0x5EBF68 ≠ 0; a time limit 0x5EC1A8 ≠ 0 and ≤ clock → message 0x5A.
+
+**Game end and result (used to record finished missions) (I):**
+- The lock 0x5EBF68 (int; 0x5EBF6C is a separate int) is set to 1 only in `FUN_1400b0000`: case 3 (player out: the human defeated or bankrupt → only the human becomes kind 9), case 0x3E (a mission fulfilled → every kind 0/0xC player becomes 9; the human won if he is the sender or also fulfils it, otherwise message 0x53 = lost), case 0x5A (time limit → all 9, message 0x53). It is reset to 0 only by command 0x36, which both "new game" and **loading a savegame** send first (generic loader `FUN_140016bc0`).
+- Logbook rule: phase "ended" = lock ≠ 0 or human kind 9 (with clock > 0); result = human +0x84 ? won : lost. A finished mission is recorded only if the logbook saw the same session running before (no duplicates when started at the score screen) and the human had a mission (mission slot ≤ 3, bits ≠ 0); endless games are not recorded.
+
+**Scenario name (I):**
+- 0x5C0E50 is the parameter block of a new game (copied into command 0x36): +0x08 campaign index (0xFF none), +0x0F mission index in the campaign, **+0x12 flags (bit 1 = own scenario, "CUSTOM")**, **+0x13 name, char[0x40]**.
+- Path of the scenario: `FUN_1400d3d00`/`FUN_1400d3c50` build `"%s%s\\%s%s"` = Documents path (0x5C56C0) + folder (pointer 0x5C1A40) + **name** + extension (".szs" or other per 0x5C4D44), or for original campaigns from the table at 0x5C1720[campaign × 5 + mission]. For own scenarios the name is therefore the **file name without .szs**.
+- The savegame writer stores the name as chunk `NAME` (and `CUSTOM` if bit 1); `FUN_1400d38b0` restores both when loading (64 bytes cleared, name copied, then matched against the scenario list with `MaxnetOnlineOverlayFindTextAllLanguages`). A saved and reloaded own scenario keeps its name.
+- **?** Content for an endless game and for original campaign missions (the endless savegame `Welt1000x700.gam` has a `NAME` chunk). The logbook shows names starting with `[[` as "Endlosspiel"/"Szenario"; each mission record also stores `title` = first line of the mission text (+0x83C) as a fallback.
+
+**logbook.json** (`%APPDATA%\Anno1602-Extensions\logbook.json`, UTF-8 without BOM):
+
+```json
+{
+  "version": 1,
+  "achievements": [ { "id": "citizens", "date": "2026-11-12T10:00:03", "game": "Wettlauf 2 - Buergerstolz" } ],
+  "missions": [ { "scenario": "Wettlauf 2 - Buergerstolz", "title": "WETTLAUF DER HÄUSER - Kapitel 2: Bürgerstolz",
+                  "result": "won", "date": "2026-11-12T12:01:44", "gameHours": 5.1 } ],
+  "settings": { "alwaysOnTop": true, "compact": false, "height": 780, "left": 1800, "top": 80, "width": 460 }
+}
+```
+
+- Re-read before every write (changes by the launcher survive), written via a temp file + `File.Replace`. A broken file is renamed to `logbook.broken-<datetime>.json` and a new one is started. Unknown fields of mission entries are kept. The launcher's "Abenteuer" tab reads `missions` (scenario = file name, best result wins).
+- Game hours = clock / 32,700 (endurance run: 523,094 in 60 min at 16×), rounded to 0.1.
+- A condition must hold in two consecutive readings of a running game (clock > 0, lock 0, human kind 0) before an achievement unlocks (protection against half-loaded data); `mission_won` and `race_won` are set at the end of the game.
+
+  | Id (stable) | German | English | Condition |
+  |---|---|---|---|
+  | first_town | Land in Sicht | Land Ho! | first own town |
+  | settlers / citizens / merchants / aristocrats | Erste Siedler / Bürgerstolz / Pfeffersäcke / Blaues Blut | First Settlers / Civic Pride / Merchant Princes / Blue Blood | first resident of that stage |
+  | res_1000 / res_5000 / res_10000 | Tausend Seelen / Blühendes Inselreich / Zehntausend Untertanen | A Thousand Souls / Thriving Realm / Ten Thousand Subjects | 1,000 / 5,000 / 10,000 residents in total |
+  | city_2500 | Metropole | Metropolis | one town with 2,500 residents |
+  | aristo_1000 | Hofstaat | Royal Court | 1,000 aristocrats |
+  | towns_3 / towns_5 / towns_10 | Inselhüpfer / Kolonialmacht / Herr der Inseln | Island Hopper / Colonial Power / Lord of the Isles | 3 / 5 / 10 own towns |
+  | gold_250k / gold_1m | Volle Truhen / Millionär | Full Coffers / Millionaire | 250,000 / 1,000,000 gold |
+  | ships_5 / ships_10 | Kleine Flotte / Armada | Small Fleet / Armada | 5 / 10 own ships |
+  | balance_500 | Schwarze Zahlen | In the Black | balance ≥ +500 (with a town) |
+  | hours_10 / hours_50 | Sitzleder / Ewiger Regent | Staying Power / Eternal Ruler | 10 / 50 game hours in one game |
+  | turbo | Volle Fahrt voraus | Full Speed Ahead | game speed 8× or faster |
+  | rival_defeated | Bezwinger | Conqueror | a rival defeated (player +0x8E ≥ 1) |
+  | mission_won | Auftrag erfüllt | Mission Accomplished | a scenario won |
+  | race_won | Erster im Ziel | First Past the Post | a race won |
+
+**Offline tests (O, 2026-11-12, game not running):**
+- Static: BOM yes, no CR, parse errors 0, no function named like an alias or an existing command.
+- `logbook.ps1 -SelfTest`: **73 of 73** (UI language de and en), synthetic images from the layouts above: the greedy one-town-per-goal rule, "or higher", race rivals, monopoly blocked by an AI but not by natives, gold deposits, taxes at 50 % rate, unit upkeep, trade.
+- Live path: a helper process maps `analysis\bin\Anno1602.exe` with `LoadLibraryEx`, the test writes a race state into its `.data`, the logbook reads it via `ReadProcessMemory`: **14 of 14** – dump identical to the image snapshot; real window loop: running → game won written into the process → "ended" → helper killed → "waiting", exit 0 after 10 refreshes; `logbook.json`: mission `won`, 9.2 h, achievements incl. `mission_won`/`race_won`, settings saved on close; a second instance exits at once; a renamed `PING.EXE` as "Anno1602.exe" → "Unknown game version", nothing read; no process → waiting.
+- Toggles (BM_CLICK on the off-screen window): compact 460×780 → 360×180 → back to 460×780; on top → TopMost; settings saved. (Bug found and fixed: leaving compact mode kept the small height.)
+
+**In-game test plan (not yet done):**
+1. Start the logbook before the game: "Warte auf Anno 1602 …"; start the game via the launcher (Ubisoft quick restart): within 2–3 s "Anno 1602 läuft – Starte oder lade ein Spiel", footer "Verbunden · PID …" (the second PID).
+2. New endless game: title "Endlosspiel" (note what 0x5C0E63 holds), "Kein Auftrag", gold equals the in-game display, ships 1, speed text follows F5/F6/F7. Game time: about 1 h per 32,700 clock units; at F5, 10 real minutes ≈ 0 h 10 min (± 1 min).
+3. Found a town: "Land in Sicht" unlocks after about 5 s with banner and sound; residents and stages equal the game's town window; "Bilanz" and trade balance equal the game's status window exactly.
+4. Rival lines: names (empty → "Gegner 1–3"; same names → "(1)/(2)"), towns and residents plausible against the game's statistics.
+5. "Wettlauf 1 - Erster Hafen": title = file name, mission 300 residents / 150 settlers+, race note, rival race bars. Goal reached → row green "erfüllt" before the game's victory; game ends → "Auftrag erfüllt – gewonnen!", `logbook.json` mission `won`.
+6. A lost race (or a test copy with a lower goal so that a rival wins): entry `lost`, title "Spiel beendet – diesmal verloren".
+7. Save, quit to the main menu, load: the title keeps the scenario name (`NAME` chunk), phase back to running (lock reset by command 0x36).
+8. Handelsimperium / Goldrausch: goods bars equal the warehouse stock; Smaragdinseln 2: own spice islands counter and the blocking message when an AI settles there; Der Eroberer: "Besiege: Gegner 1, Gegner 2, Gegner 3" counter and rival line "besiegt".
+9. Close the game while the logbook runs → waiting; restart → reconnects. "Im Vordergrund" and "Kompakt" survive a restart. Window over the game in window mode (WINDOW_MODE 2); in exclusive full screen use a second monitor.
+10. The logbook must not change anything: `tools\check-game.ps1` output identical before and after.
+
+**Open (?):** content of 0x5C0E63 for endless games and original campaign missions; AI player names; meaning of the goal bits 0x20000/0x40000 (player +0x87/+0x88) and 0x40 (not checked by `FUN_1400ae010` → such a mission cannot be won); where the time limit 0x5EC1A8 is set (only the reset and the checks were found; shown only when ≠ 0); balance formula mirrored from the code but not yet compared with the in-game status window (test plan 3).
+
+### Launcher: three tabs, new presets, settings per savegame (2026-11-12)
+
+`tools/launcher.ps1` now has three tabs (German on a German Windows, otherwise English). The preset argument lists below were printed offline (`launcher.ps1 -PrintArgs`, O); all 86 choices of the 24 options are accepted by `anno-patcher.ps1 -CheckOnly` (O). `saves.json` from a real game end, the classification and the adventure list with logbook results were checked with the real game on 2026-11-12 (see "In-game tests of phase 2"); the buttons themselves were not clicked in game.
+
+**Tab "Neues Spiel" (New game):** every option as a drop-down list in four groups; `settings.json` stores option id → value key (independent of the UI language).
+
+| Group | Options (German / English labels) |
+|---|---|
+| Welt / World | Kartengrösse, Inseln, Inselgrösse, Rohstoffe, Ureinwohner, Fruchtbarkeit / Map size, Islands, Island size, Resources, Natives, Fertility |
+| Wirtschaft / Economy | Dein Startgold, Einwohner je Haus, Produktionstempo, Lager je Ware, Baukosten, Betriebskosten, Steuereinnahmen, Einflussradius, Erz- und Goldminen / Your starting gold, Residents per house, Production speed, Storage per good, Building costs, Running costs, Tax income, Influence radius, Ore and gold mines |
+| Gegner und Gefahren / Rivals and dangers | Freie Händler, Computergegner, Gold der Gegner, Piraten, Piratenflotte, Katastrophen / Free traders, Computer rivals, Rivals' gold, Pirates, Pirate fleet, Disasters |
+| Schiffe und Tempo / Ships and speed | Turbo (Taste F7), Schiffstempo, Laderaum der Schiffe / Turbo (F7 key), Ship speed, Cargo space |
+
+Presets (map 1000 × 700 with more islands is the default and gives no argument):
+
+| Button | Arguments for `anno-patcher.ps1` (O, `-PrintArgs`) |
+|---|---|
+| "Alles gross" (Everything big) | `-IslandSize Huge -Resources Lots -Natives Lots -Traders Lots -Rivals Hard -RivalGold 60000 -Pirates Active -PirateFleet Large -StartGold 50000 -Residents 5 -Turbo -TurboLevel 16 -Production 2 -Storage 5 -ShipSpeed 2 -Cargo 3` |
+| "Für Kampagnen" (For campaigns) | `-Resources More -Turbo -TurboLevel 16` |
+| "Gemütlich" (Relaxed, new) | `-IslandSize Large -Resources Lots -Pirates Off -StartGold 100000 -Residents 2 -Turbo -TurboLevel 16 -Production 2 -Storage 3 -BuildCost 0.5 -Upkeep 0.5 -Taxes 2 -Radius 1.5 -Fertility Everywhere -Mines Infinite -Disasters Off` |
+| "Harte Probe" (Tough test, new) | `-Resources More -Natives More -Rivals Hard -RivalGold 100000 -Pirates Strong -PirateFleet Huge -Turbo -TurboLevel 16 -Disasters More` |
+| "Alles auf Standard" (Reset to defaults) | `-Resources More` |
+
+**Tab "Weiterspielen" (Continue):** lists every `.gam` of the Savegame folder, newest first, with map size and the options it was made with; "Mit diesen Einstellungen spielen" (Play with these settings) starts patcher and game with exactly those options, then the player loads the savegame in the game.
+- Source: at the end of the game `anno-patcher.ps1` writes `%APPDATA%\Anno1602-Extensions\saves.json` (with the "Continue game" protection on, after renaming `lastgame.gam`, so the renamed autosave is recorded under its new name): one entry per `.gam` written during the session `{ File, Written (local time, ISO format 's'), Width, Height, Args }`; `Args` = the argument list of the run with numbers in invariant culture (dot), always with `-Width`/`-Height`, without `-CheckOnly`, `-WaitMinutes`, `-GameAlreadyRunning`, `-GamePath`, `-NoLastgameProtection`. At most 500 entries; the same file version (name + write time) is replaced.
+- Classification in the launcher:
+
+  | Kind | Rule | Button |
+  |---|---|---|
+  | known | entry with the same file name and a write time within 3 s | patcher + game with exactly the recorded arguments |
+  | size | renamed autosave `lastgame-<W>x<H>-*` without a record | this map size plus the current options of the "New game" tab |
+  | original | written before the oldest `Savegame-Backup-`/`Savegame-Sicherung-` folder (first use of the tool) | original game without changes |
+  | unknown | everything else | disabled (grey line) |
+
+**Tab "Abenteuer" (Adventures):** every `*.szs` in `Own Scenarios` (except the game's own "Last Szenario"), grouped by campaign (name before the chapter number or before " - "), sorted by chapter, with the progress from `logbook.json`: "✓ gewonnen <date>" (won), "verloren – nochmals versuchen" (lost), "→ nächstes Kapitel" (next chapter) at the first chapter of each campaign that is not won yet. Below the random-adventure panel: difficulty (Einfach / Durchschnittlich / Fordernd / Schwer), optional number (= seed), button "Abenteuer würfeln" (Roll an adventure) → `random-adventure.ps1 -Difficulty <X> [-Seed N] -Install`; the result box shows the name and the goals.
+- The number field takes at most 6 digits (0–999,999, like `random-adventure.ps1`); a different input gives a short message instead of a parameter error.
+
+**Buttons below the tabs:** "Mit Erweiterungen spielen" (Play with extensions), "Original starten" (Start original), "Logbuch öffnen" (Open logbook; starts `logbook.ps1` hidden, shown only if the file exists). On the "Continue" tab the two play buttons are disabled.
+
+**Installer (`tools/install.ps1`):** installs `anno-patcher.ps1`, `launcher.ps1`, `logbook.ps1`, `random-adventure.ps1`, `build-scenarios.ps1`, `scenario-lib.ps1`, `README.txt`, `README.de.txt` and `FINDINGS.md`; builds the scenarios in the UI language into a fresh temp folder and copies these 23 to "Own Scenarios" (the temp folder is deleted afterwards). `-Remove` deletes our scenario files by name in both languages, random adventures included (`^((Smaragdinseln|Wettlauf|Sturmsee|Emerald Isles|Race|Storm Sea) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+)\.szs$`).
+
+### In-game tests of phase 2 (O), 2026-11-12 08:56–09:44
+
+Installed version (`install.ps1` from the repository), tool started detached via WMI, game via Ubisoft Connect, German UI. Read-only checks with `check-game.ps1`, `check-islands.ps1`, `logbook.ps1 -Dump/-PreviewImage` and a mission/ship reader.
+
+**Options** (`-Resources More -BuildCost 0.5 -Upkeep 0.5 -Taxes 2 -Radius 2 -Fertility Everywhere -Mines Infinite -Disasters Off -Turbo -TurboLevel 16`):
+- Console exactly as planned: all 33 sites set; "Baukosten x0.5: 408 Werte geaendert" (trading post I 50 gold, 2 t tools, 3 t wood), "Betriebskosten x0.5: 107 Werte geaendert" (8 / church 25), taxes 14/16/22/24/26, radius 32/32/42/32 (17 values). No "unexpected values" line, so the in-game building table matches the image parse.
+- New endless game "Durchschnittlich": 50 islands, **50 of 50 with all six crops**, 500 fertilities, 57 ore deposits on 39 islands.
+- 16-fold for about 1.5 game hours (clock 0 → 51,199): stable; rivals 222/374/222 residents in 2 settlements each; **rivals' gold 15,000 → 19,955 / 21,821 / 21,659** (normally it falls in the first hours); taxes/running costs per tick e.g. 881/197; ore and gold in the deposits **constant 4,880 t / 250 t**; no drought, no plague or fire.
+- Game ended by terminating the process after the autosave: the tool renamed `lastgame.gam` to `lastgame-1000x700-20261112-090843.gam` and wrote **`saves.json` with all 10 options**; `launcher.ps1 -PrintSaves` shows it as `known` with exactly these arguments.
+
+**Scenarios** (tool with "Für Kampagnen", big versions):
+- Sturmsee 1: gold 10,000, mission bits 0x121 (town 200/1/100, 2 towns, balance ≥ 0); **cargo of "Morgenstern" in memory (+0x300): `00028016 00018017 0001000E`** = 20 t tools, 12 t wood, 8 t food (the rivals keep 50/50/30 t). Mission text with umlauts in the list.
+- Sturmsee 5: bits 0x401, town 1,000/3/400, defeat flag only for player 2; gold 40,000 / 20,000 / 60,000 / 20,000; own ships "Morgenstern", "Vergeltung" (14 cannons), "Falke" (8); rival 2's ship is called "Valcourts Stolz". **The player name from PLAYER4 (+0x3C0, "Haus Valcourt") is not used**: the game shows the colour names ("Gelber Spieler"). The mission text identifies the rival by its flagship, which works.
+- Random adventure 4711 (Fordernd), installed by the generator from the installed folder: bits 0x501 (town 800/3/300, balance 300, defeat), 47 islands (37 × 70×60, 10 × 100×90), pirates active, extra warship "Hai".
+- **Bug found and fixed – Archipel:** with only lit/mit islands (MaxClass 1, 30×30 and 40×40) the three computer rivals have kind 9 from the first second (their start ships end up with the traders, owner 4); at clock 700 the game ends as lost (all kind 9, lock 1, score screen "Schiffe gesunken 2", mission bonus 0 %). A test copy with MaxClass 2 (twenty 50×52 islands in the big version) keeps all three rivals (kind 12, one ship each). **I: the AI needs an island of class med (50×52) or bigger.** Fix: Archipel and the archipelago maps of the generator now use MaxClass 2; `check-scenarios.ps1` requires at least 4 islands of class med or bigger in every map version (the old file fails this check in both versions). Fixed Archipel in game: rivals kind 12 past clock 1,094, at 4× all three found settlements (clock 8,622: 26/22/8 residents).
+- Logbook: live values match (gold, rivals, towns, speed); the scenario name comes from the parameter block (also "Abenteuer 4711"). Test scenario "ZZ Test Sofortsieg" (balance ≥ −1,000,000): game ended at clock 50, mission flag set, **logbook.json got `{"scenario": "ZZ Test Sofortsieg", "result": "won"}`**; the launcher's Adventures tab shows "verloren – nochmals versuchen" for the three lost Archipel runs. Test data removed afterwards (`logbook.json`, `saves.json`, test scenario, test autosave moved to `Savegame-Testlaeufe-20261112`); `lastgame.gam` restored (B7C4BFB9…).
+- Not tested in game: building something with the cheaper costs (only the table values are confirmed), the bigger radius on screen, "Disasters More", the English scenario files, clicking the launcher buttons.
 
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 

@@ -72,6 +72,9 @@ td:first-child { font-weight: 600; white-space: nowrap; }
 .chapter .no { font-family: var(--f-title); font-size: 2rem; color: var(--brass); line-height: 1; }
 .chapter .content { display: grid; gap: 6px; min-width: 0; }
 .chapter .goal { color: var(--ink-2); }
+.chapter .story { font-style: italic; }
+.chapter .hint { font-size: 0.92rem; color: var(--ink-2); border-left: 2px solid var(--brass); padding-left: 10px; }
+.chapter .hint b { color: var(--brass); font-weight: 700; margin-right: 4px; }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .tag { font-size: 0.78rem; font-weight: 600; padding: 1px 8px; border: 1px solid var(--sea); color: var(--sea); border-radius: 999px; white-space: nowrap; }
 .tag.danger { border-color: var(--warn); color: var(--warn); }
@@ -100,16 +103,17 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
   <header class="sheet masthead">
     <div class="topline"><span class="course">Logbook · As of 12 November 2026</span><a class="lang-link" href="handbook.de.html" hreflang="de" lang="de">Deutsch</a></div>
     <h1>Anno 1602 Extensions</h1>
-    <p class="lead">Bigger worlds, stronger rivals, more life at sea and two campaigns with a story. Everything runs in memory, no game file is changed.</p>
+    <p class="lead">Bigger worlds, stronger rivals, cheaper building, more life at sea, three campaigns with a story, random adventures and a logbook next to the game. Everything runs in memory, no game file is changed.</p>
   </header>
 
   <section class="sheet section" aria-labelledby="start">
     <h2 id="start">Setting sail</h2>
     <ol class="steps">
       <li><span>Open <strong>“Anno 1602 – Extensions”</strong> on the desktop (on a German Windows: “Anno 1602 – Erweiterungen”).</span></li>
-      <li><span>Choose the options or use a button: <strong>Everything big</strong> (maximum), <strong>For campaigns</strong> (campaigns as intended) or <strong>Reset to defaults</strong>.</span></li>
+      <li><span>On the <strong>New game</strong> tab choose the options or use a preset: <strong>Everything big</strong> (maximum), <strong>For campaigns</strong> (campaigns as intended), <strong>Relaxed</strong> (build in peace), <strong>Tough test</strong> (rivals and pirates at their strongest) or <strong>Reset to defaults</strong>.</span></li>
       <li><span><strong>Play with extensions</strong>. In the game <em>Single Player → New Game</em>: the endless game at the top, the campaigns at the very bottom under <em>Own Scenarios</em>.</span></li>
       <li><span>Press <kbd>F7</kbd> for up to 16× speed. After attack messages the game switches back by itself; then press F7 again.</span></li>
+      <li><span>To continue later: tab <strong>Continue</strong>, select the save, <strong>Play with these settings</strong>, then <em>Load Game</em> in the game. The save is loaded with exactly the options it was made with.</span></li>
     </ol>
   </section>
 
@@ -124,16 +128,23 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
           <tr><td>Island size</td><td>Large or almost only huge islands</td><td>Normal · Large · Huge</td></tr>
           <tr><td>Resources</td><td>Ore, gold, fertility, treasures grow along</td><td>Template · More · Lots</td></tr>
           <tr><td>Natives</td><td>Villages per climate zone (north + south)</td><td>2+2 · 4+4 · 7+7</td></tr>
+          <tr><td>Fertility</td><td>Every crop on every island (new endless games, not the scenarios)</td><td>As template · Every crop on every island</td></tr>
           <tr><td>Free traders</td><td>Trading ships on the map</td><td>× 1 · × 2 · × 3, at most 24</td></tr>
           <tr><td>Computer rivals</td><td>Arm and build as on “Hard”</td><td>As per difficulty · Always like “Hard”</td></tr>
           <tr><td>Rivals’ gold</td><td>Starting gold of the three rivals</td><td>up to 100,000</td></tr>
           <tr><td>Pirates</td><td>Attack, with the full number of cannons, or not at all</td><td>As per difficulty · Always attack · Strong · No pirates</td></tr>
           <tr><td>Pirate fleet</td><td>Size of the pirate fleet</td><td>up to 4 · up to 8 · up to 12 ships</td></tr>
+          <tr><td>Disasters</td><td>Fire, plague, drought and volcano</td><td>Normal · None · More often</td></tr>
           <tr><td>Your starting gold</td><td>Gold in new games</td><td>up to 100,000</td></tr>
           <tr><td>Residents per house</td><td>Bigger towns</td><td>× 1 to × 5 (up to 200 per house)</td></tr>
           <tr><td>Turbo (F7)</td><td>Speed of the F7 key</td><td>4 · 8 · 12 · 16×</td></tr>
           <tr><td>Production speed</td><td>All production buildings work faster</td><td>× 1 to × 3</td></tr>
           <tr><td>Storage per good</td><td>Warehouses and markets hold more</td><td>× 1 to × 5</td></tr>
+          <tr><td>Building costs</td><td>Gold, tools, wood and bricks per building (also for the rivals)</td><td>Normal · × 0.75 · Half · A quarter · Free</td></tr>
+          <tr><td>Running costs</td><td>Upkeep of all buildings</td><td>Normal · × 0.75 · Half · A quarter · None</td></tr>
+          <tr><td>Tax income</td><td>Taxes per resident</td><td>× 1 to × 3</td></tr>
+          <tr><td>Influence radius</td><td>Warehouse, market and public buildings reach further</td><td>× 1 · × 1.5 · × 2</td></tr>
+          <tr><td>Ore and gold mines</td><td>Deposits never run dry</td><td>Normal · Inexhaustible</td></tr>
           <tr><td>Ship speed</td><td>All ships sail faster</td><td>× 1 to × 3</td></tr>
           <tr><td>Cargo space</td><td>Tons per hold of the ships you can build</td><td>× 1 to × 3</td></tr>
         </tbody>
@@ -142,44 +153,104 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
   </section>
 
   <section class="sheet section" aria-labelledby="emerald">
-    <span class="course">Campaign “The Emerald Isles” · play in order</span>
-    <h2 id="emerald">Die Smaragdinseln</h2>
+    <span class="course">Campaign “Die Smaragdinseln” · play in order</span>
+    <h2 id="emerald">The Emerald Isles</h2>
     <p>As governor of the trading company you found a colony on an unknown archipelago and rise to viceroy.</p>
     <div class="chapters" data-group="emerald">
-      <div class="chapter" data-id="s1"><span class="no">1</span><div class="content"><h3>Landung (Landfall)</h3><p class="goal">A town of 250 residents, 150 of them settlers. Positive balance.</p><div class="tags"><span class="level" aria-label="Easy"><i class="on"></i><i></i><i></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-s1"> done</label></div>
-      <div class="chapter" data-id="s2"><span class="no">2</span><div class="content"><h3>Gewürzfieber (Spice Fever)</h3><p class="goal">Monopoly: settle every spice island yourself, no foreign settlement there. Plus 500 residents, 250 of them citizens.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Monopoly</span></div></div><label class="done"><input type="checkbox" id="k-s2"> done</label></div>
-      <div class="chapter" data-id="s3"><span class="no">3</span><div class="content"><h3>Zwei Kolonien (Two Colonies)</h3><p class="goal">800 residents (300 merchants) and a second town with 500 (250 citizens). Balance +300.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">North and south</span></div></div><label class="done"><input type="checkbox" id="k-s3"> done</label></div>
-      <div class="chapter" data-id="s4"><span class="no">4</span><div class="content"><h3>Schwarze Segel (Black Sails)</h3><p class="goal">1000 residents (500 merchants). Arsenal: 20 t cannons and 40 t muskets.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-s4"> done</label></div>
-      <div class="chapter" data-id="s5"><span class="no">5</span><div class="content"><h3>Der Eroberer (The Conqueror)</h3><p class="goal">Defeat all three rivals: no settlement and no ship left.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ large warship</span></div></div><label class="done"><input type="checkbox" id="k-s5"> done</label></div>
-      <div class="chapter" data-id="s6"><span class="no">6</span><div class="content"><h3>Krone der Inseln (Crown of the Isles)</h3><p class="goal">Residence with 2500 residents, 1200 of them aristocrats. Second town 1500 (800 merchants), third 800 (400 citizens). Balance +1000.</p><div class="tags"><span class="level" aria-label="Hard"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag danger">Pirates</span><span class="tag">+ large trading ship</span></div></div><label class="done"><input type="checkbox" id="k-s6"> done</label></div>
+      <div class="chapter" data-id="s1"><span class="no">1</span><div class="content"><h3>Landfall (Landung)</h3><p class="goal">A town of 250 residents, 150 of them settlers. Positive balance.</p><div class="tags"><span class="level" aria-label="Easy"><i class="on"></i><i></i><i></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-s1"> done</label></div>
+      <div class="chapter" data-id="s2"><span class="no">2</span><div class="content"><h3>Spice Fever (Gewürzfieber)</h3><p class="goal">Monopoly: settle every spice island yourself, no foreign settlement there. Plus 500 residents, 250 of them citizens.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Monopoly</span></div></div><label class="done"><input type="checkbox" id="k-s2"> done</label></div>
+      <div class="chapter" data-id="s3"><span class="no">3</span><div class="content"><h3>Two Colonies (Zwei Kolonien)</h3><p class="goal">800 residents (300 merchants) and a second town with 500 (250 citizens). Balance +300.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">North and south</span></div></div><label class="done"><input type="checkbox" id="k-s3"> done</label></div>
+      <div class="chapter" data-id="s4"><span class="no">4</span><div class="content"><h3>Black Sails (Schwarze Segel)</h3><p class="goal">1000 residents (500 merchants). Arsenal: 20 t cannons and 40 t muskets.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-s4"> done</label></div>
+      <div class="chapter" data-id="s5"><span class="no">5</span><div class="content"><h3>The Conqueror (Der Eroberer)</h3><p class="goal">Defeat all three rivals: no settlement and no ship left.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ large warship</span></div></div><label class="done"><input type="checkbox" id="k-s5"> done</label></div>
+      <div class="chapter" data-id="s6"><span class="no">6</span><div class="content"><h3>Crown of the Isles (Krone der Inseln)</h3><p class="goal">Residence with 2500 residents, 1200 of them aristocrats. Second town 1500 (800 merchants), third 800 (400 citizens). Balance +1000.</p><div class="tags"><span class="level" aria-label="Hard"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag danger">Pirates</span><span class="tag">+ large trading ship</span></div></div><label class="done"><input type="checkbox" id="k-s6"> done</label></div>
     </div>
   </section>
 
   <section class="sheet section" aria-labelledby="race">
-    <span class="course">Campaign “Race of the Houses” · against the rivals</span>
-    <h2 id="race">Wettlauf der Häuser</h2>
+    <span class="course">Campaign “Wettlauf der Häuser” · against the rivals</span>
+    <h2 id="race">Race of the Houses</h2>
     <p>The three rivals have the same mission. Whoever fulfils it first wins. If a rival is faster, the chapter is lost. Measured: in chapter 3 the fastest rival reaches the goal after about 8 hours of game time, in the finale after about 20 hours. Turbo does not help, because the rivals get faster too.</p>
     <div class="chapters">
-      <div class="chapter" data-id="w1"><span class="no">1</span><div class="content"><h3>Erster Hafen (First Harbour)</h3><p class="goal">Be the first with a town of 300 residents, 150 of them settlers.</p><div class="tags"><span class="level" aria-label="Easy"><i class="on"></i><i></i><i></i><i></i></span><span class="tag">Race</span></div></div><label class="done"><input type="checkbox" id="k-w1"> done</label></div>
-      <div class="chapter" data-id="w2"><span class="no">2</span><div class="content"><h3>Bürgerstolz (Citizens’ Pride)</h3><p class="goal">700 residents (350 citizens) and a second town with 200 (100 settlers).</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Race</span></div></div><label class="done"><input type="checkbox" id="k-w2"> done</label></div>
-      <div class="chapter" data-id="w3"><span class="no">3</span><div class="content"><h3>Kaufmannsrepublik (Merchant Republic)</h3><p class="goal">1000 residents, 400 of them merchants.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">Race</span><span class="tag danger">Pirates</span></div></div><label class="done"><input type="checkbox" id="k-w3"> done</label></div>
-      <div class="chapter" data-id="w4"><span class="no">4</span><div class="content"><h3>Die Krone (The Crown)</h3><p class="goal">1500 residents, 600 of them aristocrats. Balance +500.</p><div class="tags"><span class="level" aria-label="Hard"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag">Race</span><span class="tag danger">Pirates</span></div></div><label class="done"><input type="checkbox" id="k-w4"> done</label></div>
+      <div class="chapter" data-id="w1"><span class="no">1</span><div class="content"><h3>First Harbour (Erster Hafen)</h3><p class="goal">Be the first with a town of 300 residents, 150 of them settlers.</p><div class="tags"><span class="level" aria-label="Easy"><i class="on"></i><i></i><i></i><i></i></span><span class="tag">Race</span></div></div><label class="done"><input type="checkbox" id="k-w1"> done</label></div>
+      <div class="chapter" data-id="w2"><span class="no">2</span><div class="content"><h3>Civic Pride (Bürgerstolz)</h3><p class="goal">700 residents (350 citizens) and a second town with 200 (100 settlers).</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Race</span></div></div><label class="done"><input type="checkbox" id="k-w2"> done</label></div>
+      <div class="chapter" data-id="w3"><span class="no">3</span><div class="content"><h3>Merchant Republic (Kaufmannsrepublik)</h3><p class="goal">1000 residents, 400 of them merchants.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">Race</span><span class="tag danger">Pirates</span></div></div><label class="done"><input type="checkbox" id="k-w3"> done</label></div>
+      <div class="chapter" data-id="w4"><span class="no">4</span><div class="content"><h3>The Crown (Die Krone)</h3><p class="goal">1500 residents, 600 of them aristocrats. Balance +500.</p><div class="tags"><span class="level" aria-label="Hard"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag">Race</span><span class="tag danger">Pirates</span></div></div><label class="done"><input type="checkbox" id="k-w4"> done</label></div>
+    </div>
+  </section>
+
+  <section class="sheet section" aria-labelledby="stormsea">
+    <span class="course">Campaign “Die Sturmsee” · play in order · new</span>
+    <h2 id="stormsea">The Storm Sea</h2>
+    <p>A storm wrecks your convoy on the reefs of the Storm Sea. With one battered ship you build a colony, win the trade of the islands, fight off pirates and a treacherous trading house, and in the end unite the islands under one crown. Every chapter asks for something different. New in November 2026: the difficulty is designed by analogy with the measured chapters and has not been played through yet.</p>
+    <div class="chapters" data-group="stormsea">
+      <div class="chapter" data-id="ss1"><span class="no">1</span><div class="content"><h3>Shipwreck (Schiffbruch)</h3><p class="story">Only the “Morning Star” survived the storm – with a half-empty hold and hardly any gold. The castaways of the other ships wait on a foreign shore.</p><p class="goal">A town of 200 residents, 100 of them settlers. A second settlement on another island for the castaways. Positive balance.</p><p class="hint"><b>Tip</b>Only 10,000 gold, 20 t tools, 12 t wood and 8 t food. Build foresters first – they cost no wood. If tools run short, set them to “buy” in the warehouse; the free traders bring them.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Little gold</span></div></div><label class="done"><input type="checkbox" id="k-ss1"> done</label></div>
+      <div class="chapter" data-id="ss2"><span class="no">2</span><div class="content"><h3>Tobacco and Cocoa (Tabak und Kakao)</h3><p class="story">Europe’s coffee houses crave tobacco and drinking chocolate – and in the Storm Sea both grow on only a few islands. Whoever owns them all sets the prices.</p><p class="goal">Tobacco monopoly and cocoa monopoly: a settlement of your own on every island where tobacco or cocoa grows, and no rival settlement there. Plus a town of 600 residents, 300 of them citizens.</p><p class="hint"><b>Tip</b>Explore at once and check the fertility in the island info. Native villages do not spoil a monopoly, rival settlements do – and the rivals are more cunning this time.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Double monopoly</span><span class="tag">Rivals: Demanding</span></div></div><label class="done"><input type="checkbox" id="k-ss2"> done</label></div>
+      <div class="chapter" data-id="ss3"><span class="no">3</span><div class="content"><h3>The Free Port (Der Freihafen)</h3><p class="story">The company wants a free port where traders from all over the world buy and sell. This time nobody counts residents – only the figures in the ledgers.</p><p class="goal">Trade balance +400: sales must clearly exceed purchases. 40 t tobacco goods and 40 t cocoa in store.</p><p class="hint"><b>Tip</b>Sell what you have in abundance and buy only what you really need. The “Hope” carries 50 t cloth and 50 t liquor – put them up for sale in the warehouse.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">Trade</span><span class="tag">+ large trading ship</span></div></div><label class="done"><input type="checkbox" id="k-ss3"> done</label></div>
+      <div class="chapter" data-id="ss4"><span class="no">4</span><div class="content"><h3>The Red Flag (Die Rote Flagge)</h3><p class="story">Pirates under a red flag raid every ship between the islands, and rumour says a powerful trading house pays them.</p><p class="goal">At least 3 settlements – and every one of them with 300 residents, 100 of them citizens. Small outposts count too.</p><p class="hint"><b>Tip</b>Found only settlements you want to grow into towns. A watchtower needs 2 t cannons; 10 t are on board, with 50 t tools, 40 t wood and 30 t bricks. Never let trading ships sail without an escort.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ 2 small warships</span></div></div><label class="done"><input type="checkbox" id="k-ss4"> done</label></div>
+      <div class="chapter" data-id="ss5"><span class="no">5</span><div class="content"><h3>Betrayal (Verrat)</h3><p class="story">A captured pirate captain talked: House Valcourt paid for the raids. The other two houses declare themselves neutral – an elastic word in these waters.</p><p class="goal">Defeat House Valcourt: no settlement and no ship left. You know it by its flagship, the “Valcourt Pride”. The other two rivals may stay. Plus a town of 1000 residents, 400 of them merchants.</p><p class="hint"><b>Tip</b>All rivals plan as on “Hard”, and Valcourt starts with 60,000 gold. Secure ore for cannons and muskets before you attack, and do not get drawn into a second war.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Rivals: Hard</span><span class="tag">+ large and small warship</span></div></div><label class="done"><input type="checkbox" id="k-ss5"> done</label></div>
+      <div class="chapter" data-id="ss6"><span class="no">6</span><div class="content"><h3>The Golden Age (Das Goldene Zeitalter)</h3><p class="story">Valcourt has fallen, the pirates are scattered. The King seeks a ruler to unite the islands – but the remaining houses reach for the crown as well, and the pirates gather one last time.</p><p class="goal">A residence of 2000 residents, 800 of them aristocrats. A second town of 1200 (500 merchants). 4000 residents in total, 40 t jewellery in store, balance +800.</p><p class="hint"><b>Tip</b>The “Morning Star II” brings 50 t tools, 50 t bricks and 40 t wood, the “Admiral” guards your coasts. Gold for the jewellery is found on only a few islands – claim one early.</p><div class="tags"><span class="level" aria-label="Hard"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag danger">Pirates</span><span class="tag">+ large trading ship</span><span class="tag">+ large warship</span></div></div><label class="done"><input type="checkbox" id="k-ss6"> done</label></div>
     </div>
   </section>
 
   <section class="sheet section" aria-labelledby="challenges">
     <span class="course">Single scenarios</span>
     <h2 id="challenges">Challenges</h2>
+    <p>Archipelago, Continents, Merchant Fleet and Sea Power are new (November 2026) and have not been played through yet.</p>
     <div class="chapters">
-      <div class="chapter" data-id="h1"><span class="no">◆</span><div class="content"><h3>Inselreich (Island Realm)</h3><p class="goal">8 own settlements with 3000 residents in total.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h1"> done</label></div>
-      <div class="chapter" data-id="h2"><span class="no">◆</span><div class="content"><h3>Handelsimperium (Trade Empire)</h3><p class="goal">50 t jewellery and 80 t clothes in store. Trade balance +300: sales must clearly exceed purchases.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h2"> done</label></div>
-      <div class="chapter" data-id="h3"><span class="no">◆</span><div class="content"><h3>Goldrausch (Gold Rush)</h3><p class="goal">60 t gold and 40 t jewellery in store.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-h3"> done</label></div>
+      <div class="chapter" data-id="h1"><span class="no">◆</span><div class="content"><h3>Island Realm (Inselreich)</h3><p class="goal">8 own settlements with 3000 residents in total.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h1"> done</label></div>
+      <div class="chapter" data-id="h2"><span class="no">◆</span><div class="content"><h3>Trade Empire (Handelsimperium)</h3><p class="goal">50 t jewellery and 80 t clothes in store. Trade balance +300: sales must clearly exceed purchases.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h2"> done</label></div>
+      <div class="chapter" data-id="h3"><span class="no">◆</span><div class="content"><h3>Gold Rush (Goldrausch)</h3><p class="goal">60 t gold and 40 t jewellery in store.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-h3"> done</label></div>
+      <div class="chapter" data-id="h4"><span class="no">◆</span><div class="content"><h3>Archipelago (Archipel)</h3><p class="goal">Dozens of small islands: at least 10 settlements, and every one of them with 100 residents, 40 of them settlers. A warehouse without houses counts as a settlement too.</p><p class="hint"><b>Tip</b>Extra tools, wood and bricks are on board, and the “Island Hopper” brings more. Every small town needs its own marketplace.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">New</span><span class="tag">+ small trading ship</span></div></div><label class="done"><input type="checkbox" id="k-h4"> done</label></div>
+      <div class="chapter" data-id="h5"><span class="no">◆</span><div class="content"><h3>Continents (Kontinente)</h3><p class="goal">A few huge islands: a metropolis of 1500 residents, 400 of them aristocrats. 3000 residents in total, balance +300.</p><p class="hint"><b>Tip</b>The roads are long: place marketplaces so that they cover the whole town, and leave the rivals no bay to take hold in.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">New</span></div></div><label class="done"><input type="checkbox" id="k-h5"> done</label></div>
+      <div class="chapter" data-id="h6"><span class="no">◆</span><div class="content"><h3>Merchant Fleet (Handelsflotte)</h3><p class="goal">Only 15,000 gold, but four ships: at least 4 settlements, 60 t spices and 60 t cocoa in store.</p><p class="hint"><b>Tip</b>Sell the cloth, liquor and tobacco goods of the “Mercury” for your first gold, then set up trade routes that bring the harvest home from the south.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">New</span><span class="tag">+ 2 large trading ships</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-h6"> done</label></div>
+      <div class="chapter" data-id="h7"><span class="no">◆</span><div class="content"><h3>Sea Power (Seemacht)</h3><p class="goal">Defeat all three rivals: no settlement and no ship left. They are poor (10,000 gold), you start with 60,000.</p><p class="hint"><b>Tip</b>The “Trident” and the “Thunderbolt” carry cannons and swords. Strike before the rivals build castles.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">New</span><span class="tag">+ 2 large warships</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-h7"> done</label></div>
     </div>
+  </section>
+
+  <section class="sheet section" aria-labelledby="adventures">
+    <span class="course">Launcher tab “Adventures” · new</span>
+    <h2 id="adventures">Random adventures</h2>
+    <p>A fresh island world with a fresh mission whenever you like – made by the same builder as the campaigns, with a short story and the helmsman’s advice.</p>
+    <ol class="steps">
+      <li><span>In the launcher open the tab <strong>Adventures</strong>.</span></li>
+      <li><span>Choose the difficulty: Easy, Average, Demanding or Hard. Optionally enter a number from 0 to 999,999; without one, a number is rolled for you.</span></li>
+      <li><span><strong>Roll an adventure</strong>. The box shows the name, for example “Adventure 4711”, and your mission. In the game it waits under <em>Own Scenarios</em>.</span></li>
+    </ol>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Rolled</th><th>Possibilities</th></tr></thead>
+        <tbody>
+          <tr><td>Map</td><td>Classic (some islands larger), an archipelago of 26 to 30 small islands (the largest 50 × 52, so that the rivals can settle too), or a few huge continents</td></tr>
+          <tr><td>Main goal</td><td>Towns, a realm of many settlements, trade (goods and trade balance), a monopoly, or conquest (not on Easy)</td></tr>
+          <tr><td>Extra goals</td><td>None on Easy, up to two on Hard: balance, trade balance, a good in store, total residents, another town</td></tr>
+          <tr><td>World</td><td>Ore, gold and crops to match the mission, native villages, your and the rivals’ starting gold, the rivals’ strength</td></tr>
+          <tr><td>Pirates</td><td>Never on Easy, always on Hard, sometimes in between</td></tr>
+          <tr><td>Ships</td><td>Rich start cargo on Easy, sometimes lean cargo on Hard; extra ships where the mission needs them</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>The same number with the same difficulty always gives the same adventure, in English and in German – play a map again or give the number to a friend. The same number with another difficulty replaces the file.</p>
+  </section>
+
+  <section class="sheet section" aria-labelledby="logbook">
+    <span class="course">Launcher button “Open logbook” · new</span>
+    <h2 id="logbook">The logbook</h2>
+    <p>A small window next to the game. It only reads the game’s memory and never changes anything; it may run before, during and after the game and connects by itself. Play in window mode or put it on a second monitor.</p>
+    <div class="tips">
+      <div class="tip"><strong>Mission</strong><span>Every goal with a live progress bar, green when met – the same check the game uses. In a race also how close the rivals are.</span></div>
+      <div class="tip"><strong>Your empire</strong><span>Gold, balance and trade balance, towns, residents per class, workers and ships.</span></div>
+      <div class="tip"><strong>Rivals</strong><span>Best town, residents, towns, ships and gold of each rival.</span></div>
+      <div class="tip"><strong>Achievements</strong><span>24 milestones, kept with date and game in <code>logbook.json</code>. Won missions also show up in the launcher’s Adventures tab.</span></div>
+    </div>
+    <div class="tags" aria-label="The 24 achievements">
+      <span class="tag" title="Found your first town.">Land Ho!</span><span class="tag" title="Your first settlers move in.">First Settlers</span><span class="tag" title="The first citizens in your realm.">Civic Pride</span><span class="tag" title="Your first merchants.">Merchant Princes</span><span class="tag" title="Your first aristocrats.">Blue Blood</span><span class="tag" title="1,000 residents in total.">A Thousand Souls</span><span class="tag" title="5,000 residents in total.">Thriving Realm</span><span class="tag" title="10,000 residents in total.">Ten Thousand Subjects</span><span class="tag" title="One town with 2,500 residents.">Metropolis</span><span class="tag" title="1,000 aristocrats.">Royal Court</span><span class="tag" title="3 towns of your own.">Island Hopper</span><span class="tag" title="5 towns of your own.">Colonial Power</span><span class="tag" title="10 towns of your own.">Lord of the Isles</span><span class="tag" title="250,000 gold in the treasury.">Full Coffers</span><span class="tag" title="1,000,000 gold in the treasury.">Millionaire</span><span class="tag" title="5 ships of your own.">Small Fleet</span><span class="tag" title="10 ships of your own.">Armada</span><span class="tag" title="A balance of at least +500.">In the Black</span><span class="tag" title="10 game hours in one game.">Staying Power</span><span class="tag" title="50 game hours in one game.">Eternal Ruler</span><span class="tag" title="Play in turbo (8× or faster).">Full Speed Ahead</span><span class="tag" title="Defeat a rival.">Conqueror</span><span class="tag" title="Win a scenario.">Mission Accomplished</span><span class="tag" title="Win a race against the computer rivals.">First Past the Post</span>
+    </div>
+    <p>“On top” keeps the window above the game, “Compact” shows only the title, the goals and one line of figures. Point at an achievement to see its condition.</p>
   </section>
 
   <section class="sheet section" aria-labelledby="maps">
     <h2 id="maps">Small and big maps</h2>
-    <p>Every scenario has two versions. With <strong>Start original</strong> the classic map with 17 to 20 islands applies. With <strong>Play with extensions</strong>, map size 1000 × 700 or bigger and <em>More islands</em> the big version applies: up to 50 islands, more resources and natives. A tick above only stores in this browser which chapters you have completed.</p>
+    <p>Every scenario and every random adventure has two versions. With <strong>Start original</strong> the classic map with mostly 17 to 20 islands applies. With <strong>Play with extensions</strong>, map size 1000 × 700 or bigger and <em>More islands</em> the big version applies: up to 50 islands, more resources and natives. A tick above only stores in this browser which chapters you have completed.</p>
   </section>
 
   <section class="sheet section" aria-labelledby="advice">
@@ -187,13 +258,14 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
     <div class="tips">
       <div class="tip danger"><strong>Build a warehouse early</strong><span>With strong pirates the game is over as soon as your only ship sinks and you have no settlement.</span></div>
       <div class="tip"><strong>Gold options and campaigns</strong><span>Your starting gold and the rivals’ gold replace the scenario’s gold. The “For campaigns” button sets both to “As per difficulty”.</span></div>
-      <div class="tip danger"><strong>Saves from the big world</strong><span>Load them only with “Play with extensions” and the same map size. Leave the black window open until the game has ended.</span></div>
+      <div class="tip danger"><strong>Saves from the big world</strong><span>Load them only with the extensions and the same map size – easiest through the <em>Continue</em> tab. Leave the black window open until the game has ended: only then are the save’s options noted.</span></div>
+      <div class="tip"><strong>Relaxed and Tough test</strong><span>Both presets are made for the endless game. In a scenario their gold settings replace the scenario’s gold, and “Every crop on every island” does not apply there. For campaigns use “For campaigns”.</span></div>
       <div class="tip"><strong>To another PC</strong><span>Unzip the ZIP from GitHub (<em>Code → Download ZIP</em>), double-click <code>install.cmd</code>.</span></div>
     </div>
   </section>
 
   <footer class="foot">
-    <p>Built by reverse engineering the History Edition. Checked: 456 automatic tests against the loaded game code, plus runs in the real game (50 islands, 14 villages, up to 12 pirate ships, race, victory conditions, start fleet) and an endurance run over 14.5 game hours at 16× with all options: always responsive, 430 to 490 MB of memory.</p>
+    <p>Built by reverse engineering the History Edition. Checked: 556 automatic tests against the loaded game code, plus runs in the real game (50 islands, 14 villages, up to 12 pirate ships, race, victory conditions, start fleet) and an endurance run over 14.5 game hours at 16× with all options: always responsive, 430 to 490 MB of memory. The new options, the Storm Sea, the four new challenges, the random adventures and the logbook were checked offline (all 23 scenarios in both languages, 128 random adventures, 73 logbook self-tests) and in the running game; the balance of the new scenarios has not been played through yet.</p>
     <p>Single player only and only for the Ubisoft Connect version. After a game update the tool stops without changing anything.</p>
   </footer>
 </main>

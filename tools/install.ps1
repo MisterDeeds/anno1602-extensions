@@ -3,9 +3,9 @@
   Installs (or removes) the Anno 1602 extensions on this PC.
 
 .DESCRIPTION
-  Copies anno-patcher.ps1, launcher.ps1, README.txt, README.de.txt and ..\analysis\FINDINGS.md to
-  %LOCALAPPDATA%\Programs\Anno1602-Extensions, builds the campaigns and challenges from the game files
-  (build-scenarios.ps1) and copies them to Documents\Anno 1602 History Edition\Own Scenarios, and creates
+  Copies the tool (anno-patcher.ps1), the launcher, the logbook, the scenario builder with the random adventure
+  generator, README.txt, README.de.txt and ..\analysis\FINDINGS.md to %LOCALAPPDATA%\Programs\Anno1602-Extensions,
+  builds the campaigns and challenges from the game files (build-scenarios.ps1, in the UI language) and copies them to Documents\Anno 1602 History Edition\Own Scenarios, and creates
   the shortcut "Anno 1602 - Extensions" (German Windows: "Anno 1602 - Erweiterungen") in the Start menu
   and on the desktop. Game files are not changed. Checks first whether Anno 1602 History Edition
   (Ubisoft Connect) is installed and whether the game version matches.
@@ -39,7 +39,8 @@ function Get-DesktopFolder {
 }
 # Campaigns and challenges: own scenarios, shown in the game under "Own Scenarios" ("Eigene Szenarien").
 $OwnScenarios = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Anno 1602 History Edition\Own Scenarios'
-$ScenarioPatterns = @('Smaragdinseln *.szs', 'Wettlauf *.szs', 'Herausforderung - *.szs')
+# File names of the scenarios made by this project, both languages, including the random adventures.
+$ScenarioNames = '^((Smaragdinseln|Wettlauf|Sturmsee|Emerald Isles|Race|Storm Sea) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+)\.szs$'
 $ShortcutFolders = @([Environment]::GetFolderPath('Programs'))
 $desk = Get-DesktopFolder
 if ($desk) { $ShortcutFolders += $desk }
@@ -68,7 +69,7 @@ if ($Remove) {
             if (Test-Path -LiteralPath $s) { Remove-Item -LiteralPath $s -Recurse -Force; Write-Host (Txt "Removed: $s" "Entfernt: $s") }
         }
         if (Test-Path -LiteralPath $OwnScenarios) {
-            foreach ($pattern in $ScenarioPatterns) { Get-ChildItem -LiteralPath $OwnScenarios -Filter $pattern -File | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force; Write-Host (Txt "Removed: $($_.Name)" "Entfernt: $($_.Name)") } }
+            Get-ChildItem -LiteralPath $OwnScenarios -Filter '*.szs' -File | Where-Object { $_.Name -match $ScenarioNames } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force; Write-Host (Txt "Removed: $($_.Name)" "Entfernt: $($_.Name)") }
         }
     }
     Write-Host (Txt 'The extensions have been removed. Game and saved games are unchanged.' 'Die Erweiterungen sind entfernt. Spiel und Spielstaende sind unveraendert.') -ForegroundColor Green
@@ -92,7 +93,8 @@ else {
 
 # --- Copy files -------------------------------------------------------------------------------
 # Repository layout: this script lies in tools\, FINDINGS.md in analysis\ (optional).
-$files = foreach ($n in 'anno-patcher.ps1', 'launcher.ps1', 'README.txt', 'README.de.txt') {
+# The random adventure generator needs the scenario builder, its library and the island planner of the patcher.
+$files = foreach ($n in 'anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'README.txt', 'README.de.txt') {
     $f = Join-Path $PSScriptRoot $n
     if (-not (Test-Path -LiteralPath $f)) { throw (Txt "File missing next to install.ps1: $n" "Datei fehlt neben install.ps1: $n") }
     Get-Item -LiteralPath $f
@@ -118,8 +120,10 @@ $builder = Join-Path $PSScriptRoot 'build-scenarios.ps1'
 if (-not $NoShortcuts -and (Test-Path -LiteralPath $builder)) {
     if ($game -and (Test-Path -LiteralPath (Join-Path $game 'Szenes'))) {
         Write-Host (Txt 'Building campaigns and challenges from the game files ...' 'Baue Kampagnen und Herausforderungen aus den Spieldateien ...')
-        try { & $builder -GamePath $game | Out-Null; $scenarios = Join-Path $PSScriptRoot 'scenarios' }
-        catch { Write-Host (Txt "Could not build the scenarios: $($_.Exception.Message)" "Szenarien konnten nicht gebaut werden: $($_.Exception.Message)") -ForegroundColor Yellow }
+        # Into a fresh folder, so that only the scenarios of this run (in the UI language) are installed.
+        $scenarios = Join-Path ([IO.Path]::GetTempPath()) ('anno1602-scenarios-' + [guid]::NewGuid().ToString('N'))
+        try { & $builder -GamePath $game -OutFolder $scenarios | Out-Null }
+        catch { $scenarios = $null; Write-Host (Txt "Could not build the scenarios: $($_.Exception.Message)" "Szenarien konnten nicht gebaut werden: $($_.Exception.Message)") -ForegroundColor Yellow }
     }
     else { Write-Host (Txt 'No campaigns without the installed game (they are built from the game files).' 'Ohne installiertes Spiel keine Kampagnen (sie werden aus den Spieldateien gebaut).') -ForegroundColor Yellow }
 }
@@ -132,6 +136,7 @@ if (-not $NoShortcuts -and $scenarios -and (Test-Path -LiteralPath $scenarios)) 
         $n++
     }
     Write-Host (Txt "Campaigns and challenges: $n scenarios to $OwnScenarios (in the game under 'Own Scenarios')." "Kampagnen und Herausforderungen: $n Szenarien nach $OwnScenarios (im Spiel unter 'Eigene Szenarien').")
+    Remove-Item -LiteralPath $scenarios -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 # --- Shortcuts --------------------------------------------------------------------------------

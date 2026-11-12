@@ -66,6 +66,32 @@ try {
     $res['AI hard (0x17A8E)'] = & $hx 0x17A8E 6
     $res['Pirate fleet call (0x3B7F1) / code cave'] = '{0} / {1}' -f (& $hx 0x3B7F1 5), (& $hx 0xE5E00 17)
     $res['Traders call (0xBC140) / code cave'] = '{0} / {1}' -f (& $hx 0xBC140 5), (& $hx 0xE5E20 14)
+    # Build cost, upkeep, taxes, radius (anno-patcher.ps1 -BuildCost/-Upkeep/-Taxes/-Radius).
+    $mark = { param($rva, $tag) $m = Read-Rva $rva 8; if ([Text.Encoding]::ASCII.GetString($m, 0, 4) -eq $tag) { '{0} x{1}' -f $tag, ([BitConverter]::ToInt32($m, 4) / 100) } else { 'none' } }
+    $k1 = 0x6BA1C0 + 270 * 0x90
+    $res['Build cost marker / trading post I'] = '{0} / {1} gold, {2} t tools, {3} t wood (original 100, 3, 6)' -f (& $mark 0xE5BC0 'BAUK'), (I32 ($k1 + 0x58)), ((U16 ($k1 + 0x50)) / 32), ((U16 ($k1 + 0x52)) / 32)
+    $res['Upkeep marker / trading post I, church'] = '{0} / {1}, {2} (original 15, 50)' -f (& $mark 0xE5BC8 'UNTH'), (U16 ($k1 + 0x2C)), (U16 (0x6BA1C0 + 463 * 0x90 + 0x2C))
+    $res['Taxes per group (original 7/8/11/12/13)'] = ((0..4 | ForEach-Object { I32 (0x6BA030 + $_ * 0x50) }) -join '/')
+    $res['Radius trading post/market/church/doctor (16/16/21/16)'] = ((270, 467, 463, 469 | ForEach-Object { (Read-Rva (0x6BA1C0 + $_ * 0x90 + 0x20) 1)[0] }) -join '/')
+    # Upkeep and taxes per player: running costs = towns +0x1D8 (+0x1DC for the human), taxes as FUN_1400bbdc0.
+    $cost = @{}; $tax = @{}
+    for ($i = 0; $i -lt 75; $i++) {
+        $b0 = $i * 600; if ($sb[$b0 + 0x18] -eq 0xFF) { continue }
+        $o = $sb[$b0 + 0x1A]; $cost[$o] = [int]$cost[$o] + [BitConverter]::ToInt32($sb, $b0 + 0x1D8) + $(if ($o -eq 0) { [BitConverter]::ToInt32($sb, $b0 + 0x1DC) } else { 0 })
+        $t = 0; foreach ($g in 0..4) { $v = [BitConverter]::ToInt32($sb, $b0 + 0x220 + 4 * $g) * (I32 (0x6BA030 + $g * 0x50)) * 6; $t += [math]::Truncate([math]::Truncate($v / 32) * $sb[$b0 + 0x24D + $g] / 128) }
+        $tax[$o] = [int]$tax[$o] + $t
+    }
+    $res['Taxes / running costs per tick, player 0-3'] = ((0..3 | ForEach-Object { '{0}/{1}' -f [int]$tax[[byte]$_], [int]$cost[[byte]$_] }) -join '  ')
+    # Fertility (-Fertility Everywhere): hook in FUN_1400d0ce0 and islands with all six crops (+0x5C bits 1-6).
+    $six = 0; $used = 0
+    foreach ($i in 0..49) { $ii = 0x62DDC0 + $i * 0x2CC8; if ([BitConverter]::ToInt64((Read-Rva ($ii + 0x2CB0) 8), 0) -ne 0) { $used++; if (((I32 ($ii + 0x5C)) -band 0x7E) -eq 0x7E) { $six++ } } }
+    $res['Fertility jump (0xD0D56) / islands with all six crops'] = '{0} / {1} of {2}' -f (& $hx 0xD0D56 5), $six, $used
+    # Mines (-Mines Infinite) and the ore/gold still in the deposits (island +0x20 + i*8: ware, x, y, -, kind, -, amount x 32).
+    $ore = 0; $gold = 0
+    foreach ($i in 0..49) { $ii = 0x62DDC0 + $i * 0x2CC8; if ([BitConverter]::ToInt64((Read-Rva ($ii + 0x2CB0) 8), 0) -eq 0) { continue }; $n = (Read-Rva ($ii + 0x41) 1)[0]; $dep = Read-Rva ($ii + 0x20) (8 * [math]::Max(1, $n)); for ($j = 0; $j -lt $n; $j++) { $amt = [BitConverter]::ToUInt16($dep, 8 * $j + 6); if ($dep[8 * $j] -eq 2) { $ore += $amt } elseif ($dep[8 * $j] -eq 3) { $gold += $amt } } }
+    $res['Mines (0xBA429 / 0xBA495) / ore, gold t in deposits'] = '{0} / {1} / {2}, {3}' -f (& $hx 0xBA429 4), (& $hx 0xBA495 5), [math]::Round($ore / 32), [math]::Round($gold / 32)
+    $dis = if ((& $hx 0xBCAC3 5) -eq '0F 1F 44 00 00') { 'Off' } elseif ((& $hx 0xBCABB 3) -eq '83 FA 19') { 'More' } else { 'Default' }
+    $res['Disasters (plague call 0xBCAC3, limit 0xBCABB)'] = '{0} ({1}, {2}); drought on island 0-49: {3}' -f $dis, (& $hx 0xBCAC3 5), (& $hx 0xBCABB 3), (@(0..49 | Where-Object { (Read-Rva (0x62DDC0 + $_ * 0x2CC8 + 0x45) 1)[0] -ne 0 }).Count)
     $cam = [BitConverter]::ToInt64((Read-Rva 0xF9A00 8), 0)
     if ($cam) { $k = Read-Memory $cam 0x4C; $res['Camera world x/y, scroll s/t, rotation'] = '{0}/{1}, {2}/{3}, {4}' -f [BitConverter]::ToInt32($k, 0x1C), [BitConverter]::ToInt32($k, 0x20), [BitConverter]::ToInt32($k, 0x24), [BitConverter]::ToInt32($k, 0x28), [BitConverter]::ToInt32($k, 0x48) }
     if ($Short) { $res.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" } } else { [pscustomobject]$res | Format-List }
