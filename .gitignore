@@ -1,0 +1,8 @@
+# Nur eigener Code und Doku: keine Spieldateien, keine Analyse-Abbilder.
+/analysis/*
+!/analysis/BEFUNDE.md
+/decoded/
+# Die Szenarien entstehen aus den eigenen Spieldateien (tools/kampagne-bauen.ps1).
+/tools/kampagne/
+*.log
+*.err
