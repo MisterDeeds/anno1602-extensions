@@ -81,8 +81,12 @@ gesetzt (alle 50 Inseln tragen alle sechs Pflanzen; bei 16-fach über 1,5 Spiels
 Erzvorkommen gleich, es gab keine Katastrophe, und das Gold der Gegner stieg mit doppelten Steuern und
 halben Betriebskosten), die Registerkarte „Weiterspielen“ (ein Spielstand wird beim Spielende mit seinen
 Optionen gemerkt), Sturmsee 1 und 5, Archipel und ein Zufallsabenteuer (Ladung, Flotte und Auftrag wie
-geplant) sowie das Logbuch (Live-Werte, eine gewonnene Mission wird eingetragen). Noch nicht
-durchgespielt: die Balance der zehn neuen Szenarien.
+geplant) sowie das Logbuch (Live-Werte, eine gewonnene Mission wird eingetragen). Später am selben
+Tag: Das Baumenü zeigt die halbierten Kosten, ein Wegstück kostete wirklich 3 statt 5 Gold; die
+Bauvorschau des Marktplatzes zeigt den doppelten Radius; mit demselben Spielstand über 2,9 Spielstunden
+ergaben die Katastrophen 0 / 34 / 89 neue Brände und Pestfälle für aus / normal / häufiger; ein
+englisches Szenario erscheint mit englischem Text; alle Knöpfe des Startfensters wurden im Code
+geklickt. Noch nicht durchgespielt: die Balance der zehn neuen Szenarien.
 
 ## Kampagnen und Herausforderungen
 

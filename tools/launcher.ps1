@@ -26,6 +26,10 @@ param(
     [Parameter(DontShow)][switch]$PrintSaves,
     # For testing only: print every choice of every option with its arguments (one line each) and exit.
     [Parameter(DontShow)][switch]$PrintChoices,
+    # For testing only: build the window invisibly, click the buttons in code (no process is started; random adventures
+    # go to -TestOutFolder instead of Own Scenarios), print what would have been started and exit.
+    [Parameter(DontShow)][switch]$TestClicks,
+    [Parameter(DontShow)][string]$TestOutFolder = (Join-Path ([IO.Path]::GetTempPath()) 'anno1602-launcher-test'),
     # For testing only: folder used instead of %APPDATA% for the settings.
     [Parameter(DontShow)][string]$AppDataFolder = $env:APPDATA,
     # For testing only: folder used instead of the Documents folder (savegames, own scenarios).
@@ -690,7 +694,8 @@ if (-not (Test-Path -LiteralPath $Generator)) { $buttonRoll.Enabled = $false }
 
 $buttonRoll.Add_Click({
         # Direct call of a native program: PowerShell quotes the path itself.
-        $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Generator, '-Difficulty', $DifficultyKeys[$rollDifficulty.SelectedIndex], '-Install')
+        $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Generator, '-Difficulty', $DifficultyKeys[$rollDifficulty.SelectedIndex])
+        $a += if ($TestClicks) { @('-OutFolder', $TestOutFolder) } else { @('-Install') }
         $seedText = $rollSeed.Text.Trim()
         if ($seedText) {
             if ($seedText -notmatch '^\d{1,6}$') { $rollResult.Text = Txt 'The number must be a whole number from 0 to 999999.' 'Die Nummer muss eine ganze Zahl von 0 bis 999999 sein.'; return }
@@ -786,6 +791,36 @@ function Set-TabSize {
 }
 Set-TabSize
 
+if ($TestClicks) {
+    # Record instead of starting: these functions hide the cmdlets for the button handlers of this script.
+    $script:Started = New-Object System.Collections.Generic.List[string]
+    function Start-Process { param([Parameter(Position = 0)]$FilePath, $ArgumentList, $WindowStyle) $script:Started.Add(('START {0} {1}' -f $FilePath, (@($ArgumentList) -join ' ')).TrimEnd()) }
+    function Start-Sleep { }
+    # Click in code (works also while the form is closing): call the protected OnClick of the button.
+    function Invoke-Click($button) { $button.GetType().GetMethod('OnClick', [Reflection.BindingFlags]'NonPublic, Instance').Invoke($button, @([EventArgs]::Empty)) }
+    function Write-Step([string]$what) { $script:Started.Add("--- $what") }
+    $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(-10000, -10000); $form.ShowInTaskbar = $false
+    $form.Add_Shown({
+            Write-Step 'preset Relaxed, Play with extensions'; Invoke-Click $buttonRelaxed; Invoke-Click $buttonStart
+            Write-Step 'preset Tough test, Start original'; Invoke-Click $buttonTough; Invoke-Click $buttonOriginal
+            Write-Step 'Open logbook'; Invoke-Click $buttonLogbook
+            # As a player would: switch to the tab first (the list only reports a selection once it is shown).
+            $tabs.SelectedIndex = 1
+            foreach ($kind in 'known', 'size', 'original') {
+                $item = @($saveList.Items | Where-Object { $_.Tag.Kind -eq $kind }) | Select-Object -First 1
+                if (-not $item) { Write-Step "Continue: no $kind savegame"; continue }
+                Write-Step ('Continue: {0} savegame "{1}", button enabled: {2}' -f $kind, $item.Text, $($item.Selected = $true; $buttonContinue.Enabled)); Invoke-Click $buttonContinue
+            }
+            Write-Step 'Roll an adventure: Demanding, number 4711'; $rollDifficulty.SelectedIndex = 2; $rollSeed.Text = '4711'; Invoke-Click $buttonRoll
+            $script:Started.Add('RESULT ' + ($rollResult.Text -replace "`r?`n", ' | '))
+            Write-Step 'Roll with an invalid number'; $rollSeed.Text = '12345678'; Invoke-Click $buttonRoll
+            $script:Started.Add('RESULT ' + $rollResult.Text)
+            $form.Close()
+        })
+    [void]$form.ShowDialog()
+    $script:Started
+    return
+}
 if ($PreviewImage) {
     $form.StartPosition = 'Manual'
     $form.Location = New-Object Drawing.Point(-10000, -10000)

@@ -838,7 +838,7 @@ Difficulty = template (0 Einfach … 3 Schwer); "AI n" = rival strength set sepa
 
 ### Launcher: three tabs, new presets, settings per savegame (2026-11-12)
 
-`tools/launcher.ps1` now has three tabs (German on a German Windows, otherwise English). The preset argument lists below were printed offline (`launcher.ps1 -PrintArgs`, O); all 86 choices of the 24 options are accepted by `anno-patcher.ps1 -CheckOnly` (O). `saves.json` from a real game end, the classification and the adventure list with logbook results were checked with the real game on 2026-11-12 (see "In-game tests of phase 2"); the buttons themselves were not clicked in game.
+`tools/launcher.ps1` now has three tabs (German on a German Windows, otherwise English). The preset argument lists below were printed offline (`launcher.ps1 -PrintArgs`, O); all 86 choices of the 24 options are accepted by `anno-patcher.ps1 -CheckOnly` (O). `saves.json` from a real game end, the classification and the adventure list with logbook results were checked with the real game on 2026-11-12 (see "In-game tests of phase 2"); all buttons were clicked in code with the hidden switch `-TestClicks` (see the follow-up tests there).
 
 **Tab "Neues Spiel" (New game):** every option as a drop-down list in four groups; `settings.json` stores option id → value key (independent of the UI language).
 
@@ -893,7 +893,23 @@ Installed version (`install.ps1` from the repository), tool started detached via
 - Random adventure 4711 (Fordernd), installed by the generator from the installed folder: bits 0x501 (town 800/3/300, balance 300, defeat), 47 islands (37 × 70×60, 10 × 100×90), pirates active, extra warship "Hai".
 - **Bug found and fixed – Archipel:** with only lit/mit islands (MaxClass 1, 30×30 and 40×40) the three computer rivals have kind 9 from the first second (their start ships end up with the traders, owner 4); at clock 700 the game ends as lost (all kind 9, lock 1, score screen "Schiffe gesunken 2", mission bonus 0 %). A test copy with MaxClass 2 (twenty 50×52 islands in the big version) keeps all three rivals (kind 12, one ship each). **I: the AI needs an island of class med (50×52) or bigger.** Fix: Archipel and the archipelago maps of the generator now use MaxClass 2; `check-scenarios.ps1` requires at least 4 islands of class med or bigger in every map version (the old file fails this check in both versions). Fixed Archipel in game: rivals kind 12 past clock 1,094, at 4× all three found settlements (clock 8,622: 26/22/8 residents).
 - Logbook: live values match (gold, rivals, towns, speed); the scenario name comes from the parameter block (also "Abenteuer 4711"). Test scenario "ZZ Test Sofortsieg" (balance ≥ −1,000,000): game ended at clock 50, mission flag set, **logbook.json got `{"scenario": "ZZ Test Sofortsieg", "result": "won"}`**; the launcher's Adventures tab shows "verloren – nochmals versuchen" for the three lost Archipel runs. Test data removed afterwards (`logbook.json`, `saves.json`, test scenario, test autosave moved to `Savegame-Testlaeufe-20261112`); `lastgame.gam` restored (B7C4BFB9…).
-- Not tested in game: building something with the cheaper costs (only the table values are confirmed), the bigger radius on screen, "Disasters More", the English scenario files, clicking the launcher buttons.
+- Not tested in this round: building with the cheaper costs, the bigger radius on screen, "Disasters More", the English scenario files, clicking the launcher buttons (done in the follow-up below).
+
+**Follow-up tests (O), 2026-11-12 20:20–21:20** (user away; the user declined computer-use access to the PowerShell windows, so the launcher was not clicked on screen):
+- **Launcher buttons in code:** hidden switch `launcher.ps1 -TestClicks` builds the window off-screen, clicks the buttons through their `OnClick` and records instead of starting (`Start-Process`/`Start-Sleep` replaced by script functions; random adventures go to `-TestOutFolder`). Result: "Gemütlich" + play → patcher with exactly the Relaxed arguments, then `uplay://launch/16236/0`; "Harte Probe" + start original → only the uplay URL, `settings.json` holds the Tough choice; open logbook → `logbook.ps1`; Continue: known savegame → exactly the recorded arguments, autosave of a big world → current options + `-Width 1000 -Height 700`, original savegame → only the uplay URL; roll Fordernd/4711 → "Abenteuer 4711.szs" with the readable goal list; number `12345678` → message instead of a parameter error. Note: the Continue list only reports a selection once its tab has been shown (the test switches to the tab first, as a player does).
+- **Building costs (`-BuildCost 0.5 -Radius 2`, savegame `lastgame-1000x700-20261109-185329` with an own warehouse):** the build menu shows the halved costs – Jagdhütte (hunting lodge) 25 gold, 1 t tools, 1 t wood (haeuser.cod: 50/2/2), Feldweg (dirt road) 3 gold (5; rounded up), Webstube (weaving hut) 100 gold, Marktplatz (market) 100 gold, 2 t tools, 5 t wood. One dirt road tile placed: **gold 41,084 → 41,081 within 2 s (−3)**. (The warehouse had no tools/wood, so nothing else could be built.)
+- **Radius:** the placement preview of the market shows its catchment circle with radius 32 – it spans most of the island, far beyond the territory of the existing warehouse (built with radius 16).
+- **Disasters:** active-disaster table **RVA 0x54E240**, 0x120 entries of 8 bytes (written by `FUN_1400b5120`): [0] island (0xFF = free), [1] x, [2] y, [3] & 0x1F kind (1 plague, 2 fire), [6] parameter, [7] territory bits of the tile. Sampled every 0.7 s (new island/x/y/kind = one new event; F7 pressed again by window message whenever the game dropped to speed 1). Same savegame (rivals with 966/901/1,851 residents), 16-fold, about 2.9 game hours each (clock 441,500 → 536,000):
+
+  | Run | new plague | new fire | max. at once |
+  |---|---|---|---|
+  | `-Disasters Off` | 0 | 0 | 0 |
+  | default | 26 | 8 | 4 |
+  | `-Disasters More` | 60 | 29 | 5 |
+
+  (The default run of the evening without the radius option; the radius would widen doctor/bathhouse cover and lower the plague.)
+- **English scenario:** "Storm Sea 1 - Shipwreck.szs" (built with `-Language en`) appears in the list of own scenarios; mission text "THE STORM SEA - Chapter 1: Shipwreck … Morning Star …" shown correctly. File removed afterwards.
+- `saves.json` recorded all four autosaves of these runs with their arguments (removed afterwards with the test autosaves; `lastgame.gam` restored, B7C4BFB9…).
 
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 

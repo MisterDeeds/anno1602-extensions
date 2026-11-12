@@ -79,7 +79,11 @@ Checked in the running game on 12 November 2026: all seven new options are set e
 constant, no disaster struck, and the rivals' gold rose with doubled taxes and halved running costs),
 the Continue tab (a savegame is noted with its options when the game ends), Storm Sea 1 and 5,
 Archipelago and a random adventure (cargo, fleet and missions as designed) and the logbook (live
-values, a won mission is recorded). Not played through yet: the balance of the ten new scenarios.
+values, a won mission is recorded). Later the same day: the build menu shows the halved costs and a
+road tile really cost 3 instead of 5 gold; the market preview shows the doubled radius; with the same
+savegame over 2.9 game hours "Disasters" gave 0 / 34 / 89 new fires and plagues for off / normal /
+more; an English scenario appears with its English text; all launcher buttons were clicked in code.
+Not played through yet: the balance of the ten new scenarios.
 
 ## Campaigns and challenges
 
