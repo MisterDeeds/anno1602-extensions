@@ -1,6 +1,6 @@
-// Schreibt Bytes nur im Arbeitsspeicher von Ghidra an Adressen (Projekt wird nicht gespeichert)
-// und gibt die Rueckuebersetzung aus. Prueft so von Hand kodierten Maschinencode.
-// Argumente: <outdir> <name> <adresse> <hexbytes ohne Leerzeichen> [<adresse> <hexbytes> ...]
+// Writes bytes to addresses only in Ghidra's memory (the project is not saved)
+// and prints the disassembly. Checks hand-encoded machine code this way.
+// Arguments: <outdir> <name> <address> <hexbytes without spaces> [<address> <hexbytes> ...]
 //@category Anno1602
 
 import java.io.File;
@@ -28,7 +28,7 @@ public class AnnoPatchDis extends GhidraScript {
                 clearListing(a, a.add(b.length - 1));
                 setBytes(a, b);
                 disassemble(a);
-                pw.printf("== %s (%d Bytes)%n", a, b.length);
+                pw.printf("== %s (%d bytes)%n", a, b.length);
                 Address end = a.add(b.length);
                 Instruction ins = getInstructionAt(a);
                 while (ins != null && ins.getAddress().compareTo(end) < 0) {

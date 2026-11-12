@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anno 1602 Extensions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=Source+Sans+3:wght@400;600;700&display=swap">
+<style>
+/* Layout: a sea chart - narrow reading column on chart paper with a fine graticule, chapters as logbook lines */
+:root {
+  --paper: #e9eee8;       /* sea chart, slightly greenish */
+  --paper-2: #dfe6df;
+  --ink: #17263a;         /* navy ink */
+  --ink-2: #4a5a6c;
+  --brass: #8a6420;       /* brass of the sextant */
+  --sea: #1f6f78;         /* shoal */
+  --line: #c3cec6;
+  --warn: #9b3b21;
+  --f-title: "IM Fell English SC", "Iowan Old Style", Georgia, serif;
+  --f-text: "Source Sans 3", "Segoe UI", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1a22; --paper-2: #15232d; --ink: #e4e3da; --ink-2: #a7b2b8;
+    --brass: #d6a54e; --sea: #5fb8bf; --line: #27394a; --warn: #e07a5c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1a22; --paper-2: #15232d; --ink: #e4e3da; --ink-2: #a7b2b8;
+  --brass: #d6a54e; --sea: #5fb8bf; --line: #27394a; --warn: #e07a5c; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--paper);
+  background-image:
+    linear-gradient(var(--line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line) 1px, transparent 1px);
+  background-size: 96px 96px;
+  background-attachment: fixed;
+  color: var(--ink);
+  font: 17px/1.6 var(--f-text);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 64px;
+}
+main { max-width: 860px; margin: 0 auto; display: grid; gap: 40px; }
+.sheet { background: var(--paper); border: 1px solid var(--line); padding: 28px clamp(18px, 4vw, 40px); }
+h1, h2, h3 { font-family: var(--f-title); font-weight: 400; text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(2.2rem, 6vw, 3.4rem); letter-spacing: 0.01em; }
+h2 { font-size: clamp(1.6rem, 4vw, 2.1rem); color: var(--ink); }
+h3 { font-size: 1.3rem; }
+p { margin: 0; max-width: 65ch; }
+.masthead { display: grid; gap: 14px; }
+.topline { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 16px; }
+.course { font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--brass); font-weight: 700; }
+.lang-link { font-size: 0.8rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--sea); font-weight: 700; text-decoration: none; border-bottom: 1px solid currentColor; }
+.lang-link:hover { color: var(--brass); }
+.lead { font-size: 1.15rem; color: var(--ink-2); }
+.section { display: grid; gap: 18px; }
+.steps { display: grid; gap: 12px; padding: 0; margin: 0; list-style: none; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 2.2rem 1fr; gap: 12px; align-items: baseline; counter-increment: s; }
+.steps li::before { content: counter(s); font-family: var(--f-title); font-size: 1.6rem; color: var(--brass); text-align: right; }
+kbd { font: 600 0.85em var(--f-text); border: 1px solid var(--ink-2); border-bottom-width: 2px; padding: 0 6px; border-radius: 4px; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); font-weight: 700; }
+td:first-child { font-weight: 600; white-space: nowrap; }
+.chapters { display: grid; gap: 0; border-top: 2px solid var(--ink); }
+.chapter { display: grid; grid-template-columns: 3rem 1fr auto; gap: 6px 16px; padding: 16px 0; border-bottom: 1px solid var(--line); align-items: start; }
+.chapter .no { font-family: var(--f-title); font-size: 2rem; color: var(--brass); line-height: 1; }
+.chapter .content { display: grid; gap: 6px; min-width: 0; }
+.chapter .goal { color: var(--ink-2); }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag { font-size: 0.78rem; font-weight: 600; padding: 1px 8px; border: 1px solid var(--sea); color: var(--sea); border-radius: 999px; white-space: nowrap; }
+.tag.danger { border-color: var(--warn); color: var(--warn); }
+.level { display: inline-flex; gap: 3px; vertical-align: middle; }
+.level i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--brass); display: block; }
+.level i.on { background: var(--brass); }
+.done { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--ink-2); cursor: pointer; white-space: nowrap; }
+.done input { width: 18px; height: 18px; accent-color: var(--sea); }
+.chapter.finished .content h3 { text-decoration: line-through; text-decoration-color: var(--brass); }
+.tips { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.tip { border-left: 3px solid var(--sea); padding: 4px 0 4px 14px; display: grid; gap: 4px; }
+.tip.danger { border-color: var(--warn); }
+.tip strong { font-weight: 700; }
+.foot { font-size: 0.9rem; color: var(--ink-2); display: grid; gap: 6px; }
+code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; background: var(--paper-2); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+:focus-visible { outline: 2px solid var(--sea); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .chapter { grid-template-columns: 2.2rem 1fr; }
+  .chapter .done { grid-column: 2; }
+  td:first-child { white-space: normal; }
+}
+@media (prefers-reduced-motion: no-preference) { .chapter { transition: background-color .2s; } .chapter:hover { background: var(--paper-2); } }
+</style>
+
+<main>
+  <header class="sheet masthead">
+    <div class="topline"><span class="course">Logbook · As of 12 November 2026</span><a class="lang-link" href="handbook.de.html" hreflang="de" lang="de">Deutsch</a></div>
+    <h1>Anno 1602 Extensions</h1>
+    <p class="lead">Bigger worlds, stronger rivals, more life at sea and two campaigns with a story. Everything runs in memory, no game file is changed.</p>
+  </header>
+
+  <section class="sheet section" aria-labelledby="start">
+    <h2 id="start">Setting sail</h2>
+    <ol class="steps">
+      <li><span>Open <strong>“Anno 1602 – Extensions”</strong> on the desktop (on a German Windows: “Anno 1602 – Erweiterungen”).</span></li>
+      <li><span>Choose the options or use a button: <strong>Everything big</strong> (maximum), <strong>For campaigns</strong> (campaigns as intended) or <strong>Reset to defaults</strong>.</span></li>
+      <li><span><strong>Play with extensions</strong>. In the game <em>Single Player → New Game</em>: the endless game at the top, the campaigns at the very bottom under <em>Own Scenarios</em>.</span></li>
+      <li><span>Press <kbd>F7</kbd> for up to 16× speed. After attack messages the game switches back by itself; then press F7 again.</span></li>
+    </ol>
+  </section>
+
+  <section class="sheet section" aria-labelledby="options">
+    <h2 id="options">The options in the launcher</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Option</th><th>Effect</th><th>Values</th></tr></thead>
+        <tbody>
+          <tr><td>Map size</td><td>Size of the world in tiles</td><td>500 × 350 to 2000 × 1400</td></tr>
+          <tr><td>Islands</td><td>Extra islands across the whole map</td><td>up to 50 (the game’s maximum)</td></tr>
+          <tr><td>Island size</td><td>Large or almost only huge islands</td><td>Normal · Large · Huge</td></tr>
+          <tr><td>Resources</td><td>Ore, gold, fertility, treasures grow along</td><td>Template · More · Lots</td></tr>
+          <tr><td>Natives</td><td>Villages per climate zone (north + south)</td><td>2+2 · 4+4 · 7+7</td></tr>
+          <tr><td>Free traders</td><td>Trading ships on the map</td><td>× 1 · × 2 · × 3, at most 24</td></tr>
+          <tr><td>Computer rivals</td><td>Arm and build as on “Hard”</td><td>As per difficulty · Always like “Hard”</td></tr>
+          <tr><td>Rivals’ gold</td><td>Starting gold of the three rivals</td><td>up to 100,000</td></tr>
+          <tr><td>Pirates</td><td>Attack, with the full number of cannons, or not at all</td><td>As per difficulty · Always attack · Strong · No pirates</td></tr>
+          <tr><td>Pirate fleet</td><td>Size of the pirate fleet</td><td>up to 4 · up to 8 · up to 12 ships</td></tr>
+          <tr><td>Your starting gold</td><td>Gold in new games</td><td>up to 100,000</td></tr>
+          <tr><td>Residents per house</td><td>Bigger towns</td><td>× 1 to × 5 (up to 200 per house)</td></tr>
+          <tr><td>Turbo (F7)</td><td>Speed of the F7 key</td><td>4 · 8 · 12 · 16×</td></tr>
+          <tr><td>Production speed</td><td>All production buildings work faster</td><td>× 1 to × 3</td></tr>
+          <tr><td>Storage per good</td><td>Warehouses and markets hold more</td><td>× 1 to × 5</td></tr>
+          <tr><td>Ship speed</td><td>All ships sail faster</td><td>× 1 to × 3</td></tr>
+          <tr><td>Cargo space</td><td>Tons per hold of the ships you can build</td><td>× 1 to × 3</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="sheet section" aria-labelledby="emerald">
+    <span class="course">Campaign “The Emerald Isles” · play in order</span>
+    <h2 id="emerald">Die Smaragdinseln</h2>
+    <p>As governor of the trading company you found a colony on an unknown archipelago and rise to viceroy.</p>
+    <div class="chapters" data-group="emerald">
+      <div class="chapter" data-id="s1"><span class="no">1</span><div class="content"><h3>Landung (Landfall)</h3><p class="goal">A town of 250 residents, 150 of them settlers. Positive balance.</p><div class="tags"><span class="level" aria-label="Easy"><i class="on"></i><i></i><i></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-s1"> done</label></div>
+      <div class="chapter" data-id="s2"><span class="no">2</span><div class="content"><h3>Gewürzfieber (Spice Fever)</h3><p class="goal">Monopoly: settle every spice island yourself, no foreign settlement there. Plus 500 residents, 250 of them citizens.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Monopoly</span></div></div><label class="done"><input type="checkbox" id="k-s2"> done</label></div>
+      <div class="chapter" data-id="s3"><span class="no">3</span><div class="content"><h3>Zwei Kolonien (Two Colonies)</h3><p class="goal">800 residents (300 merchants) and a second town with 500 (250 citizens). Balance +300.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">North and south</span></div></div><label class="done"><input type="checkbox" id="k-s3"> done</label></div>
+      <div class="chapter" data-id="s4"><span class="no">4</span><div class="content"><h3>Schwarze Segel (Black Sails)</h3><p class="goal">1000 residents (500 merchants). Arsenal: 20 t cannons and 40 t muskets.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-s4"> done</label></div>
+      <div class="chapter" data-id="s5"><span class="no">5</span><div class="content"><h3>Der Eroberer (The Conqueror)</h3><p class="goal">Defeat all three rivals: no settlement and no ship left.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ large warship</span></div></div><label class="done"><input type="checkbox" id="k-s5"> done</label></div>
+      <div class="chapter" data-id="s6"><span class="no">6</span><div class="content"><h3>Krone der Inseln (Crown of the Isles)</h3><p class="goal">Residence with 2500 residents, 1200 of them aristocrats. Second town 1500 (800 merchants), third 800 (400 citizens). Balance +1000.</p><div class="tags"><span class="level" aria-label="Hard"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag danger">Pirates</span><span class="tag">+ large trading ship</span></div></div><label class="done"><input type="checkbox" id="k-s6"> done</label></div>
+    </div>
+  </section>
+
+  <section class="sheet section" aria-labelledby="race">
+    <span class="course">Campaign “Race of the Houses” · against the rivals</span>
+    <h2 id="race">Wettlauf der Häuser</h2>
+    <p>The three rivals have the same mission. Whoever fulfils it first wins. If a rival is faster, the chapter is lost. Measured: in chapter 3 the fastest rival reaches the goal after about 8 hours of game time, in the finale after about 20 hours. Turbo does not help, because the rivals get faster too.</p>
+    <div class="chapters">
+      <div class="chapter" data-id="w1"><span class="no">1</span><div class="content"><h3>Erster Hafen (First Harbour)</h3><p class="goal">Be the first with a town of 300 residents, 150 of them settlers.</p><div class="tags"><span class="level" aria-label="Easy"><i class="on"></i><i></i><i></i><i></i></span><span class="tag">Race</span></div></div><label class="done"><input type="checkbox" id="k-w1"> done</label></div>
+      <div class="chapter" data-id="w2"><span class="no">2</span><div class="content"><h3>Bürgerstolz (Citizens’ Pride)</h3><p class="goal">700 residents (350 citizens) and a second town with 200 (100 settlers).</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span><span class="tag">Race</span></div></div><label class="done"><input type="checkbox" id="k-w2"> done</label></div>
+      <div class="chapter" data-id="w3"><span class="no">3</span><div class="content"><h3>Kaufmannsrepublik (Merchant Republic)</h3><p class="goal">1000 residents, 400 of them merchants.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag">Race</span><span class="tag danger">Pirates</span></div></div><label class="done"><input type="checkbox" id="k-w3"> done</label></div>
+      <div class="chapter" data-id="w4"><span class="no">4</span><div class="content"><h3>Die Krone (The Crown)</h3><p class="goal">1500 residents, 600 of them aristocrats. Balance +500.</p><div class="tags"><span class="level" aria-label="Hard"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span><span class="tag">Race</span><span class="tag danger">Pirates</span></div></div><label class="done"><input type="checkbox" id="k-w4"> done</label></div>
+    </div>
+  </section>
+
+  <section class="sheet section" aria-labelledby="challenges">
+    <span class="course">Single scenarios</span>
+    <h2 id="challenges">Challenges</h2>
+    <div class="chapters">
+      <div class="chapter" data-id="h1"><span class="no">◆</span><div class="content"><h3>Inselreich (Island Realm)</h3><p class="goal">8 own settlements with 3000 residents in total.</p><div class="tags"><span class="level" aria-label="Average"><i class="on"></i><i class="on"></i><i></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h1"> done</label></div>
+      <div class="chapter" data-id="h2"><span class="no">◆</span><div class="content"><h3>Handelsimperium (Trade Empire)</h3><p class="goal">50 t jewellery and 80 t clothes in store. Trade balance +300: sales must clearly exceed purchases.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></div></div><label class="done"><input type="checkbox" id="k-h2"> done</label></div>
+      <div class="chapter" data-id="h3"><span class="no">◆</span><div class="content"><h3>Goldrausch (Gold Rush)</h3><p class="goal">60 t gold and 40 t jewellery in store.</p><div class="tags"><span class="level" aria-label="Demanding"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span><span class="tag danger">Pirates</span><span class="tag">+ small warship</span></div></div><label class="done"><input type="checkbox" id="k-h3"> done</label></div>
+    </div>
+  </section>
+
+  <section class="sheet section" aria-labelledby="maps">
+    <h2 id="maps">Small and big maps</h2>
+    <p>Every scenario has two versions. With <strong>Start original</strong> the classic map with 17 to 20 islands applies. With <strong>Play with extensions</strong>, map size 1000 × 700 or bigger and <em>More islands</em> the big version applies: up to 50 islands, more resources and natives. A tick above only stores in this browser which chapters you have completed.</p>
+  </section>
+
+  <section class="sheet section" aria-labelledby="advice">
+    <h2 id="advice">The helmsman’s advice</h2>
+    <div class="tips">
+      <div class="tip danger"><strong>Build a warehouse early</strong><span>With strong pirates the game is over as soon as your only ship sinks and you have no settlement.</span></div>
+      <div class="tip"><strong>Gold options and campaigns</strong><span>Your starting gold and the rivals’ gold replace the scenario’s gold. The “For campaigns” button sets both to “As per difficulty”.</span></div>
+      <div class="tip danger"><strong>Saves from the big world</strong><span>Load them only with “Play with extensions” and the same map size. Leave the black window open until the game has ended.</span></div>
+      <div class="tip"><strong>To another PC</strong><span>Unzip the ZIP from GitHub (<em>Code → Download ZIP</em>), double-click <code>install.cmd</code>.</span></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p>Built by reverse engineering the History Edition. Checked: 456 automatic tests against the loaded game code, plus runs in the real game (50 islands, 14 villages, up to 12 pirate ships, race, victory conditions, start fleet) and an endurance run over 14.5 game hours at 16× with all options: always responsive, 430 to 490 MB of memory.</p>
+    <p>Single player only and only for the Ubisoft Connect version. After a game update the tool stops without changing anything.</p>
+  </footer>
+</main>
+
+<script>
+(function () {
+  var key = 'anno1602-chapters-en';
+  var state = {};
+  try { state = JSON.parse(localStorage.getItem(key) || '{}') || {}; } catch (e) { state = {}; }
+  document.querySelectorAll('.chapter').forEach(function (chapter) {
+    var id = chapter.getAttribute('data-id');
+    var box = chapter.querySelector('input[type=checkbox]');
+    if (!box) return;
+    box.checked = !!state[id];
+    chapter.classList.toggle('finished', box.checked);
+    box.addEventListener('change', function () {
+      state[id] = box.checked;
+      chapter.classList.toggle('finished', box.checked);
+      try { localStorage.setItem(key, JSON.stringify(state)); } catch (e) { }
+    });
+  });
+})();
+</script>

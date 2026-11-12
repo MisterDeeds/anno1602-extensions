@@ -1,8 +1,8 @@
 @echo off
-rem Ghidra-Auswertung fuer Anno1602.exe (headless).
-rem   ghidra-scan.cmd import                 - exe neu importieren, analysieren, AnnoScan laufen lassen
-rem   ghidra-scan.cmd <Skript.java> [args]   - Skript auf dem vorhandenen Projekt ausfuehren
-rem Ergebnisse landen in analysis\scan, das Log in analysis\scan\headless.log.
+rem Ghidra analysis of Anno1602.exe (headless).
+rem   ghidra-scan.cmd import                 - import the exe again, analyse it, run AnnoScan
+rem   ghidra-scan.cmd <Script.java> [args]   - run a script on the existing project
+rem Results go to analysis\scan, the log to analysis\scan\headless.log.
 setlocal
 for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 set "PROJ=%ROOT%\analysis\ghidra"

@@ -1,5 +1,5 @@
-// Dekompiliert die Funktionen, die die angegebenen Adressen enthalten.
-// Argumente: <outdir> <tag> <adresse> [<adresse> ...]
+// Decompiles the functions that contain the given addresses.
+// Arguments: <outdir> <tag> <address> [<address> ...]
 //@category Anno1602
 
 import java.io.File;
@@ -27,13 +27,13 @@ public class AnnoDecomp extends GhidraScript {
             File out = new File(decompDir, tag + "_" + args[i] + ".c");
             try (PrintWriter pw = new PrintWriter(new FileWriter(out))) {
                 if (f == null) {
-                    pw.println("// Keine Funktion an " + args[i]);
+                    pw.println("// No function at " + args[i]);
                     continue;
                 }
                 DecompileResults r = decomp.decompileFunction(f, 120, monitor);
-                pw.printf("// %s @ %s  (%d Bytes)%n", f.getName(), f.getEntryPoint(), f.getBody().getNumAddresses());
+                pw.printf("// %s @ %s  (%d bytes)%n", f.getName(), f.getEntryPoint(), f.getBody().getNumAddresses());
                 pw.println(r.decompileCompleted() ? r.getDecompiledFunction().getC()
-                    : "// Dekompilierung fehlgeschlagen: " + r.getErrorMessage());
+                    : "// Decompilation failed: " + r.getErrorMessage());
             }
         }
         decomp.dispose();

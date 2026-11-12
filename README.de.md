@@ -27,7 +27,8 @@ Spiels an. Wird das Spiel beendet, ist alles wieder wie im Original. Nur für da
 | Turbo (F7) | 8-, 12- oder 16-fache Geschwindigkeit |
 
 Ein Startfenster bietet alle Optionen zum Anklicken, dazu die Knöpfe **„Alles gross“** und
-**„Für Kampagnen“** (grosse Karte und Turbo, sonst wie im Original).
+**„Für Kampagnen“** (grosse Karte und Turbo, sonst wie im Original). Auf einem deutschen Windows
+ist das Fenster deutsch, sonst englisch.
 
 ## Kampagnen und Herausforderungen
 
@@ -55,18 +56,19 @@ schaffen Kapitel 1 nach rund 5, Kapitel 2 nach rund 7½, Kapitel 3 nach rund 8 u
 rund 20 Stunden Spielzeit.
 
 Die Szenarien liegen nicht in diesem Repository. Der Installer baut sie aus den Endlos-Vorlagen
-deines eigenen Spiels (`tools/kampagne-bauen.ps1`).
+deines eigenen Spiels (`tools/build-scenarios.ps1`).
 
 ## Installieren
 
 Voraussetzungen: Windows 10 oder 11 und Anno 1602 History Edition aus Ubisoft Connect.
 
 1. Oben auf **Code → Download ZIP** klicken und das ZIP entpacken.
-2. `installieren.cmd` doppelklicken. Zeigt Windows „Der Computer wurde durch Windows geschützt“:
+2. Im entpackten Ordner `install.cmd` doppelklicken. Zeigt Windows „Der Computer wurde durch Windows geschützt“:
    *Weitere Informationen → Trotzdem ausführen*.
-3. Starten über **„Anno 1602 – Erweiterungen“** im Startmenü oder auf dem Desktop.
+3. Starten über **„Anno 1602 – Erweiterungen“** im Startmenü oder auf dem Desktop
+   (auf einem Windows in anderer Sprache heisst die Verknüpfung „Anno 1602 – Extensions“).
 
-Entfernen: `deinstallieren.cmd` doppelklicken. Spiel und Spielstände bleiben.
+Entfernen: im selben Ordner `uninstall.cmd` doppelklicken. Spiel und Spielstände bleiben.
 
 ## Wichtig
 
@@ -82,15 +84,16 @@ Entfernen: `deinstallieren.cmd` doppelklicken. Spiel und Spielstände bleiben.
 
 | Pfad | Inhalt |
 |---|---|
-| `tools/weltgroesse.ps1` | das Werkzeug: prüft die Spielversion und patcht den Speicher |
-| `tools/anno-starter.ps1` | das Startfenster |
-| `tools/kampagne-bauen.ps1`, `tools/szenario-bauer.ps1` | bauen die 13 Szenarien (Format AUFTRAG4 entschlüsselt) |
-| `tools/test-weltgroesse.ps1` | Prüfung ohne Spiel: lädt die exe als Abbild und prüft jede Patchstelle |
-| `tools/pruefe-*.ps1` | Prüfungen für laufendes Spiel, Inseln und Szenarien |
+| `tools/anno-patcher.ps1` | das Werkzeug: prüft die Spielversion und patcht den Speicher |
+| `tools/launcher.ps1` | das Startfenster (deutsch oder englisch, je nach Sprache von Windows) |
+| `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1` | bauen die 13 Szenarien (Format AUFTRAG4 entschlüsselt) |
+| `tools/test-patcher.ps1` | Prüfung ohne Spiel: lädt die exe als Abbild und prüft jede Patchstelle |
+| `tools/check-*.ps1` | Prüfungen für laufendes Spiel, Inseln und Szenarien |
 | `tools/ghidra_scripts/`, `tools/ghidra-scan.cmd` | Ghidra-Auswertung (braucht eine eigene Kopie der exe in `analysis/bin`) |
-| `tools/paket/` | Installer |
-| `analysis/BEFUNDE.md` | alle Fundstellen im Spielcode, Formate und Messungen |
-| `docs/handbuch.html` | Handbuch zu den Kampagnen |
+| `install.cmd`, `uninstall.cmd`, `tools/install.ps1` | Installer |
+| `tools/README.de.txt`, `tools/README.txt` | Anleitung (deutsch, englisch), wird neben dem Werkzeug installiert |
+| `analysis/FINDINGS.md` | alle Fundstellen im Spielcode, Formate und Messungen (englisch) |
+| `docs/handbook.de.html`, `docs/handbook.html` | Handbuch zu den Kampagnen (deutsch, englisch) |
 
 ## Rechtliches
 

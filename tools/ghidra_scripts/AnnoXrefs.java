@@ -1,6 +1,6 @@
-// Listet alle Zugriffe auf die angegebenen Adressen (lesend/schreibend, mit Funktion)
-// und dekompiliert die zugreifenden Funktionen.
-// Argumente: <outdir> <tag> <adresse> [<adresse> ...]
+// Lists all accesses to the given addresses (read/write, with function)
+// and decompiles the accessing functions.
+// Arguments: <outdir> <tag> <address> [<address> ...]
 //@category Anno1602
 
 import java.io.File;
@@ -42,15 +42,15 @@ public class AnnoXrefs extends GhidraScript {
                     int[] c = perFunc.computeIfAbsent(f, k -> new int[2]);
                     c[w ? 1 : 0]++;
                 }
-                pw.printf("%n%s: %d lesend, %d schreibend, %d Funktionen%n", a, reads, writes, perFunc.size());
+                pw.printf("%n%s: %d reads, %d writes, %d functions%n", a, reads, writes, perFunc.size());
                 for (Map.Entry<Function, int[]> e : perFunc.entrySet()) {
                     Function f = e.getKey();
-                    pw.printf("    %-16s @ %s  lesen %d  schreiben %d  (%d Bytes)%n", f.getName(), f.getEntryPoint(),
+                    pw.printf("    %-16s @ %s  read %d  write %d  (%d bytes)%n", f.getName(), f.getEntryPoint(),
                         e.getValue()[0], e.getValue()[1], f.getBody().getNumAddresses());
                     funcs.merge(f, args[i], (x, y) -> x.contains(y) ? x : x + "," + y);
                 }
             }
-            pw.printf("%nVerschiedene Funktionen insgesamt: %d%n", funcs.size());
+            pw.printf("%nDifferent functions in total: %d%n", funcs.size());
         }
 
         DecompInterface decomp = new DecompInterface();
@@ -62,10 +62,10 @@ public class AnnoXrefs extends GhidraScript {
             DecompileResults r = decomp.decompileFunction(f, 120, monitor);
             File out = new File(decompDir, tag + "_" + f.getEntryPoint() + ".c");
             try (PrintWriter pw = new PrintWriter(new FileWriter(out))) {
-                pw.printf("// %s @ %s  (%d Bytes)  greift zu auf: %s%n", f.getName(), f.getEntryPoint(),
+                pw.printf("// %s @ %s  (%d bytes)  accesses: %s%n", f.getName(), f.getEntryPoint(),
                     f.getBody().getNumAddresses(), e.getValue());
                 pw.println(r.decompileCompleted() ? r.getDecompiledFunction().getC()
-                    : "// Dekompilierung fehlgeschlagen: " + r.getErrorMessage());
+                    : "// Decompilation failed: " + r.getErrorMessage());
             }
         }
         decomp.dispose();

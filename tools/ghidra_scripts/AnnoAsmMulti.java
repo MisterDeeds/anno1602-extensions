@@ -1,6 +1,6 @@
-// Gibt Maschinenbefehle fuer mehrere Bereiche aus und dazu jede Stelle, die eine Adresse liest
-// oder schreibt (mit Umgebung). Argumente:
-//   <outdir> <name> ref.<adresse>:<davor>:<danach> ... <adresse>:<anzahl> ...
+// Prints the machine instructions of several ranges, plus every place that reads or writes an address
+// (with its surroundings). Arguments:
+//   <outdir> <name> ref.<address>:<before>:<after> ... <address>:<count> ...
 //@category Anno1602
 
 import java.io.File;
@@ -31,22 +31,22 @@ public class AnnoAsmMulti extends GhidraScript {
                 if (a.startsWith("ref.")) {
                     String[] p = a.substring(4).split(":");
                     Address t = toAddr(p[0]);
-                    int vor = Integer.parseInt(p[1]), nach = Integer.parseInt(p[2]);
+                    int before = Integer.parseInt(p[1]), after = Integer.parseInt(p[2]);
                     for (Reference r : getReferencesTo(t)) {
                         Instruction ins = getInstructionAt(r.getFromAddress());
                         if (ins == null) { continue; }
                         Function f = getFunctionContaining(ins.getAddress());
-                        pw.printf("== Zugriff %s auf %s in %s (%s)%n", r.getFromAddress(), t,
+                        pw.printf("== Access %s to %s in %s (%s)%n", r.getFromAddress(), t,
                                 f == null ? "?" : f.getName(), r.getReferenceType());
                         Instruction s = ins;
-                        for (int k = 0; k < vor && s.getPrevious() != null; k++) { s = s.getPrevious(); }
-                        for (int k = 0; k < vor + nach + 1 && s != null; k++) { line(pw, s); s = s.getNext(); }
+                        for (int k = 0; k < before && s.getPrevious() != null; k++) { s = s.getPrevious(); }
+                        for (int k = 0; k < before + after + 1 && s != null; k++) { line(pw, s); s = s.getNext(); }
                     }
                 } else {
                     String[] p = a.split(":");
                     Address s0 = toAddr(p[0]);
                     int n = Integer.parseInt(p[1]);
-                    pw.printf("== Bereich %s (%d Befehle)%n", s0, n);
+                    pw.printf("== Range %s (%d instructions)%n", s0, n);
                     Instruction ins = getInstructionAt(s0);
                     if (ins == null) { ins = getInstructionAfter(s0); }
                     for (int k = 0; k < n && ins != null; k++) { line(pw, ins); ins = ins.getNext(); }

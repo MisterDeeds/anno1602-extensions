@@ -1,6 +1,6 @@
-// Sucht in Anno1602.exe nach Kartengroessen-Konstanten, grossen statischen
-// Tabellen in .data und Funktionen, die bestimmte Texte (Chunk-Namen,
-// .cod-Schluesselwoerter) verwenden. Schreibt Berichte und Pseudocode nach <outdir>.
+// Searches Anno1602.exe for map size constants, large static tables in .data
+// and functions that use certain strings (chunk names, .cod keywords).
+// Writes reports and pseudocode to <outdir>.
 //@category Anno1602
 
 import java.io.File;
@@ -50,7 +50,7 @@ public class AnnoScan extends GhidraScript {
         return false;
     }
 
-    /** Sofortwerte (keine Adress-Offsets) 500/350 und Verwandte, gruppiert nach Funktion. */
+    /** Immediate values (no address offsets) 500/350 and relatives, grouped by function. */
     private void scanConstants() throws Exception {
         Map<Function, List<String>> hits = new LinkedHashMap<>();
         Map<Function, int[]> kinds = new HashMap<>();
@@ -73,27 +73,27 @@ public class AnnoScan extends GhidraScript {
             }
         }
         List<Function> both = new ArrayList<>();
-        try (PrintWriter pw = new PrintWriter(new FileWriter(new File(outDir, "konstanten.txt")))) {
-            pw.println("Funktionen mit Sofortwerten 500/499/1000 (Breite) bzw. 350/349/700 (Hoehe)");
-            pw.println("Format: Funktion  [Breite-Treffer/Hoehe-Treffer]");
+        try (PrintWriter pw = new PrintWriter(new FileWriter(new File(outDir, "constants.txt")))) {
+            pw.println("Functions with immediate values 500/499/1000 (width) or 350/349/700 (height)");
+            pw.println("Format: function  [width hits/height hits]");
             for (Map.Entry<Function, List<String>> e : hits.entrySet()) {
                 int[] k = kinds.get(e.getKey());
                 if (k[0] > 0 && k[1] > 0) both.add(e.getKey());
                 pw.printf("%n%s @ %s  [%d/%d]%s%n", e.getKey().getName(), e.getKey().getEntryPoint(), k[0], k[1],
-                    (k[0] > 0 && k[1] > 0) ? "  <-- beides" : "");
+                    (k[0] > 0 && k[1] > 0) ? "  <-- both" : "");
                 for (String line : e.getValue()) pw.println("    " + line);
             }
-            pw.printf("%nFunktionen mit Treffern: %d, davon mit Breite UND Hoehe: %d%n", hits.size(), both.size());
+            pw.printf("%nFunctions with hits: %d, of these with width AND height: %d%n", hits.size(), both.size());
         }
         both.sort(Comparator.comparingInt(f -> -(kinds.get(f)[0] + kinds.get(f)[1])));
-        for (Function f : both.subList(0, Math.min(30, both.size()))) writeDecomp(f, "groesse");
+        for (Function f : both.subList(0, Math.min(30, both.size()))) writeDecomp(f, "size");
     }
 
-    /** Referenzierte Adressen in .data; Abstand zur naechsten Referenz = obere Schranke der Objektgroesse. */
+    /** Referenced addresses in .data; distance to the next reference = upper bound of the object size. */
     private void scanDataTables() throws Exception {
         MemoryBlock data = currentProgram.getMemory().getBlock(".data");
         Address start = data.getStart();
-        long initEnd = start.getOffset() + 14336; // roher Anteil in der Datei
+        long initEnd = start.getOffset() + 14336; // raw part in the file
         TreeMap<Long, Set<Function>> refs = new TreeMap<>();
         InstructionIterator it = currentProgram.getListing().getInstructions(true);
         while (it.hasNext() && !monitor.isCancelled()) {
@@ -114,23 +114,23 @@ public class AnnoScan extends GhidraScript {
         }
         if (prev != null) objs.add(new long[] { prev, data.getEnd().getOffset() + 1 - prev });
         objs.sort((x, y) -> Long.compare(y[1], x[1]));
-        try (PrintWriter pw = new PrintWriter(new FileWriter(new File(outDir, "datentabellen.txt")))) {
-            pw.printf("Referenzierte Adressen in .data: %d%n", refs.size());
-            pw.println("Groesste Luecken bis zur naechsten referenzierten Adresse (obere Schranke der Tabellengroesse):");
-            pw.println("Adresse         Bytes       Init  Funktionen  Beispiele");
+        try (PrintWriter pw = new PrintWriter(new FileWriter(new File(outDir, "data-tables.txt")))) {
+            pw.printf("Referenced addresses in .data: %d%n", refs.size());
+            pw.println("Largest gaps to the next referenced address (upper bound of the table size):");
+            pw.println("Address         Bytes       Init  Functions   Examples");
             for (long[] o : objs.subList(0, Math.min(60, objs.size()))) {
                 Set<Function> fs = refs.get(o[0]);
                 StringBuilder ex = new StringBuilder();
                 int n = 0;
                 for (Function f : fs) { if (n++ == 4) break; ex.append(f.getName()).append(' '); }
-                pw.printf("0x%x  %10d  %-4s  %10d  %s%n", o[0], o[1], o[0] < initEnd ? "ja" : "nein", fs.size(), ex);
+                pw.printf("0x%x  %10d  %-4s  %10d  %s%n", o[0], o[1], o[0] < initEnd ? "yes" : "no", fs.size(), ex);
             }
         }
     }
 
-    /** Funktionen, die bestimmte Texte referenzieren, dekompilieren. */
+    /** Decompile the functions that reference certain strings. */
     private void scanStrings() throws Exception {
-        try (PrintWriter pw = new PrintWriter(new FileWriter(new File(outDir, "texte.txt")))) {
+        try (PrintWriter pw = new PrintWriter(new FileWriter(new File(outDir, "strings.txt")))) {
             DataIterator di = currentProgram.getListing().getDefinedData(true);
             while (di.hasNext() && !monitor.isCancelled()) {
                 Data d = di.next();
@@ -143,7 +143,7 @@ public class AnnoScan extends GhidraScript {
                     pw.printf("%n\"%s\" @ %s%n", s, d.getAddress());
                     for (Reference r : getReferencesTo(d.getAddress())) {
                         Function f = getFunctionContaining(r.getFromAddress());
-                        pw.printf("    von %s in %s%n", r.getFromAddress(), f == null ? "?" : f.getName() + " @ " + f.getEntryPoint());
+                        pw.printf("    from %s in %s%n", r.getFromAddress(), f == null ? "?" : f.getName() + " @ " + f.getEntryPoint());
                         if (f != null) writeDecomp(f, "text_" + want.replaceAll("[^A-Za-z0-9]", ""));
                     }
                 }
@@ -156,8 +156,8 @@ public class AnnoScan extends GhidraScript {
         DecompileResults r = decomp.decompileFunction(f, 120, monitor);
         File out = new File(outDir, "decomp/" + tag + "_" + f.getEntryPoint() + ".c");
         try (PrintWriter pw = new PrintWriter(new FileWriter(out))) {
-            pw.printf("// %s @ %s  (%d Bytes)%n", f.getName(), f.getEntryPoint(), f.getBody().getNumAddresses());
-            pw.println(r.decompileCompleted() ? r.getDecompiledFunction().getC() : "// Dekompilierung fehlgeschlagen: " + r.getErrorMessage());
+            pw.printf("// %s @ %s  (%d bytes)%n", f.getName(), f.getEntryPoint(), f.getBody().getNumAddresses());
+            pw.println(r.decompileCompleted() ? r.getDecompiledFunction().getC() : "// Decompilation failed: " + r.getErrorMessage());
         }
     }
 }

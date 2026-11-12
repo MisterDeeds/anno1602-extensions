@@ -8,7 +8,8 @@ tougher rivals, up to 16× game speed and 13 new scenarios with a story and a mi
 The tool **does not change any game file**. It only patches the memory of the running game.
 Quit the game and everything is back to the original. Single player only.
 
-The launcher, the scenarios and the in-game texts are in German, like the game itself.
+The launcher shows German on a German Windows and English otherwise. The scenarios and their
+mission texts are in German.
 
 ## Features
 
@@ -28,8 +29,9 @@ The launcher, the scenarios and the in-game texts are in German, like the game i
 | Storage per good | ×2 to ×5 |
 | Turbo (F7) | 8×, 12× or 16× game speed |
 
-A launcher window offers every option as a click, plus the buttons **"Alles gross"** (everything
-big) and **"Für Kampagnen"** (big map and turbo, everything else original).
+A launcher window offers every option as a click, plus the buttons **"Everything big"** and
+**"For campaigns"** (big map and turbo, everything else original). On a German Windows they read
+"Alles gross" and "Für Kampagnen".
 
 ## Campaigns and challenges
 
@@ -57,24 +59,25 @@ finish chapter 1 after about 5, chapter 2 after about 7½, chapter 3 after about
 about 20 hours of game time.
 
 The scenarios are not part of this repository. The installer builds them from the endless-game
-templates of your own copy of the game (`tools/kampagne-bauen.ps1`).
+templates of your own copy of the game (`tools/build-scenarios.ps1`).
 
 ## Install
 
 Requirements: Windows 10 or 11 and Anno 1602 History Edition from Ubisoft Connect.
 
 1. Click **Code → Download ZIP** at the top and unzip it.
-2. Double-click `installieren.cmd`. If Windows shows "Windows protected your PC":
+2. In the unzipped folder, double-click `install.cmd`. If Windows shows "Windows protected your PC":
    *More info → Run anyway*.
-3. Start with **"Anno 1602 - Erweiterungen"** in the Start menu or on the desktop.
+3. Start with **"Anno 1602 - Extensions"** in the Start menu or on the desktop
+   (on a German Windows the shortcut is called "Anno 1602 - Erweiterungen").
 
-Uninstall: double-click `deinstallieren.cmd`. The game and your saves stay as they are.
+Uninstall: double-click `uninstall.cmd` in the same folder. The game and your saves stay as they are.
 
 ## Good to know
 
-- Load saves from a big world only with "Mit Erweiterungen spielen" and the same map size.
+- Load saves from a big world only with "Play with extensions" and the same map size.
   The save itself does not store the size.
-- After the game ends, the tool renames the autosave ("Spiel fortsetzen") of a big world, so the
+- After the game ends, the tool renames the autosave ("Continue game") of a big world, so the
   game cannot load it without the extensions.
 - Before every start, the tool backs up `Documents\Anno 1602 History Edition\Savegame`.
 - Tested with exactly one game version (SHA-256 of `Anno1602.exe` starts with `7731972f`).
@@ -84,15 +87,16 @@ Uninstall: double-click `deinstallieren.cmd`. The game and your saves stay as th
 
 | Path | Contents |
 |---|---|
-| `tools/weltgroesse.ps1` | the tool: checks the game version and patches memory |
-| `tools/anno-starter.ps1` | the launcher window |
-| `tools/kampagne-bauen.ps1`, `tools/szenario-bauer.ps1` | build the 13 scenarios (decoded AUFTRAG4 mission format) |
-| `tools/test-weltgroesse.ps1` | offline test: loads the exe as an image and checks every patch site |
-| `tools/pruefe-*.ps1` | checks for the running game, islands and scenarios |
+| `tools/anno-patcher.ps1` | the tool: checks the game version and patches memory |
+| `tools/launcher.ps1` | the launcher window (German or English, following the Windows language) |
+| `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1` | build the 13 scenarios (decoded AUFTRAG4 mission format) |
+| `tools/test-patcher.ps1` | offline test: loads the exe as an image and checks every patch site |
+| `tools/check-*.ps1` | checks for the running game, islands and scenarios |
 | `tools/ghidra_scripts/`, `tools/ghidra-scan.cmd` | Ghidra analysis (needs your own copy of the exe in `analysis/bin`) |
-| `tools/paket/` | installer |
-| `analysis/BEFUNDE.md` | every patch site in the game code, file formats and measurements (German) |
-| `docs/handbuch.html` | campaign handbook (German) |
+| `install.cmd`, `uninstall.cmd`, `tools/install.ps1` | installer |
+| `tools/README.txt`, `tools/README.de.txt` | player guide (English, German), installed next to the tool |
+| `analysis/FINDINGS.md` | every patch site in the game code, file formats and measurements |
+| `docs/handbook.html`, `docs/handbook.de.html` | campaign handbook (English, German) |
 
 ## Legal
 

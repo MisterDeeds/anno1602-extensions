@@ -3,11 +3,13 @@ Anno 1602 History Edition - Erweiterungen
 
 Installieren (auch auf einem anderen PC)
   1. Anno 1602 History Edition ueber Ubisoft Connect installieren (eigenes Ubisoft-Konto).
-  2. Das ZIP entpacken und "installieren.cmd" doppelklicken.
+  2. Das ZIP von GitHub (Code -> Download ZIP) entpacken und im entpackten Ordner
+     "install.cmd" doppelklicken.
      Falls Windows "Der Computer wurde durch Windows geschuetzt" zeigt:
      "Weitere Informationen" -> "Trotzdem ausfuehren".
-  3. Starten ueber "Anno 1602 - Erweiterungen" im Startmenue oder auf dem Desktop.
-  Entfernen: "deinstallieren.cmd" doppelklicken (Spiel und Spielstaende bleiben).
+  3. Starten ueber "Anno 1602 - Erweiterungen" im Startmenue oder auf dem Desktop
+     (auf einem Windows in anderer Sprache heisst die Verknuepfung "Anno 1602 - Extensions").
+  Entfernen: im selben Ordner "uninstall.cmd" doppelklicken (Spiel und Spielstaende bleiben).
   Spielstaende mitnehmen: den Ordner Dokumente\Anno 1602 History Edition\Savegame auf den
   anderen PC an dieselbe Stelle kopieren (vorher dort einmal das Spiel starten).
   Das ZIP enthaelt keine Spieldateien; das Spiel selbst kommt immer aus Ubisoft Connect.
@@ -16,6 +18,7 @@ Spielen
   Im Fenster die Optionen waehlen, dann "Mit Erweiterungen spielen".
   Im Spiel ein neues Endlosspiel beginnen.
   "Original starten" startet das Spiel ohne Aenderungen (z. B. fuer alte Spielstaende).
+  Das Fenster ist auf einem deutschen Windows deutsch, sonst englisch.
 
 Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
   Kartengroesse        bis 2000 x 1400 Felder (Original 500 x 350)
@@ -100,11 +103,13 @@ Wichtig:
     automatischer Spielstand ("Spiel fortsetzen") aus der grossen Welt umbenannt, damit
     ihn das Spiel ohne Erweiterungen nicht laedt. Das Fenster nicht vorher schliessen.
   - Vor jedem Start werden die Spielstaende gesichert (Dokumente\Anno 1602 History Edition\
-    Savegame-Sicherung-<Datum>), aber nur, wenn sich etwas geaendert hat.
+    Savegame-Backup-<Datum>), aber nur, wenn sich etwas geaendert hat.
   - Nur fuer das Einzelspiel und nur fuer die Ubisoft-Connect-Version. Nach einem Update des
     Spiels passt das Werkzeug nicht mehr und bricht ab, ohne etwas zu aendern.
 
-Dateien (im Ordner %LOCALAPPDATA%\Programs\Anno1602-Erweiterungen):
-  anno-starter.ps1   das Fenster
-  weltgroesse.ps1    das Werkzeug (auch direkt nutzbar, Optionen siehe Kopf der Datei)
-  BEFUNDE.md         technische Beschreibung aller Fundstellen im Spielcode
+Dateien (im Ordner %LOCALAPPDATA%\Programs\Anno1602-Extensions):
+  launcher.ps1       das Fenster
+  anno-patcher.ps1   das Werkzeug (auch direkt nutzbar, Optionen siehe Kopf der Datei)
+  README.de.txt      diese Anleitung
+  README.txt         diese Anleitung auf Englisch
+  FINDINGS.md        technische Beschreibung aller Fundstellen im Spielcode (Englisch)

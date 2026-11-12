@@ -1,5 +1,5 @@
-// Gibt Maschinenbefehle ab einer Adresse aus (Adresse, Bytes, Befehl).
-// Argumente: <outdir> <name> <adresse> <anzahl>
+// Prints the machine instructions from an address on (address, bytes, instruction).
+// Arguments: <outdir> <name> <address> <count>
 //@category Anno1602
 
 import java.io.File;

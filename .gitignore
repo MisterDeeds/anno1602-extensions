@@ -1,8 +1,9 @@
-# Nur eigener Code und Doku: keine Spieldateien, keine Analyse-Abbilder.
+# Own code and docs only: no game files, no analysis images.
 /analysis/*
-!/analysis/BEFUNDE.md
+!/analysis/FINDINGS.md
 /decoded/
-# Die Szenarien entstehen aus den eigenen Spieldateien (tools/kampagne-bauen.ps1).
+# The scenarios are built from your own game files (tools/build-scenarios.ps1; old output folder tools/kampagne/).
+/tools/scenarios/
 /tools/kampagne/
 *.log
 *.err

@@ -1,5 +1,5 @@
-// Dekompiliert alle Funktionen in eine einzige Textdatei (zum Durchsuchen mit grep).
-// Argumente: <outdir>
+// Decompiles all functions into a single text file (to search it with grep).
+// Arguments: <outdir>
 //@category Anno1602
 
 import java.io.File;
@@ -16,23 +16,23 @@ public class AnnoDecompAll extends GhidraScript {
 
     @Override
     protected void run() throws Exception {
-        File out = new File(getScriptArgs()[0], "alle-funktionen.c");
+        File out = new File(getScriptArgs()[0], "all-functions.c");
         DecompInterface decomp = new DecompInterface();
         decomp.openProgram(currentProgram);
-        int n = 0, fehler = 0;
+        int n = 0, failed = 0;
         try (PrintWriter pw = new PrintWriter(new FileWriter(out))) {
             FunctionIterator it = currentProgram.getFunctionManager().getFunctions(true);
             while (it.hasNext() && !monitor.isCancelled()) {
                 Function f = it.next();
                 if (f.isExternal() || f.isThunk()) continue;
                 DecompileResults r = decomp.decompileFunction(f, 60, monitor);
-                pw.printf("%n// ===== %s @ %s (%d Bytes)%n", f.getName(), f.getEntryPoint(), f.getBody().getNumAddresses());
+                pw.printf("%n// ===== %s @ %s (%d bytes)%n", f.getName(), f.getEntryPoint(), f.getBody().getNumAddresses());
                 if (r.decompileCompleted()) pw.println(r.getDecompiledFunction().getC());
-                else { pw.println("// Dekompilierung fehlgeschlagen: " + r.getErrorMessage()); fehler++; }
+                else { pw.println("// Decompilation failed: " + r.getErrorMessage()); failed++; }
                 n++;
             }
         }
         decomp.dispose();
-        println("Dekompiliert: " + n + ", fehlgeschlagen: " + fehler);
+        println("Decompiled: " + n + ", failed: " + failed);
     }
 }
