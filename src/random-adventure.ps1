@@ -4,7 +4,7 @@
   and a difficulty ("Abenteuer <seed>" / "Adventure <seed>").
 
 .DESCRIPTION
-  Uses the same chapter builder as the campaigns (tools\build-scenarios.ps1, loaded as a library):
+  Uses the same chapter builder as the campaigns (src\build-scenarios.ps1, loaded as a library):
   endless-game template, mirrored layout, the patcher's island planner for the big version
   (1000 x 700, up to 50 islands), free starting point for the ships, mission and text.
   The generator picks from a deterministic random generator (Park-Miller, seeded from -Seed):
@@ -20,7 +20,7 @@
     text      title, a short story from text blocks, the goals, the helmsman's advice (German and English)
   Same seed + same difficulty = the same scenario in both languages; the file is byte-identical on
   every run. The seed and difficulty are stored in SZENE_GAMEID (0x53000000 + difficulty << 20 + seed),
-  so tools\check-scenarios.ps1 -Reproduce can regenerate the file and compare it.
+  so tests\check-scenarios.ps1 -Reproduce can regenerate the file and compare it.
   Note: the file name contains only the seed; the same seed with another difficulty overwrites it.
 
 .PARAMETER Seed
@@ -30,11 +30,11 @@
 .PARAMETER Language
   de or en (default: German on a German Windows, English otherwise; $env:ANNO_EXTENSIONS_LANG).
 .PARAMETER OutFolder
-  Output folder (default tools\scenarios).
+  Output folder (default src\scenarios).
 .PARAMETER Install
   Also copy the file to Documents\Anno 1602 History Edition\Own Scenarios.
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File .\tools\random-adventure.ps1 -Seed 4711 -Difficulty Demanding -Install
+  powershell -ExecutionPolicy Bypass -File .\src\random-adventure.ps1 -Seed 4711 -Difficulty Demanding -Install
 #>
 param(
     [ValidateRange(-1, 999999)][int]$Seed = -1,

@@ -135,7 +135,7 @@ finish chapter 1 after about 5, chapter 2 after about 7½, chapter 3 after about
 about 20 hours of game time.
 
 The scenarios are not part of this repository. The installer builds them from the endless-game
-templates of your own copy of the game (`tools/build-scenarios.ps1`).
+templates of your own copy of the game (`src/build-scenarios.ps1`).
 
 ## Install
 
@@ -164,21 +164,35 @@ Uninstall: double-click `uninstall.cmd` in the same folder. The game and your sa
 
 ## Layout
 
-| Path | Contents |
-|---|---|
-| `tools/anno-patcher.ps1` | the tool: checks the game version and patches memory |
-| `tools/launcher.ps1` | the launcher window (German or English, following the Windows language) |
-| `tools/logbook.ps1` | the logbook window (reads the game's memory only) |
-| `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1` | build the 23 scenarios in German or English (decoded AUFTRAG4 mission format) |
-| `tools/random-adventure.ps1` | random adventure generator (seed and difficulty → a new scenario) |
-| `tools/test-patcher.ps1` | offline test: loads the exe as an image and checks every patch site (556 checks) |
-| `tools/check-*.ps1` | checks for the running game, islands and scenarios |
-| `tools/ghidra_scripts/`, `tools/ghidra-scan.cmd` | Ghidra analysis (needs your own copy of the exe in `analysis/bin`) |
-| `install.cmd`, `uninstall.cmd`, `tools/install.ps1` | installer |
-| `tools/README.txt`, `tools/README.de.txt` | player guide (English, German), installed next to the tool |
-| `analysis/FINDINGS.md` | every patch site in the game code, file formats and measurements |
-| `docs/handbook.html`, `docs/handbook.de.html` | campaign handbook (English, German) |
+```
+anno1602-extensions/
+├── install.cmd, uninstall.cmd     install or remove (double-click)
+├── src/                           everything that gets installed (runs from one folder)
+│   ├── anno-patcher.ps1           the tool: checks the game version and patches memory
+│   ├── launcher.ps1               the launcher window (German or English, following Windows)
+│   ├── logbook.ps1                the logbook window (only reads the game's memory)
+│   ├── build-scenarios.ps1        builds the 23 scenarios in German or English
+│   ├── scenario-lib.ps1           .szs file format and AUFTRAG4 missions (decoded)
+│   ├── random-adventure.ps1       random adventure generator (number + difficulty)
+│   ├── install.ps1                installer behind install.cmd / uninstall.cmd
+│   └── README.txt, README.de.txt  player guide, installed next to the tool
+├── tests/
+│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site (556 checks)
+│   └── check-scenarios.ps1        checks built scenarios and random adventures (-Reproduce)
+├── dev/                           helpers for development
+│   ├── check-game.ps1             shows the patched values in the running game (read only)
+│   ├── check-islands.ps1          islands, ore and fertility of the running game
+│   ├── show-island-plan.ps1       draws the planned island layout as a picture
+│   ├── cod.ps1                    decodes and encodes the game's .cod files
+│   └── ghidra-scan.cmd, ghidra_scripts/   Ghidra analysis (needs your own copy of the exe in analysis/bin)
+└── docs/
+    ├── FINDINGS.md                every patch site, file format, measurement and test run
+    ├── handbook.html, handbook.de.html   campaign handbook
+    └── images/                    screenshots
+```
 
+Run the offline test: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (needs the installed
+game; the game is not started). Changes per version: [CHANGELOG.md](CHANGELOG.md).
 ## Legal
 
 An unofficial fan project, not affiliated with Ubisoft. "Anno" is a trademark of Ubisoft.

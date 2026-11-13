@@ -1,1 +1,3 @@
+# Store every file exactly as it is (the .cmd files need CRLF, everything else uses LF).
 * -text
+*.png binary

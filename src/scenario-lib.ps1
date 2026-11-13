@@ -10,7 +10,7 @@
     Set-Islands <SZENE> <list>           -> island list (up to 50 entries of 16 bytes from +0x174)
     New-CargoBytes <cargo> <ship type>   -> cargo block of a SHIP4 entry (0x40 bytes from +0x174)
     Set-FixedString <bytes> <o> <size> <text> -> zero-terminated Windows-1252 text in a fixed field
-  The template is only read. How the fields were worked out: analysis\FINDINGS.md, section on
+  The template is only read. How the fields were worked out: docs\FINDINGS.md, section on
   custom scenarios.
 
   AUFTRAG4 entry (0x8C4 bytes; loader FUN_1400b1780, check FUN_1400ae010):

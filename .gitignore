@@ -1,9 +1,8 @@
-# Own code and docs only: no game files, no analysis images.
-/analysis/*
-!/analysis/FINDINGS.md
+# Only our own code and docs: no game files and no analysis data.
+# Local analysis data: Ghidra project, copy of the exe, scan results, reference scenarios.
+/analysis/
 /decoded/
-# The scenarios are built from your own game files (tools/build-scenarios.ps1; old output folder tools/kampagne/).
-/tools/scenarios/
-/tools/kampagne/
+# The scenarios are built from your own game files (src/build-scenarios.ps1).
+/src/scenarios/
 *.log
 *.err

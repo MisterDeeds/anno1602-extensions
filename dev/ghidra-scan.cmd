@@ -8,7 +8,7 @@ for %%I in ("%~dp0..") do set "ROOT=%%~fI"
 set "PROJ=%ROOT%\analysis\ghidra"
 set "OUT=%ROOT%\analysis\scan"
 set "EXE=%ROOT%\analysis\bin\Anno1602.exe"
-set "SCRIPTS=%ROOT%\tools\ghidra_scripts"
+set "SCRIPTS=%ROOT%\dev\ghidra_scripts"
 if not exist "%OUT%" mkdir "%OUT%"
 if not exist "%PROJ%" mkdir "%PROJ%"
 

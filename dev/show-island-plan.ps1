@@ -1,14 +1,14 @@
 <#
 .SYNOPSIS
-  Shows what tools\anno-patcher.ps1 computes for the islands, without touching the game:
+  Shows what src\anno-patcher.ps1 computes for the islands, without touching the game:
   code cave (hex), island table and one map per endless layout as PNG.
   The functions are loaded from anno-patcher.ps1 (syntax tree); the tool itself does not run.
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File .\tools\show-island-plan.ps1 -Width 1000 -Height 700 -Folder .\analysis\test
+  powershell -ExecutionPolicy Bypass -File .\dev\show-island-plan.ps1 -Width 1000 -Height 700 -Folder .\analysis\test
 #>
 param([int]$Width = 1000, [int]$Height = 700, [string]$Folder = '', [switch]$HexOnly)
 $ErrorActionPreference = 'Stop'
-$tool = Join-Path $PSScriptRoot 'anno-patcher.ps1'
+$tool = Join-Path (Split-Path -Parent $PSScriptRoot) 'src\anno-patcher.ps1'
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$null, [ref]$null)
 # Take over the constants and functions of the island part.
 foreach ($stmt in $ast.EndBlock.Statements) {
@@ -40,6 +40,11 @@ foreach ($a in ($script:IslandPlans.Keys | Sort-Object)) {
         $g.DrawString("$i", $font, [System.Drawing.Brushes]::White, [int](10 + $x * $f), [int](30 + $y * $f))
     }
     $g.Dispose()
-    if ($Folder) { $z = Join-Path $Folder ("island-plan-{0}x{1}-layout-{2}.png" -f $Width, $Height, $a); $bmp.Save($z); "Map: $z" }
+    if ($Folder) {
+        # Bitmap.Save needs an existing folder and an absolute path.
+        $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Folder)
+        New-Item -ItemType Directory -Force -Path $full | Out-Null
+        $z = Join-Path $full ("island-plan-{0}x{1}-layout-{2}.png" -f $Width, $Height, $a); $bmp.Save($z); "Map: $z"
+    }
     $bmp.Dispose()
 }

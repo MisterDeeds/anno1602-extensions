@@ -18,12 +18,12 @@
   - random adventures ("Abenteuer <seed>" / "Adventure <seed>"): game id = seed and difficulty
   Exit code 1 if a check fails.
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File .\tools\check-scenarios.ps1 -Folder .\tools\scenarios
-  powershell -ExecutionPolicy Bypass -File .\tools\check-scenarios.ps1 -Folder .\tools\scenarios -Reproduce
+  powershell -ExecutionPolicy Bypass -File .\tests\check-scenarios.ps1 -Folder .\src\scenarios
+  powershell -ExecutionPolicy Bypass -File .\tests\check-scenarios.ps1 -Folder .\src\scenarios -Reproduce
 #>
-param([string]$Folder = (Join-Path $PSScriptRoot 'scenarios'), [switch]$Reproduce, [string]$GamePath, [switch]$Quiet)
+param([string]$Folder = (Join-Path (Split-Path -Parent $PSScriptRoot) 'src\scenarios'), [switch]$Reproduce, [string]$GamePath, [switch]$Quiet)
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'scenario-lib.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'src\scenario-lib.ps1')
 $ClassW = @(30, 40, 50, 70, 100); $ClassH = @(30, 40, 52, 60, 90)
 $stageNames = 'pioneers', 'settlers', 'citizens', 'merchants', 'aristocrats'
 $goodsNames = @{ 2 = 'iron ore'; 3 = 'gold'; 4 = 'wool'; 5 = 'sugar'; 6 = 'tobacco'; 7 = 'cattle'; 8 = 'grain'; 9 = 'flour'; 10 = 'iron'; 11 = 'swords'; 12 = 'muskets'; 13 = 'cannons'; 14 = 'food'; 15 = 'tobacco goods'; 16 = 'spices'; 17 = 'cocoa'; 18 = 'liquor'; 19 = 'cloth'; 20 = 'clothes'; 21 = 'jewelry'; 22 = 'tools'; 23 = 'wood'; 24 = 'bricks' }
@@ -196,7 +196,7 @@ if ($Reproduce -and $adventures.Count) {
     try {
         foreach ($adv in $adventures) {
             $gp = @{}; if ($GamePath) { $gp.GamePath = $GamePath }
-            & (Join-Path $PSScriptRoot 'random-adventure.ps1') -Seed $adv.Seed -Difficulty $adv.Difficulty -Language $adv.Language -OutFolder $tmp @gp | Out-Null
+            & (Join-Path (Split-Path -Parent $PSScriptRoot) 'src\random-adventure.ps1') -Seed $adv.Seed -Difficulty $adv.Difficulty -Language $adv.Language -OutFolder $tmp @gp | Out-Null
             $new = Join-Path $tmp ([IO.Path]::GetFileName($adv.File))
             $same = (Test-Path -LiteralPath $new) -and ((Get-FileHash -LiteralPath $new).Hash -eq (Get-FileHash -LiteralPath $adv.File).Hash)
             Assert-Check "Reproduced byte for byte: $([IO.Path]::GetFileName($adv.File)) (seed $($adv.Seed), $($adv.Difficulty), $($adv.Language))" $same

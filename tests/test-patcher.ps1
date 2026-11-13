@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Offline test for tools\anno-patcher.ps1, without starting the game.
+  Offline test for src\anno-patcher.ps1, without starting the game.
 
 .DESCRIPTION
   A helper process loads the exe copy analysis\bin\Anno1602.exe only as an image
@@ -79,8 +79,16 @@
 #>
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
-$tool = Join-Path $PSScriptRoot 'anno-patcher.ps1'
+$tool = Join-Path $root 'src\anno-patcher.ps1'
 $exe = Join-Path $root 'analysis\bin\Anno1602.exe'
+if (-not (Test-Path -LiteralPath $exe)) {
+    # No local copy (e.g. a fresh clone of the repository): use the exe of the installed game. It is only mapped
+    # as an image (read only), the game itself is not started.
+    foreach ($k in 'HKLM:\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\16236', 'HKLM:\SOFTWARE\Ubisoft\Launcher\Installs\16236') {
+        try { $d = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).InstallDir; if ($d) { $exe = Join-Path (($d -replace '/', '\').TrimEnd('\')) 'Anno1602.exe'; break } } catch { }
+    }
+}
+if (-not (Test-Path -LiteralPath $exe)) { throw 'Anno1602.exe not found: neither analysis\bin\Anno1602.exe nor an installed Anno 1602 History Edition.' }
 $tmp = Join-Path ([IO.Path]::GetTempPath()) "anno-patcher-test-$PID"
 New-Item -ItemType Directory -Force $tmp | Out-Null
 # The tool runs in English (child processes inherit the variable); Invoke-Tool can switch to 'de'.

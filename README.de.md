@@ -137,7 +137,7 @@ schaffen Kapitel 1 nach rund 5, Kapitel 2 nach rund 7½, Kapitel 3 nach rund 8 u
 rund 20 Stunden Spielzeit.
 
 Die Szenarien liegen nicht in diesem Repository. Der Installer baut sie aus den Endlos-Vorlagen
-deines eigenen Spiels (`tools/build-scenarios.ps1`).
+deines eigenen Spiels (`src/build-scenarios.ps1`).
 
 ## Installieren
 
@@ -168,21 +168,35 @@ Entfernen: im selben Ordner `uninstall.cmd` doppelklicken. Spiel und Spielständ
 
 ## Aufbau
 
-| Pfad | Inhalt |
-|---|---|
-| `tools/anno-patcher.ps1` | das Werkzeug: prüft die Spielversion und patcht den Speicher |
-| `tools/launcher.ps1` | das Startfenster (deutsch oder englisch, je nach Sprache von Windows) |
-| `tools/logbook.ps1` | das Logbuch-Fenster (liest den Speicher des Spiels nur) |
-| `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1` | bauen die 23 Szenarien deutsch oder englisch (Format AUFTRAG4 entschlüsselt) |
-| `tools/random-adventure.ps1` | Zufallsabenteuer-Generator (Nummer und Schwierigkeit → neues Szenario) |
-| `tools/test-patcher.ps1` | Prüfung ohne Spiel: lädt die exe als Abbild und prüft jede Patchstelle (556 Prüfungen) |
-| `tools/check-*.ps1` | Prüfungen für laufendes Spiel, Inseln und Szenarien |
-| `tools/ghidra_scripts/`, `tools/ghidra-scan.cmd` | Ghidra-Auswertung (braucht eine eigene Kopie der exe in `analysis/bin`) |
-| `install.cmd`, `uninstall.cmd`, `tools/install.ps1` | Installer |
-| `tools/README.de.txt`, `tools/README.txt` | Anleitung (deutsch, englisch), wird neben dem Werkzeug installiert |
-| `analysis/FINDINGS.md` | alle Fundstellen im Spielcode, Formate und Messungen (englisch) |
-| `docs/handbook.de.html`, `docs/handbook.html` | Handbuch zu den Kampagnen (deutsch, englisch) |
+```
+anno1602-extensions/
+├── install.cmd, uninstall.cmd     installieren oder entfernen (Doppelklick)
+├── src/                           alles, was installiert wird (läuft aus einem Ordner)
+│   ├── anno-patcher.ps1           das Werkzeug: prüft die Spielversion und patcht den Speicher
+│   ├── launcher.ps1               das Startfenster (deutsch oder englisch, je nach Windows)
+│   ├── logbook.ps1                das Logbuch-Fenster (liest den Speicher des Spiels nur)
+│   ├── build-scenarios.ps1        baut die 23 Szenarien deutsch oder englisch
+│   ├── scenario-lib.ps1           Dateiformat .szs und Aufträge AUFTRAG4 (entschlüsselt)
+│   ├── random-adventure.ps1       Zufallsabenteuer-Generator (Nummer + Schwierigkeit)
+│   ├── install.ps1                Installer hinter install.cmd / uninstall.cmd
+│   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
+├── tests/
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle (556 Prüfungen)
+│   └── check-scenarios.ps1        prüft gebaute Szenarien und Zufallsabenteuer (-Reproduce)
+├── dev/                           Hilfen für die Entwicklung
+│   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
+│   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel
+│   ├── show-island-plan.ps1       zeichnet die geplante Inselverteilung als Bild
+│   ├── cod.ps1                    ent- und verschlüsselt die .cod-Dateien des Spiels
+│   └── ghidra-scan.cmd, ghidra_scripts/   Ghidra-Auswertung (braucht eine eigene Kopie der exe in analysis/bin)
+└── docs/
+    ├── FINDINGS.md                alle Fundstellen, Formate, Messungen und Testläufe (englisch)
+    ├── handbook.html, handbook.de.html   Handbuch zu den Kampagnen
+    └── images/                    Bilder
+```
 
+Offline-Test starten: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (braucht das installierte
+Spiel; es wird nicht gestartet). Änderungen je Version: [CHANGELOG.md](CHANGELOG.md).
 ## Rechtliches
 
 Ein inoffizielles Fan-Projekt, nicht mit Ubisoft verbunden. „Anno“ ist eine Marke von Ubisoft.

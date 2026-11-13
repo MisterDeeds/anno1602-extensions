@@ -22,10 +22,10 @@ gloss in parentheses on first use.
 | REA | 6.8.0 | `npm -g rea-agents`, MCP registered in `~/.claude.json` |
 | Git | 2.56.0 | winget |
 
-Decrypt/encrypt `.cod` files: `tools/cod.ps1` (every byte negated).
-Map size and all game options: `tools/anno-patcher.ps1`, start together with the game: the launcher window `tools/launcher.ps1` or `tools/start-big-world.cmd`, offline test `tools/test-patcher.ps1`, island plan as an image `tools/show-island-plan.ps1`, scenarios `tools/build-scenarios.ps1` with `tools/scenario-lib.ps1` (check: `tools/check-scenarios.ps1`), random adventures `tools/random-adventure.ps1`, logbook window `tools/logbook.ps1`, read-only checks of the running game `tools/check-game.ps1` and `tools/check-islands.ps1`, installer `tools/install.ps1`, player guide `tools/README.txt` (German: `tools/README.de.txt`).
+Decrypt/encrypt `.cod` files: `dev/cod.ps1` (every byte negated).
+Map size and all game options: `src/anno-patcher.ps1`, start together with the game: the launcher window `src/launcher.ps1`, offline test `tests/test-patcher.ps1`, island plan as an image `dev/show-island-plan.ps1`, scenarios `src/build-scenarios.ps1` with `src/scenario-lib.ps1` (check: `tests/check-scenarios.ps1`), random adventures `src/random-adventure.ps1`, logbook window `src/logbook.ps1`, read-only checks of the running game `dev/check-game.ps1` and `dev/check-islands.ps1`, installer `src/install.ps1`, player guide `src/README.txt` (German: `src/README.de.txt`).
 Ghidra helper scripts: `AnnoAsm.java` (instructions from an address), `AnnoPatchDis.java` (put bytes into Ghidra's in-memory program only and disassemble them).
-Note: `tools/ghidra-scan.cmd` needs `GHIDRA_INSTALL_DIR` and `JAVA_HOME` in the process environment. If the shell was started before the variables were set, they are missing ("Das System kann den angegebenen Pfad nicht finden", the system cannot find the path specified); in that case take them over from the user or system variables first.
+Note: `dev/ghidra-scan.cmd` needs `GHIDRA_INSTALL_DIR` and `JAVA_HOME` in the process environment. If the shell was started before the variables were set, they are missing ("Das System kann den angegebenen Pfad nicht finden", the system cannot find the path specified); in that case take them over from the user or system variables first.
 
 ## Structure of the exe
 
@@ -51,7 +51,7 @@ Note: `tools/ghidra-scan.cmd` needs `GHIDRA_INSTALL_DIR` and `JAVA_HOME` in the 
 ## Ghidra analysis
 
 Ghidra 12.1.4 via REA (`rea analyze`, evidence `ev_390cb815…`) and own headless scripts
-(`tools/ghidra-scan.cmd`, scripts in `tools/ghidra_scripts/`, results in `analysis/scan/`).
+(`dev/ghidra-scan.cmd`, scripts in `dev/ghidra_scripts/`, results in `analysis/scan/`).
 The analysed file is the copy `analysis/bin/Anno1602.exe`, SHA-256 `7731972f…b7a1` (identical to the original).
 
 - **O** 1,546 functions, 1,278 strings. A PDB `anno1602.pdb` is referenced but not shipped → no original names.
@@ -113,7 +113,7 @@ The analysed file is the copy `analysis/bin/Anno1602.exe`, SHA-256 `7731972f…b
 - **O** Savegames (`.gam`) contain no `SZENE` section (checked on `Welt1000x700.gam`: `AUFTRAG4, HANDLER, HIRSCH2, INSEL5, INSELHAUS, KONTOR2, MARKT2, MILITAR, NAME, PLAYER4, PRODLIST2, ROHWACHS2, SHIP4, SIEDLER, SOLDAT3, STADT4, TIMERS, TURM, WERFT, WIFF`). A change in the `SZENE` loader therefore only affects scenario templates.
 - **O** Entry point in `FUN_1400d0de0` after the name check "SZENE" at `0x1400D0E29`: `4C 8D 1D D0 F1 F2 FF` = `LEA R11,[0x140000000]` (7 bytes). There `R15` points to the section data (`MOV R15,RDX` at `0x1400D0DFC`). The flags are not live (the next flag reader is `CMP [R15+0x64],R13D` at `0x1400D0E65`); `R8` is live (`LEA R10D,[R8-5]`) and is saved. No jump targets the replaced bytes.
 - **O** Free space: `.text` has VirtualSize `0xE40F3` and is mapped in memory up to RVA `0xE5FFF`; RVA `0xE5100`–`0xE51FF` is all `00` in the file and in the image.
-- **O** Replacement at `0x1400D0E29`: `E9 D2 42 01 00 66 90` (`JMP 0x1400E5100`, 2-byte NOP). Code stub at `0x1400E5100` (103 bytes), disassembled by Ghidra (`tools/ghidra_scripts/AnnoPatchDis.java`):
+- **O** Replacement at `0x1400D0E29`: `E9 D2 42 01 00 66 90` (`JMP 0x1400E5100`, 2-byte NOP). Code stub at `0x1400E5100` (103 bytes), disassembled by Ghidra (`dev/ghidra_scripts/AnnoPatchDis.java`):
 
   ```
   1400e5100  PUSH RAX / PUSH RCX / PUSH RDX / PUSH R8 / PUSH R9
@@ -131,7 +131,7 @@ The analysed file is the copy `analysis/bin/Anno1602.exe`, SHA-256 `7731972f…b
 - **I** The islands keep their size; only the corner is stretched. Because the factor is ≥ 1, every island still fits into the world (x' + width ≤ x + 500 ≤ world), and the distances between islands only grow, so no overlaps arise. The climate thirds (top north, bottom south) match the original again because y grows as well.
 - **I** Affects every scenario template, so also campaign scenarios (where fixed ships and missions may no longer be near the islands). The tool is meant only for the endless game. Can be switched off with `-NoIslandSpread`. Start ships from `SHIP4` are not moved (that section is also in savegames).
 
-**Offline test (O):** `tools/test-patcher.ps1`, **128 of 128** passed. New: case G (`-NoIslandSpread` leaves the jump and the code stub untouched) and case I, a functional test: in the helper process the real code stub runs at its real address in the image, called through a thread with the real `SZENE` section from `[[48]]10.szs` (the return path replaced by `pop r15; ret` only in the helper process's image). Result: all 1,172 bytes as expected for 1000 × 700 (island 0: (280, 90) → (560, 180)), 750 × 525, 2000 × 1400 and 500 × 350 (unchanged). With island count 60 nothing changes; the helper process keeps running afterwards.
+**Offline test (O):** `tests/test-patcher.ps1`, **128 of 128** passed. New: case G (`-NoIslandSpread` leaves the jump and the code stub untouched) and case I, a functional test: in the helper process the real code stub runs at its real address in the image, called through a thread with the real `SZENE` section from `[[48]]10.szs` (the return path replaced by `pop r15; ret` only in the helper process's image). Result: all 1,172 bytes as expected for 1000 × 700 (island 0: (280, 90) → (560, 180)), 750 × 525, 2000 × 1400 and 500 × 350 (unchanged). With island count 60 nothing changes; the helper process keeps running afterwards.
 
 **Game test (O), 20:13–20:35:** tool with island spreading, restart of the game caught again (PID 44220 → 16160), new endless game "Durchschnittlich" (average difficulty).
 
@@ -159,8 +159,8 @@ The analysed file is the copy `analysis/bin/Anno1602.exe`, SHA-256 `7731972f…b
 - **Implementation:** The tool reads the three templates (read only), plans a list per layout and writes it as a table at RVA `0xE5200` (empty rest of the last `.text` page, mapped in memory; 4 + 3 × 816 = 2,452 bytes). Plan: the originals stretched first (as before), then copies of the template islands (largest classes first, climate 2 = by position, flags 0, file random) at random positions with a fixed seed, at least 14 tiles from every island and 8 from the edge, until the target = min(48, island count × area factor × 0.6) is reached. 1000 × 700: 43/48/40 islands; 750 × 525: 24/27/22.
 - **Code stub (199 bytes, checked with Ghidra):** looks up the template in the table (island count and x/y of the first island); on a match it copies the island count and 800 bytes of entries (`rep movsb`) into the section; otherwise it stretches as before. Registers `rax, rcx, rdx, r8, r9, rsi, rdi` are saved.
 - **Offline (O):** 151/151; functional test with the real templates: exactly the planned lists, no overlap, everything inside the world; an unknown template is only stretched.
-- **Maps of the plans:** `analysis/test/inselplan-1000x700-anordnung-{0,1,2}.png` (historic file names; `tools/show-island-plan.ps1` now writes `island-plan-<w>x<h>-layout-<n>.png`).
-- **In game (O), 21:50:** started via `tools/start-big-world.cmd`, new endless game "Durchschnittlich". The game chose layout 1. Island table in memory: **48 islands, all 48 exactly at the planned position**, all at most as large as their class, extent x 47–985, y 24–686. No crash while generating. Evidence: `analysis/test/17-mehr-inseln-start*.png`.
+- **Maps of the plans:** `analysis/test/inselplan-1000x700-anordnung-{0,1,2}.png` (historic file names; `dev/show-island-plan.ps1` now writes `island-plan-<w>x<h>-layout-<n>.png`).
+- **In game (O), 21:50:** started via `start-big-world.cmd` (removed on 2026-11-13; the launcher replaces it), new endless game "Durchschnittlich". The game chose layout 1. Island table in memory: **48 islands, all 48 exactly at the planned position**, all at most as large as their class, extent x 47–985, y 24–686. No crash while generating. Evidence: `analysis/test/17-mehr-inseln-start*.png`.
 - **Endurance run (O):** 21:50–22:01 at fourfold speed (F7, about 40 game minutes), checked every 30 s: responsive, 48 islands, 1000 × 700, 443–451 MB. Three AI players spread over the whole map, one at the very bottom right in the new area. Islands in the new area are drawn cleanly. Evidence: `18-mehr-inseln-neuer-bereich.png`, `19-mehr-inseln-nach-40-spielminuten*.png`.
 - **Save/load (O):** new slot → `game22.gam` (1,050,674 bytes; 48 `INSEL5`, up to x 985 / y 686). Game ended (process end, no score screen), restarted via `start-big-world.cmd`, `game22` loaded: **48 of 48 islands at the same position as in the savegame and as in the plan**. Evidence: `20-geladen-game22-48-inseln*.png`.
 - **Test operation note:** At fourfold speed the game did not accept the clicks on the sidebar sent as window messages; after F5 (normal) it accepted them immediately.
@@ -265,7 +265,7 @@ Found with REA/Ghidra (`analysis/scan/all-functions.c`: all 1,275 functions deco
 - **O Rivals:** the AI difficulty comes only from the game difficulty `0x1405ec1c0` (`FUN_140017840`, `FUN_140017b30`, `FUN_140032090`, `FUN_140035220`, `FUN_14003b7e0`). There is no separate control for the AI strength.
   - **I** The simplest way to make the rivals stronger is their start gold: player table slot 1–3, money +4, stride 0x280.
 
-**Implementation in `tools/anno-patcher.ps1`:**
+**Implementation in `src/anno-patcher.ps1`:**
 
 | Option | Location | Method |
 |---|---|---|
@@ -275,13 +275,13 @@ Found with REA/Ghidra (`analysis/scan/all-functions.c`: all 1,275 functions deco
 | `-Turbo` | RVA `0xE3376` | `B9 04 00 00 00` → `B9 08 00 00 00` (code place, all or nothing) |
 | `-RivalGold N` | TIMERS code stub | after the start gold: `cmp [game clock],1000; jae +30; mov [money slot 1/2/3],N` (code stub now up to 83 bytes, room for up to 128) |
 
-**Offline test (O):** `tools/test-patcher.ps1`, new cases N–R, total **284 of 284** passed. Case R executes the real code stub: player 50,000, rivals 3 × 30,000, trader (slot 4) unchanged; with a savegame clock nothing changed.
+**Offline test (O):** `tests/test-patcher.ps1`, new cases N–R, total **284 of 284** passed. Case R executes the real code stub: player 50,000, rivals 3 × 30,000, trader (slot 4) unchanged; with a savegame clock nothing changed.
 
 **In the real game (O), 2026-11-10 19:00:** installed tool with `-Pirates Strong -RivalGold 60000 -StartGold 50000 -Residents 2 -Production 2 -Storage 3 -ShipSpeed 2 -Cargo 2 -Turbo`, game via Ubisoft Connect (restart caught again, PID 5344 → 14268).
 - All 15 code places set.
 - The resident and cargo originals matched exactly (no abort).
 - 125 work intervals halved.
-- Checked read-only in the main menu (`tools/check-game.ps1`): world 1000 × 700, F7 `B9 08 …`, residents 4/12/30/50/80, cargo space 100/160/130/240 t, ship speed 0.1, storage Kontor I 90 t, marker `NUFR x2`.
+- Checked read-only in the main menu (`dev/check-game.ps1`): world 1000 × 700, F7 `B9 08 …`, residents 4/12/30/50/80, cargo space 100/160/130/240 t, ship speed 0.1, storage Kontor I 90 t, marker `NUFR x2`.
 - Then the game was quit. The tool reported "lastgame.gam nicht geschrieben" (lastgame.gam not written); `lastgame.gam` is unchanged.
 - The check in the running game was pending at first (permission for computer use declined); done on 2026-11-11, see below.
 
@@ -303,7 +303,7 @@ Found with REA/Ghidra (`analysis/scan/all-functions.c`: all 1,275 functions deco
 - The Remote Desktop Connection took the foreground once.
 - **Interruption 2026-11-10:** the tool started from the session was terminated together with it; the game then wrote `lastgame.gam` (20:24) without renaming. On 2026-11-11 it was renamed to `lastgame-1000x700-20261110-202424.gam` and the original copied back. For the second test the tool ran as a separate process (`Win32_Process.Create`).
 
-**Launcher window:** `tools/launcher.ps1` (WinForms). All options as drop-down lists, the last choice in `%APPDATA%\Anno1602-Extensions\settings.json` (before the English renaming `%APPDATA%\Anno1602-Erweiterungen\einstellungen.json`, migrated once). "Mit Erweiterungen spielen" (Play with extensions) starts the tool in its own window and after 3 s `uplay://launch/16236/0`; "Original starten" (Start original) starts only the game. The launcher shows German on a German Windows and English otherwise.
+**Launcher window:** `src/launcher.ps1` (WinForms). All options as drop-down lists, the last choice in `%APPDATA%\Anno1602-Extensions\settings.json` (before the English renaming `%APPDATA%\Anno1602-Erweiterungen\einstellungen.json`, migrated once). "Mit Erweiterungen spielen" (Play with extensions) starts the tool in its own window and after 3 s `uplay://launch/16236/0`; "Original starten" (Start original) starts only the game. The launcher shows German on a German Windows and English otherwise.
 
 **Installation:** `%LOCALAPPDATA%\Programs\Anno1602-Extensions` (before the English renaming `%LOCALAPPDATA%\Programs\Anno1602-Erweiterungen`), with the shortcut "Anno 1602 - Erweiterungen" (German Windows) or "Anno 1602 - Extensions" (other languages) in the Start menu and on the desktop. The desktop folder `C:\Users\User\Desktop` was missing and was created.
 
@@ -338,7 +338,7 @@ Found with REA/Ghidra (`analysis/scan/all-functions.c`: all 1,275 functions deco
   - At most 10 lar per map, otherwise big. Large = originals one class bigger (where there is room), extra islands alternately lar/big; Huge = everything lar/big.
   - Changed originals get a random island file (0xFFFF).
   - Area of the island rectangles at 1000 × 700: Normal 108–122 thousand (15–17 %), Large 201–229 thousand (29–33 %), Huge 216–246 thousand (31–35 %).
-- **Second game test (O), 2026-11-11 16:40:** `-IslandSize Huge -Resources Lots -Residents 5 -Production 2 -Storage 3 -Turbo`, layout 2. **40 of 40 islands loaded** (30 × 70×60, 10 × 100×90). In addition 69 ore deposits on all 40 islands and 254 fertilities (`tools/check-islands.ps1`). World generation ran through without hanging.
+- **Second game test (O), 2026-11-11 16:40:** `-IslandSize Huge -Resources Lots -Residents 5 -Production 2 -Storage 3 -Turbo`, layout 2. **40 of 40 islands loaded** (30 × 70×60, 10 × 100×90). In addition 69 ore deposits on all 40 islands and 254 fertilities (`dev/check-islands.ps1`). World generation ran through without hanging.
 
 **Residents up to ×5:** 10/30/75/125/200 per house; read in game. The house stores ×64 as 16 bits, so at most 1,023.
 
@@ -409,7 +409,7 @@ Assembler excerpts: `analysis/scan/schwierigkeit.txt`, `haendler.txt`, `neue-pat
 - Ended by terminating the process; the tool renamed the autosave to `lastgame-1000x700-20261111-183442.gam`. `lastgame.gam` copied back from `Savegame-Sicherung-20261108-191850`, hash `B7C4BFB912C36597…` checked.
 - Side effect: the lost game from game test 1 changed the endless high-score list `Highscore\[[48]].hss` (18:23, 1,000 points), as already on 2026-11-08.
 
-**Package:** `Documents\Anno1602-Erweiterungen.zip` rebuilt and installed with the installer of that time (`installieren.ps1`); the installed files match the sources by hash. The installed version finds all 25 places with the "Alles gross" values (`-CheckOnly`). (The ZIP package mode has since been dropped; `install.cmd` now installs from the repository layout with `tools/install.ps1`.)
+**Package:** `Documents\Anno1602-Erweiterungen.zip` rebuilt and installed with the installer of that time (`installieren.ps1`); the installed files match the sources by hash. The installed version finds all 25 places with the "Alles gross" values (`-CheckOnly`). (The ZIP package mode has since been dropped; `install.cmd` now installs from the repository layout with `src/install.ps1`.)
 
 ### Own scenarios and the campaign "Die Smaragdinseln" (The Emerald Isles) (2026-11-11)
 
@@ -439,11 +439,11 @@ Assembler excerpts: `analysis/scan/schwierigkeit.txt`, `haendler.txt`, `neue-pat
 
 **Prototype (O), 2026-11-11 without the tool:** "ZZ Test Stadt" appeared in the list; the mission text was displayed with line break and umlauts; in memory mission slot 0, goal bits 0x101, town 150/1/100. "ZZ Test Sofortsieg" (instant win; balance ≥ −1,000,000) ended immediately with the score screen, mission bonus 100 %. Test files deleted afterwards.
 
-**Tools:** `tools/scenario-lib.ps1` (reading/writing .szs, `New-Mission`, `Set-Islands`), `tools/build-scenarios.ps1` (6 chapters from the endless templates: mirrored layout, single islands one class bigger, raw-material quantities, villages, gold, difficulty, pirate flag, mission and text; check for map boundaries and overlaps). Output `tools/scenarios/`, with `-Install` into "Own Scenarios".
+**Tools:** `src/scenario-lib.ps1` (reading/writing .szs, `New-Mission`, `Set-Islands`), `src/build-scenarios.ps1` (6 chapters from the endless templates: mirrored layout, single islands one class bigger, raw-material quantities, villages, gold, difficulty, pirate flag, mission and text; check for map boundaries and overlaps). Output `src/scenarios/`, with `-Install` into "Own Scenarios".
 
 **Campaign:** Landung (Landfall, Einfach) · Gewürzfieber (Spice Fever, monopoly) · Zwei Kolonien (Two Colonies) · Schwarze Segel (Black Sails; weapons store, pirates) · Der Eroberer (The Conqueror; defeat players 1–3) · Krone der Inseln (Crown of the Isles; 3 towns, 1,200 aristocrats, Schwer). All 6 decoded offline and checked (goals, geometry, texts, player data, flags).
 - **In game (O):** all 6 chapters in the list. Chapter 2 loaded: 18 islands, spices on 4 islands, 4 villages, gold 25,000 × 4, mission monopoly 0x2F (island count set to 4 by the game) + town 500/2/250, text with umlauts. Afterwards the spice quantity was lowered to 2 and the text changed to "jede Gewürzinsel" (every spice island).
-- Chapter 1 loaded in game (2026-11-11 21:50, without the tool): 20 islands, 6 villages, gold 30,000/15,000 × 3, difficulty 0, flags 0x9, mission 250/1/150 + balance. Chapters 3–5 not loaded individually (same build path, `tools/check-scenarios.ps1` checks all of them). The difficulty balance has not been played through.
+- Chapter 1 loaded in game (2026-11-11 21:50, without the tool): 20 islands, 6 villages, gold 30,000/15,000 × 3, difficulty 0, flags 0x9, mission 250/1/150 + balance. Chapters 3–5 not loaded individually (same build path, `tests/check-scenarios.ps1` checks all of them). The difficulty balance has not been played through.
 
 ### Big campaign maps, race, challenges (2026-11-11, night)
 
@@ -491,17 +491,17 @@ Assembler excerpts: `analysis/scan/schwierigkeit.txt`, `haendler.txt`, `neue-pat
 
 **In game after the corrections (O):** "Der Eroberer" (big version): own large warship "Königsadler" in slot 4, figure type 27, 14 cannons, next to the start ship; 50 islands. "Wettlauf 4" (big version, ships previously inside a 100×90 island): all ships in open water.
 
-**Scenarios now (23 per language, since 2026-11-12):** Smaragdinseln 1–6, Wettlauf 1–4 (Erster Hafen, Bürgerstolz, Kaufmannsrepublik, Die Krone – English file names First Harbour, Civic Pride, Merchant Republic, The Crown; goals from 300/150 settlers up to 1,500/600 aristocrats, adjusted after measuring, see above), challenges Inselreich (8 towns, 3,000 residents in total), Handelsimperium (50 t jewellery, 80 t clothes, trade balance +300), Goldrausch (60 t gold, 40 t jewellery); new on 2026-11-12: campaign Sturmsee 1–6 and the challenges Archipel, Kontinente, Handelsflotte, Seemacht (section "Third campaign …" below; not yet played in game). `tools/check-scenarios.ps1` checks all of them: sections, mission, race setting, both maps (boundaries, overlaps), raw materials, villages, gold, flags.
+**Scenarios now (23 per language, since 2026-11-12):** Smaragdinseln 1–6, Wettlauf 1–4 (Erster Hafen, Bürgerstolz, Kaufmannsrepublik, Die Krone – English file names First Harbour, Civic Pride, Merchant Republic, The Crown; goals from 300/150 settlers up to 1,500/600 aristocrats, adjusted after measuring, see above), challenges Inselreich (8 towns, 3,000 residents in total), Handelsimperium (50 t jewellery, 80 t clothes, trade balance +300), Goldrausch (60 t gold, 40 t jewellery); new on 2026-11-12: campaign Sturmsee 1–6 and the challenges Archipel, Kontinente, Handelsflotte, Seemacht (section "Third campaign …" below; not yet played in game). `tests/check-scenarios.ps1` checks all of them: sections, mission, race setting, both maps (boundaries, overlaps), raw materials, villages, gold, flags.
 
 ### Gameplay options: building costs, running costs, taxes, radius, fertility, mines, disasters (2026-11-12)
 
-Seven new options in `tools/anno-patcher.ps1` (changed as well: `tools/test-patcher.ps1`, `tools/check-game.ps1`). Evidence outside the repository (parser prototype, dumps, Ghidra listings, a copy of the Ghidra project). **Not yet checked in the running game**: everything below comes from the code and the offline tests; the in-game test plan is at the end of this section.
+Seven new options in `src/anno-patcher.ps1` (changed as well: `tests/test-patcher.ps1`, `dev/check-game.ps1`). Evidence outside the repository (parser prototype, dumps, Ghidra listings, a copy of the Ghidra project). **Not yet checked in the running game**: everything below comes from the code and the offline tests; the in-game test plan is at the end of this section.
 
 **Method: the game's own `haeuser.cod` parser in the image (O).**
 - `FUN_140090660` (parser) and `FUN_140092e00` (follow-up at program start) run in the test helper process (exe loaded with `LoadLibraryEx(DONT_RESOLVE_DLL_REFERENCES)`) once the 103 imports of `api-ms-win-crt-*`, `VCRUNTIME140` and `KERNEL32` are written into the IAT by hand and the process runs in the game folder (`fopen("haeuser.cod")` is relative). Return value 1.
 - The result matches every value read in the running game so far: storage Kontor I 960, Maxwohn 128/384/960/1600/2560, Kontor I costs 100 gold / 3 t tools / 6 t wood (paid in game on 2026-11-09), and `-Production 2` shortens exactly **125** intervals (the number the tool reported in game on 2026-11-10).
 - **I** The table in the image therefore equals the table in the game. `FUN_140092e00` only rewrites the interval of PRODTYP kind 10 (growth level) and the group fields +4/+8, none of the fields used below.
-- Test helpers: `Start-ImageProcess -Crt`, `Invoke-HaeuserParser` in `tools/test-patcher.ps1`.
+- Test helpers: `Start-ImageProcess -Crt`, `Invoke-HaeuserParser` in `tests/test-patcher.ps1`.
 
 **Building table (O, parser `FUN_140090660`):** 500 entries of 0x90 bytes from `0x1406ba1c0`; object `HAUS` (index = Nummer) and its sub-objects `HAUS_PRODTYP` / `HAUS_BAUKOST` (index = parent Nummer).
 
@@ -599,11 +599,11 @@ Pass decimals with a dot (`-BuildCost 0.5`). The patcher accepts any value in th
 
 **Savegames:** building costs, running costs, taxes, radius, mines and disasters act on the running process only (nothing stored; the running-cost sums are recomputed on load, I). Fertility changes only newly generated worlds (stored in their islands). The territory of Kontore and markets built with a larger radius stays in the island tiles.
 
-**Offline test (O):** `tools/test-patcher.ps1` 461 checks before the change, afterwards **556 of 556** (95 new checks in the cases AA–AH; the table cases use the real parse): AA building costs (checksum, every field scaled, marker, second run, other factor, wrong original, 0 = free), AB running costs, AC taxes, AD radius (17 radii, all other radius bytes unchanged), AE fertility (code stub and hook; function test of the resource code stub with the real templates and of the patched `FUN_1400d0ce0` with test islands; `-StretchOnly`/`-NoIslandSpread`: nothing), AF mines (falsified site → abort), AG disasters (other mode in the same process → abort), AH everything together (code stubs, tables and markers do not overlap; production ×2 shortens exactly the 125 intervals counted in the game). The `-CheckOnly` output of the old and the new patcher is identical for 5 combinations of the old options. Every new byte sequence disassembled with Ghidra (`AnnoPatchDis`): hook `JMP 0x1400e5ba0`, code stubs and NOPs decode as intended.
+**Offline test (O):** `tests/test-patcher.ps1` 461 checks before the change, afterwards **556 of 556** (95 new checks in the cases AA–AH; the table cases use the real parse): AA building costs (checksum, every field scaled, marker, second run, other factor, wrong original, 0 = free), AB running costs, AC taxes, AD radius (17 radii, all other radius bytes unchanged), AE fertility (code stub and hook; function test of the resource code stub with the real templates and of the patched `FUN_1400d0ce0` with test islands; `-StretchOnly`/`-NoIslandSpread`: nothing), AF mines (falsified site → abort), AG disasters (other mode in the same process → abort), AH everything together (code stubs, tables and markers do not overlap; production ×2 shortens exactly the 125 intervals counted in the game). The `-CheckOnly` output of the old and the new patcher is identical for 5 combinations of the old options. Every new byte sequence disassembled with Ghidra (`AnnoPatchDis`): hook `JMP 0x1400e5ba0`, code stubs and NOPs decode as intended.
 
 **In-game test plan (not yet done):** start with `-BuildCost 0.5 -Upkeep 0.5 -Taxes 2 -Radius 2 -Fertility Everywhere -Mines Infinite -Disasters Off` (plus the size options), German UI.
 1. Console: every site set; "Baukosten x0.5: 408 Werte geaendert" and "Kontor I jetzt: 50 Gold, 2 t Werkzeug, 3 t Holz"; "Betriebskosten x0.5: 107 Werte geaendert" and "Kontor I jetzt: 8 (original 15), Kirche 25"; "Steuern x2: 14/16/22/24/26"; "Radius x2: Kontor und Markt 32, Kirche 42, Arzt 32 (17 Werte gesetzt)". No yellow "unerwartete Werte" line (that would mean the table in the game differs from the parse in the image).
-2. Main menu, `tools/check-game.ps1 -Short`: markers `BAUK x0.5` and `UNTH x0.5`, Kontor I 50 gold / 2 t / 3 t, running costs 8 and 25, taxes 14/16/22/24/26, radius 32/32/42/32, fertility jump `E9 45 4E 01 00`, mines `0F 1F 40 00` / `0F 1F 44 00 00`, disasters Off.
+2. Main menu, `dev/check-game.ps1 -Short`: markers `BAUK x0.5` and `UNTH x0.5`, Kontor I 50 gold / 2 t / 3 t, running costs 8 and 25, taxes 14/16/22/24/26, radius 32/32/42/32, fertility jump `E9 45 4E 01 00`, mines `0F 1F 40 00` / `0F 1F 44 00 00`, disasters Off.
 3. New endless game: "islands with all six crops" in `check-game.ps1` = almost every island (all with flag bit 2). "Insel erkunden": six crop icons at 100 %, also those of the other climate; a cotton plantation on a northern island grows.
 4. First Kontor from the ship: gold −50 (not −100), ship −2 t tools, −3 t wood; the dotted building area is about twice as wide (radius 32); market radius 32.
 5. Chapel: houses up to 16 tiles away (original 8) count as supplied (faith need met).
@@ -618,7 +618,7 @@ Pass decimals with a dot (`-BuildCost 0.5`). The patcher accepts any value in th
 
 ### Third campaign "Die Sturmsee", four challenges, English scenarios, ship cargo, random adventures (2026-11-12)
 
-Files: `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1`, `tools/check-scenarios.ps1`, new `tools/random-adventure.ps1`. **None of the 10 new scenarios and no random adventure has been loaded or played in game yet**; their difficulty is designed by analogy with the measured chapters.
+Files: `src/build-scenarios.ps1`, `src/scenario-lib.ps1`, `tests/check-scenarios.ps1`, new `src/random-adventure.ps1`. **None of the 10 new scenarios and no random adventure has been loaded or played in game yet**; their difficulty is designed by analogy with the measured chapters.
 
 **Ship cargo (SHIP4 +0x174) (O, loader `FUN_14008e4f0`, cargo loop from `param_2 + 0x184`, 2 × 4 entries):** 8 holds of 8 bytes from the SHIP4 entry +0x174.
 - dword A: bits 0–15 = **house no. of the producing building** (`Id` − 20000 in `haeuser.cod`), bits 16–29 = amount × 32, rounded down to whole tons (`amount − (amount & 0x1F)`).
@@ -647,7 +647,7 @@ Files: `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1`, `tools/check-scena
 
 **Scenario builder:**
 - `build-scenarios.ps1 -Language de|en` (default: `$env:ANNO_EXTENSIONS_LANG`, otherwise the UI culture), `-OutFolder`, `-Library` (or plain dot-sourcing: functions and `$Scenarios` only, nothing is built); `-Install` copies only the files of this run.
-- Every definition is bilingual (`Title`, `Text`, fleet `Name` as `@{ de; en }`). German output of the 13 old scenarios at the time of the change: SHA-256 identical to `tools\kampagne` (13/13). Afterwards the German "Smaragdinseln 2" text was changed on purpose: "Es ist nur eine Handvoll." instead of "drei oder vier" (spices on 2 islands since 2026-11-11, big version 3); this one file no longer equals the build of 2026-11-11.
+- Every definition is bilingual (`Title`, `Text`, fleet `Name` as `@{ de; en }`). German output of the 13 old scenarios at the time of the change: SHA-256 identical to `analysis\reference-scenarios-v1` (13/13). Afterwards the German "Smaragdinseln 2" text was changed on purpose: "Es ist nur eine Handvoll." instead of "drei oder vier" (spices on 2 islands since 2026-11-11, big version 3); this one file no longer equals the build of 2026-11-11.
 - English file names: Emerald Isles 1–6 (Landfall, Spice Fever, Two Colonies, Black Sails, The Conqueror, Crown of the Isles), Race 1–4 (First Harbour, Civic Pride, Merchant Republic, The Crown), Challenge - Island Realm / Trade Empire / Gold Rush / Archipelago / Continents / Merchant Fleet / Sea Power, Storm Sea 1–6 (Shipwreck, Tobacco and Cocoa, The Free Port, The Red Flag, Betrayal, The Golden Age). English texts are plain ASCII.
 - New map keys: `MaxClass` (shrink the islands), `AddIslands` (fill the gaps up to n islands, 14 tiles apart, deterministic LCG from Number + GameId), `Continents = @{ Lar; Big; Small }` (template positions become 100×90 / 70×60 islands around their centre, at most 10 lar), `GameId` (overrides 0x53D00000 + Number).
 - Start point: 14 tiles from every island in all 6 map versions as before; only if none exists 12, then 10 (extra ships then 5 tiles from the start instead of 7–9). All 23 scenarios found 14.
@@ -669,8 +669,8 @@ Files: `tools/build-scenarios.ps1`, `tools/scenario-lib.ps1`, `tools/check-scena
 
 Difficulty = template (0 Einfach … 3 Schwer); "AI n" = rival strength set separately (TIMERS +0xA6). Every goal type known to be verified is used at least once: towns with stage, number of towns, every town at least, total residents, balance, trade balance, 2 goods, 2 monopolies, defeat specific rivals, start fleet, start cargo, pirates, natives, AI key, gold. No new race chapters.
 
-**Random adventures (`tools/random-adventure.ps1`):**
-- Parameters: `-Seed 0…999999` (default random, printed), `-Difficulty Easy|Average|Demanding|Hard` (default Average), `-Language de|en`, `-OutFolder` (default `tools\scenarios`), `-Install`, `-GamePath`. File "Abenteuer <seed>" / "Adventure <seed>". The same seed with another difficulty gives the same file name and overwrites the file.
+**Random adventures (`src/random-adventure.ps1`):**
+- Parameters: `-Seed 0…999999` (default random, printed), `-Difficulty Easy|Average|Demanding|Hard` (default Average), `-Language de|en`, `-OutFolder` (default `src\scenarios`), `-Install`, `-GamePath`. File "Abenteuer <seed>" / "Adventure <seed>". The same seed with another difficulty gives the same file name and overwrites the file.
 - `SZENE_GAMEID` = 0x53000000 + difficulty << 20 + seed; `check-scenarios.ps1 -Reproduce` regenerates the file from it.
 - Random numbers: Park-Miller (48271, 2^31 − 1), seeded from the seed (and the attempt number, 0 unless a build fails). Both languages draw the same numbers, so de and en give the same map and mission.
 - Map: layout 0–2 × mirroring (X / Y / XY). Classic: enlarge 1–4, big version Normal/Large/Huge. Archipelago: max. class 2 (med; class 1 made the rivals drop out, see "In-game tests of phase 2"), 26–30 islands, big Normal. Continents: 4–5 lar, 3–4 big, 2–3 small, big Large/Huge.
@@ -682,9 +682,9 @@ Difficulty = template (0 Einfach … 3 Schwer); "AI n" = rival strength set sepa
 - Text blocks: opening per map kind (2–3 variants), motive per goal (1–2), twists (pirates, rival strength, natives, cargo, extra ships), goals, the helmsman's advice per goal plus pirates/cargo/ore/gold, closing line.
 
 **Offline tests (O, 2026-11-12):**
-- German build: 13/13 old files SHA-256 identical to `tools\kampagne` (before the Smaragdinseln 2 text change above); 23 files de + 23 files en built.
+- German build: 13/13 old files SHA-256 identical to `analysis\reference-scenarios-v1` (before the Smaragdinseln 2 text change above); 23 files de + 23 files en built.
 - New checks in `check-scenarios.ps1`: goal bits known; town goals descending; every goal number written in the text; language recognised; English texts and file names ASCII; no CR; goods/monopoly codes valid, defeat only players 1–3; ship type, cargo space, cannons; cargo house no. known, whole tons, holds ≤ type, flags 0; goal good not in the human's start cargo; adventure game id = seed/difficulty; `-Reproduce`.
-- Results: all 13 (`tools\kampagne`) OK; all 23 de and all 23 en OK; 128 adventures (16 seeds × 4 difficulties × 2 languages, all 5 goal types and 3 map kinds) all OK; `-Reproduce` in a separate process 128 of 128 byte-identical; 20 random seeds generated twice: 20 of 20 identical; combined folder "All 174 scenarios OK", exit 0.
+- Results: all 13 (`analysis\reference-scenarios-v1`) OK; all 23 de and all 23 en OK; 128 adventures (16 seeds × 4 difficulties × 2 languages, all 5 goal types and 3 map kinds) all OK; `-Reproduce` in a separate process 128 of 128 byte-identical; 20 random seeds generated twice: 20 of 20 identical; combined folder "All 174 scenarios OK", exit 0.
 - Negative test (corrupted copy): all 5 errors found (non-ASCII in the English text, goal number missing in the text, 645/32 t, goal good cocoa in the start cargo, game id), exit 1.
 - Not tested by the agent: `-Install` (writing to Documents was off-limits).
 
@@ -694,15 +694,15 @@ Difficulty = template (0 Einfach … 3 Schwer); "AI n" = rival strength set sepa
 - **?** "Every town at least" with a warehouse-only outpost (from the code: it fails the goal).
 - **?** Monopoly crop amount 1 (Demanding adventures): the crop might land on no island, and then the goal is met at once.
 - **?** Ore mountains on lit/mit islands (archipelago); the generator avoids ore and gold goods there.
-- ~~`install.ps1` copies every `*.szs` in `tools\scenarios` (both languages and adventures after a language switch).~~ Fixed: the installer builds into a fresh temp folder (see "Launcher" below).
+- ~~`install.ps1` copies every `*.szs` in `src\scenarios` (both languages and adventures after a language switch).~~ Fixed: the installer builds into a fresh temp folder (see "Launcher" below).
 - `build-scenarios.ps1` takes `Get-IslandPlan` from `anno-patcher.ps1` through the syntax tree; the planner itself is unchanged.
 
 ### Logbook companion window (2026-11-12)
 
-`tools/logbook.ps1` (WinForms, UTF-8 with BOM, about 1,900 lines incl. C# and self-test). **Nothing in this section has been measured in the real game yet**; "O (test)" = checked in the offline tests (synthetic memory images and a helper process that maps the exe copy as an image). Addresses marked I come from the decompiled code (`analysis/scan/alle-funktionen.c`).
+`src/logbook.ps1` (WinForms, UTF-8 with BOM, about 1,900 lines incl. C# and self-test). **Nothing in this section has been measured in the real game yet**; "O (test)" = checked in the offline tests (synthetic memory images and a helper process that maps the exe copy as an image). Addresses marked I come from the decompiled code (`analysis/scan/alle-funktionen.c`).
 
 **The tool:**
-- Start: `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File tools\logbook.ps1` or the launcher button "Logbuch öffnen" (Open logbook). One instance at a time (mutex `Local\Anno1602-Extensions-Logbook`; a second start activates the first window by its title "Logbuch – Anno 1602" / "Logbook – Anno 1602" and exits 0).
+- Start: `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File src\logbook.ps1` or the launcher button "Logbuch öffnen" (Open logbook). One instance at a time (mutex `Local\Anno1602-Extensions-Logbook`; a second start activates the first window by its title "Logbuch – Anno 1602" / "Logbook – Anno 1602" and exits 0).
 - Attaches to the newest `Anno1602.exe` (base from `MainModule`), checks the SHA-256 of the exe file (`7731972f…b7a1`, as the patcher; another version → "Unbekannte Spielversion" (unknown game version), nothing is read) and opens the process with `PROCESS_QUERY_INFORMATION | PROCESS_VM_READ` (0x410) only. Never writes. Refresh every 2.5 s. The process end is detected with `GetExitCodeProcess` (also the Ubisoft Connect quick restart) → "Warte auf Anno 1602 …" (waiting for Anno 1602), then it re-attaches. `MainModule` failing for > 10 refreshes → "Kein Zugriff" (no access).
 - Window: title (scenario or game name, game time, speed), AUFTRAG / MISSION (goals with live bars), DEIN REICH / YOUR EMPIRE (gold, balance · trade balance, towns and the largest, ships, residents per stage as a stacked bar, workers), GEGNER / RIVALS (best town, total residents, towns, ships, gold; race progress bars in races), ERFOLGE / ACHIEVEMENTS (24 badges, tooltips with date and game). Footer: status, "Im Vordergrund" (On top, TopMost), "Kompakt" (Compact: title, goals and one line gold/residents/towns). An unlock shows a gold banner for 8 s, plays the system sound (Asterisk) and highlights the badge.
 - Parameters: `-SelfTest [-SelfTestFolder]`; hidden for tests: `-FunctionsOnly`, `-Dump`, `-PreviewImage <png>`, `-TestProcessId`/`-TestBase`, `-AppDataFolder`, `-TestTicks n -TestLog file`.
@@ -832,13 +832,13 @@ Difficulty = template (0 Einfach … 3 Schwer); "AI n" = rival strength set sepa
 7. Save, quit to the main menu, load: the title keeps the scenario name (`NAME` chunk), phase back to running (lock reset by command 0x36).
 8. Handelsimperium / Goldrausch: goods bars equal the warehouse stock; Smaragdinseln 2: own spice islands counter and the blocking message when an AI settles there; Der Eroberer: "Besiege: Gegner 1, Gegner 2, Gegner 3" counter and rival line "besiegt".
 9. Close the game while the logbook runs → waiting; restart → reconnects. "Im Vordergrund" and "Kompakt" survive a restart. Window over the game in window mode (WINDOW_MODE 2); in exclusive full screen use a second monitor.
-10. The logbook must not change anything: `tools\check-game.ps1` output identical before and after.
+10. The logbook must not change anything: `dev\check-game.ps1` output identical before and after.
 
 **Open (?):** content of 0x5C0E63 for endless games and original campaign missions; AI player names; meaning of the goal bits 0x20000/0x40000 (player +0x87/+0x88) and 0x40 (not checked by `FUN_1400ae010` → such a mission cannot be won); where the time limit 0x5EC1A8 is set (only the reset and the checks were found; shown only when ≠ 0); balance formula mirrored from the code but not yet compared with the in-game status window (test plan 3).
 
 ### Launcher: three tabs, new presets, settings per savegame (2026-11-12)
 
-`tools/launcher.ps1` now has three tabs (German on a German Windows, otherwise English). The preset argument lists below were printed offline (`launcher.ps1 -PrintArgs`, O); all 86 choices of the 24 options are accepted by `anno-patcher.ps1 -CheckOnly` (O). `saves.json` from a real game end, the classification and the adventure list with logbook results were checked with the real game on 2026-11-12 (see "In-game tests of phase 2"); all buttons were clicked in code with the hidden switch `-TestClicks` (see the follow-up tests there).
+`src/launcher.ps1` now has three tabs (German on a German Windows, otherwise English). The preset argument lists below were printed offline (`launcher.ps1 -PrintArgs`, O); all 86 choices of the 24 options are accepted by `anno-patcher.ps1 -CheckOnly` (O). `saves.json` from a real game end, the classification and the adventure list with logbook results were checked with the real game on 2026-11-12 (see "In-game tests of phase 2"); all buttons were clicked in code with the hidden switch `-TestClicks` (see the follow-up tests there).
 
 **Tab "Neues Spiel" (New game):** every option as a drop-down list in four groups; `settings.json` stores option id → value key (independent of the UI language).
 
@@ -875,7 +875,7 @@ Presets (map 1000 × 700 with more islands is the default and gives no argument)
 
 **Buttons below the tabs:** "Mit Erweiterungen spielen" (Play with extensions), "Original starten" (Start original), "Logbuch öffnen" (Open logbook; starts `logbook.ps1` hidden, shown only if the file exists). On the "Continue" tab the two play buttons are disabled.
 
-**Installer (`tools/install.ps1`):** installs `anno-patcher.ps1`, `launcher.ps1`, `logbook.ps1`, `random-adventure.ps1`, `build-scenarios.ps1`, `scenario-lib.ps1`, `README.txt`, `README.de.txt` and `FINDINGS.md`; builds the scenarios in the UI language into a fresh temp folder and copies these 23 to "Own Scenarios" (the temp folder is deleted afterwards). `-Remove` deletes our scenario files by name in both languages, random adventures included (`^((Smaragdinseln|Wettlauf|Sturmsee|Emerald Isles|Race|Storm Sea) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+)\.szs$`).
+**Installer (`src/install.ps1`):** installs `anno-patcher.ps1`, `launcher.ps1`, `logbook.ps1`, `random-adventure.ps1`, `build-scenarios.ps1`, `scenario-lib.ps1`, `README.txt`, `README.de.txt` and `FINDINGS.md`; builds the scenarios in the UI language into a fresh temp folder and copies these 23 to "Own Scenarios" (the temp folder is deleted afterwards). `-Remove` deletes our scenario files by name in both languages, random adventures included (`^((Smaragdinseln|Wettlauf|Sturmsee|Emerald Isles|Race|Storm Sea) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+)\.szs$`).
 
 ### In-game tests of phase 2 (O), 2026-11-12 08:56–09:44
 
@@ -929,7 +929,7 @@ Installed version (`install.ps1` from the repository), tool started detached via
 - **Pool `ROHWACHS2`:** 2,032 of 262,512 slots occupied (0.8 %).
 - **I** The fixed pools are not expected to fill up at 1000 × 700, even over many hours.
 - **Storage:** `KONTOR2` = per warehouse a 4-byte header + 50 goods of 20 bytes each (structure like mdcii-engine `KontorGood`, stock `lager` uint32 in 1/32 t at +12).
-  - Stocks above 30 t also occur in normal savegames without the tool (`savegame-17.gam` up to 350 t), because market buildings and warehouse levels raise the town's limit.
+  - Stocks above 30 t also occur in normal savegames without the tool (an older savegame of the original game: up to 350 t), because market buildings and warehouse levels raise the town's limit.
   - **I** The storage option therefore cannot be proven from savegames. What remains proven: the limit of a newly built warehouse is 2,880 (90 t) in memory instead of 960 (see "Game test with all options").
 - **Clean-up 2026-11-10:**
   - `lastgame.gam` (test, 18:53) renamed to `lastgame-1000x700-20261109-185329.gam`.
@@ -942,7 +942,7 @@ Installed version (`install.ps1` from the repository), tool started detached via
 - 25 minutes: always responsive, 433–494 MB, autosaves 07:55:58 and 08:05:58. All three AIs settle in the **new** area (yellow bottom left, blue bottom right, white top right). Flags 0x8, no pirate ships yet. Evidence `25-schwer-langlauf-30min*.png`.
 - Aborted in favour of the game test of the options; afterwards the long run with options (see "Long run with all options").
 
-### Experiment: `tools/anno-patcher.ps1`
+### Experiment: `src/anno-patcher.ps1`
 
 Sets the map size in the memory of the running game (default 1000 × 700). It does not change any files.
 Version of 2026-11-08: 8 code places and 5 variables (width, height, scroll range, 1/width, 1/height; table above).
@@ -958,7 +958,7 @@ New compared with the first version:
 - Island spreading (jump + code stub, see "Spreading the islands"), can be switched off with `-NoIslandSpread`.
 - Backup without duplicates: the Savegame folder is backed up only if it has changed since the last backup (comparison of path, size and modification time of all files). Tested: the first run made a backup, the second reported "unverändert" (unchanged). The backups are named `Savegame-Backup-<datetime>`; when looking for the latest backup, older `Savegame-Sicherung-<datetime>` folders count as well.
 - Protection for "Spiel fortsetzen": the tool stays open until the game ends. If the game wrote `lastgame.gam` during the session, it is renamed to `lastgame-<width>x<height>-<time>.gam` (still visible in the load list). Can be switched off with `-NoLastgameProtection`. Reason: the game overwrites `lastgame.gam` automatically (in the test at 19:43, 20:26, 21:06, 21:26) and when quitting via "Ende" (end).
-- Start file `tools/start-big-world.cmd`: starts the tool in its own window (stays open) and then the game via `uplay://launch/16236/0`; further arguments such as `-Width 750 -Height 525` are passed through. Pause via `ping` instead of `timeout` (which aborts without console input).
+- Start file `start-big-world.cmd` (removed on 2026-11-13; the launcher replaces it): starts the tool in its own window (stays open) and then the game via `uplay://launch/16236/0`; further arguments such as `-Width 750 -Height 525` are passed through. Pause via `ping` instead of `timeout` (which aborts without console input).
 - Tested in game (O): start file used three times, each time the restart was caught and the values set. Protection for "Spiel fortsetzen" triggered twice: `lastgame.gam` (written by the game at 21:45:26 and 21:59:11) renamed after the end of the game to `lastgame-1000x700-20261108-214721.gam` and `…-220145.gam`.
 - Restart of the game (added after the game test): the first `Anno1602.exe` process exits again immediately after a start via Ubisoft Connect, and a second one starts. The previous version patched the first one, then failed with "Lesen bei RVA 0x5EBC80 fehlgeschlagen (Fehler 299)" (read at RVA 0x5EBC80 failed (error 299)), and the second one ran unpatched. Now the tool detects the exit (`GetExitCodeProcess`) and waits for the next process.
 
@@ -966,7 +966,7 @@ New compared with the first version:
 
 **Resolution (O):** 3 monitors, all 2560 × 1440 (main monitor `DISPLAY5`, RTX 4090, 143 Hz). Registry `HKCU\Software\Ubisoft\Anno1602HistoryEdition` before: `SCREENMODE` = 2560, `SCREENMODEY` = 1440, `WINDOW_MODE` = 2, `UI_SCALE` = 1000, `MONITOR_INDEX` = 0, `VSYNC` = 1. So the game is already set to WQHD, matching the monitor; in game it ran at 2560 × 1440 in full screen. Nothing changed (after = before).
 
-**Offline test (O):** `tools/test-patcher.ps1` loads the exe copy `analysis/bin/Anno1602.exe` in a helper process only as an image (`LoadLibraryEx` with `DONT_RESOLVE_DLL_REFERENCES`: sections at load address + RVA with the real memory protections, no game code runs, no DLL is loaded) and runs the tool against it. Result with the final version: **93 of 93 checks passed.**
+**Offline test (O):** `tests/test-patcher.ps1` loads the exe copy `analysis/bin/Anno1602.exe` in a helper process only as an image (`LoadLibraryEx` with `DONT_RESOLVE_DLL_REFERENCES`: sections at load address + RVA with the real memory protections, no game code runs, no DLL is loaded) and runs the tool against it. Result with the final version: **93 of 93 checks passed.**
 
 | Case | Expected | Result |
 |---|---|---|
@@ -993,7 +993,7 @@ New compared with the first version:
 | Minimap marker of the ship | yes: the dot is at the right place in the view frame (scale 1/width, 1/height correct) | `05b-…`, `08b-minikarte-nach-7-minuten.png` |
 | Warehouse in the new area | **not possible**: there is no island there | – |
 | AI and pirates, about 7 minutes | the AI settled three islands (markers orange, white, blue); a foreign ship sailed in the new area. No crash, the game responded. No pirate attacks seen in this short time. | `08-fremdes-schiff-im-neuen-bereich.png`, `08b-…` |
-| Save to a new slot | yes: icon "neuer Spielstand", name `Welt1000x700` → `Welt1000x700.gam` (395,966 bytes). No existing slot overwritten (`savegame-10.gam` checked after a misclick: unchanged). | `09-gespeichert-Welt1000x700.png` |
+| Save to a new slot | yes: icon "neuer Spielstand", name `Welt1000x700` → `Welt1000x700.gam` (395,966 bytes). No existing slot overwritten (an existing savegame checked after a misclick: unchanged). | `09-gespeichert-Welt1000x700.png` |
 | Quit the game, restart with the tool, load | yes: restart caught again (PID 49004 → 15116), savegame loaded, islands, AI markers and ship (world 468, 580) as saved; the ship accepts new commands. | `10-geladen-nach-neustart.png`, `10b-…`, `11-…` |
 
 **Side effects (O):**

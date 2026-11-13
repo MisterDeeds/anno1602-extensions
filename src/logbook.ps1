@@ -17,7 +17,7 @@
     - 24 achievements, stored in %APPDATA%\Anno1602-Extensions\logbook.json with date and game.
   Finished missions (scenario, won/lost, date, game hours) are also stored in logbook.json.
 
-  Memory layout: see analysis\FINDINGS.md (sections "Big campaign maps, race, challenges",
+  Memory layout: see docs\FINDINGS.md (sections "Big campaign maps, race, challenges",
   "Own scenarios", "Rivals and pirates", "Players and parties") and the notes of the logbook.
   The text is German on a German Windows and English otherwise ($env:ANNO_EXTENSIONS_LANG = 'de'/'en').
 

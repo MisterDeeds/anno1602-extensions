@@ -18,11 +18,11 @@
   Default: German on a German Windows, English otherwise; override with $env:ANNO_EXTENSIONS_LANG.
   The German files of the first 13 scenarios are byte-identical to the builds before the English texts.
 
-  Output: tools\scenarios\*.szs (or -OutFolder); with -Install the files of this run are also copied to
+  Output: src\scenarios\*.szs (or -OutFolder); with -Install the files of this run are also copied to
   Documents\Anno 1602 History Edition\Own Scenarios (shown in the game's list of custom scenarios).
 
   Library use: dot-source with -Library (plain dot-sourcing works too) to get Build-Scenario and the
-  helpers without building anything; tools\random-adventure.ps1 does this. Pass the same -GamePath,
+  helpers without building anything; src\random-adventure.ps1 does this. Pass the same -GamePath,
   -Language and -OutFolder, because the parameters land in the caller's scope.
 
   Scenario keys (Number, Title, Text, Difficulty, Layout, Mission required):

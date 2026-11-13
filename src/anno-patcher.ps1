@@ -20,9 +20,9 @@
        lastgame-<width>x<height>-<time>.gam. That way "Continue game" without the tool
        does not load a big world. Switch off with -NoLastgameProtection.
   After the game exits everything is as before.
-  Convenient start of tool and game together: tools\start-big-world.cmd
+  Convenient start of tool and game together: the launcher (src\launcher.ps1, shortcut "Anno 1602 - Erweiterungen").
 
-  What is set (see analysis\FINDINGS.md, section "Map size"):
+  What is set (see docs\FINDINGS.md, section "Map size"):
     Width, Height                 Map size in tiles (normally 500 x 350)
     Scroll range                  Camera range = Width/2 + Height/2 (normally 425); limits
                                   edge scrolling and the arrow keys
@@ -38,9 +38,9 @@
                                   Savegames contain no SZENE section and stay
                                   untouched. -StretchOnly: no additional islands.
                                   -NoIslandSpread: all of it off.
-                                  View the plan: tools\show-island-plan.ps1
+                                  View the plan: dev\show-island-plan.ps1
                                   Own scenarios with a big version (marker 'GROS' behind the
-                                  SZENE section, e.g. the campaigns from tools\build-scenarios.ps1):
+                                  SZENE section, e.g. the campaigns from src\build-scenarios.ps1):
                                   from the map size they were designed for (1000 x 700) on the big
                                   version is used (code cave RVA 0xE5E40), otherwise the small one, stretched.
     Pirates (-Pirates)            Default: as the chosen difficulty.
@@ -145,10 +145,10 @@
   for campaign scenarios.
 
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File .\tools\anno-patcher.ps1
-  powershell -ExecutionPolicy Bypass -File .\tools\anno-patcher.ps1 -Width 750 -Height 525
-  powershell -ExecutionPolicy Bypass -File .\tools\anno-patcher.ps1 -CheckOnly
-  powershell -ExecutionPolicy Bypass -File .\tools\anno-patcher.ps1 -Pirates Strong
+  powershell -ExecutionPolicy Bypass -File .\src\anno-patcher.ps1
+  powershell -ExecutionPolicy Bypass -File .\src\anno-patcher.ps1 -Width 750 -Height 525
+  powershell -ExecutionPolicy Bypass -File .\src\anno-patcher.ps1 -CheckOnly
+  powershell -ExecutionPolicy Bypass -File .\src\anno-patcher.ps1 -Pirates Strong
 #>
 param(
     [ValidateRange(100, 2000)][int]$Width = 1000,
@@ -215,7 +215,7 @@ param(
     [switch]$PauseOnError,
     # Game folder given by hand (otherwise taken from Ubisoft Connect).
     [string]$GamePath,
-    # Only for tools\test-patcher.ps1: other process and load address, no backup.
+    # Only for tests\test-patcher.ps1: other process and load address, no backup.
     [Parameter(DontShow)][int]$TestProcessId = 0,
     [Parameter(DontShow)][long]$TestBase = 0
 )
@@ -312,7 +312,7 @@ $values = Get-SizeValues $Width $Height
 foreach ($s in $Patches) { $s.Target = [byte[]]((Bytes $s.Original)[0..5] + $values[$s.Kind]) }
 
 # --- Island spread -------------------------------------------------------------------------------
-# Derivation: analysis\FINDINGS.md, sections "Distributing islands" and "More islands".
+# Derivation: docs\FINDINGS.md, sections "Distributing islands" and "More islands".
 # Jump in the SZENE loader (RVA 0xD0E29, R15 = section data) to a code cave in the free end
 # of .text (RVA 0xE5100). The code cave looks up the template in a table (RVA 0xE5200,
 # recognised by island count and position of the first island) and then copies the island
@@ -474,7 +474,7 @@ function Build-IslandCode([bool]$withResources = $false, [bool]$withBigMap = $fa
 }
 
 # --- Resources -------------------------------------------------------------------------------------
-# Derivation: analysis\FINDINGS.md, section "Resources".
+# Derivation: docs\FINDINGS.md, section "Resources".
 # From +0x94 the SZENE section holds entries of 8 bytes (house no. 16 bits, amount 16 bits, int):
 # ore 2401 (+0x96, +0x9E), gold 2405 (+0xA6), 12 plantation fertilities (+0xB6 ... +0x10E),
 # treasure 533 (+0x116). The amounts are meant for the 17-20 template islands. The code cave is
@@ -752,7 +752,7 @@ if (-not $NoIslandSpread) {
 elseif ($FertilityAll) { Write-Host (Txt 'Fertility: only works with the island spread (not with -NoIslandSpread); NOT set.' 'Fruchtbarkeit: wirkt nur mit der Inselverteilung (nicht mit -NoIslandSpread); NICHT gesetzt.') -ForegroundColor Yellow }
 
 # --- Pirates -------------------------------------------------------------------------------------
-# Derivation: analysis\FINDINGS.md, section "Rivals and pirates".
+# Derivation: docs\FINDINGS.md, section "Rivals and pirates".
 # The pirates (player kind 0xE) only act in FUN_14003dc40 when bit 0 of the game variable
 # 0x1405ec188 is clear (set on Easy/Average = "occasional sightings").
 # The value comes from the TIMERS section when a template or a savegame is loaded
@@ -806,7 +806,7 @@ if ($Pirates -ne 'Default' -or $StartGold -gt 0 -or $RivalGold -gt 0) {
 }
 
 # --- Rivals, pirate fleet, traders ---------------------------------------------------------------
-# Derivation: analysis\FINDINGS.md, section "Rivals, pirate fleet, natives, traders".
+# Derivation: docs\FINDINGS.md, section "Rivals, pirate fleet, natives, traders".
 # Rivals Hard: the AI reads the difficulty 0x1405ec1c0 (0-3) at four sites with
 # "mov eax,[rip+rel32]" (8B 05 rel32) and sets its goals with it (military compared to the
 # strongest player, ships, expansion): level 3 = x2 or +50 %. Replaced by "mov eax,3; nop".

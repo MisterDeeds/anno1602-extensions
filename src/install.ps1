@@ -4,7 +4,7 @@
 
 .DESCRIPTION
   Copies the tool (anno-patcher.ps1), the launcher, the logbook, the scenario builder with the random adventure
-  generator, README.txt, README.de.txt and ..\analysis\FINDINGS.md to %LOCALAPPDATA%\Programs\Anno1602-Extensions,
+  generator, README.txt, README.de.txt and ..\docs\FINDINGS.md to %LOCALAPPDATA%\Programs\Anno1602-Extensions,
   builds the campaigns and challenges from the game files (build-scenarios.ps1, in the UI language) and copies them to Documents\Anno 1602 History Edition\Own Scenarios, and creates
   the shortcut "Anno 1602 - Extensions" (German Windows: "Anno 1602 - Erweiterungen") in the Start menu
   and on the desktop. Game files are not changed. Checks first whether Anno 1602 History Edition
@@ -92,14 +92,14 @@ else {
 }
 
 # --- Copy files -------------------------------------------------------------------------------
-# Repository layout: this script lies in tools\, FINDINGS.md in analysis\ (optional).
+# Repository layout: this script lies in src\, FINDINGS.md in docs\ (optional).
 # The random adventure generator needs the scenario builder, its library and the island planner of the patcher.
 $files = foreach ($n in 'anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'README.txt', 'README.de.txt') {
     $f = Join-Path $PSScriptRoot $n
     if (-not (Test-Path -LiteralPath $f)) { throw (Txt "File missing next to install.ps1: $n" "Datei fehlt neben install.ps1: $n") }
     Get-Item -LiteralPath $f
 }
-$findings = Join-Path (Split-Path -Parent $PSScriptRoot) 'analysis\FINDINGS.md'
+$findings = Join-Path (Split-Path -Parent $PSScriptRoot) 'docs\FINDINGS.md'
 if (Test-Path -LiteralPath $findings) { $files = @($files) + (Get-Item -LiteralPath $findings) }
 # Upgrade: the older version was installed in ...\Anno1602-Erweiterungen (its settings are taken over by the launcher).
 if (-not $NoShortcuts -and -not $isOldTarget -and (Test-Path -LiteralPath $OldInstallFolder)) {
