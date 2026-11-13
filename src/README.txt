@@ -179,14 +179,15 @@ Campaigns and challenges (23 own scenarios with a story and a mission)
 
   Random adventures ("Adventures" tab): choose a difficulty (Easy, Average, Demanding, Hard),
   optionally a number from 0 to 999999, and click "Roll an adventure". The scenario
-  "Adventure <number>" ("Abenteuer <number>" on a German Windows) appears in "Own Scenarios".
+  "Adventure <number> <difficulty>" (e.g. "Adventure 4711 Demanding"; "Abenteuer 4711 Fordernd"
+  on a German Windows) appears in "Own Scenarios".
   Every adventure has its own island world (classic, an archipelago of small islands or a
   few huge continents) and one main goal - towns, a realm of many settlements, trade, a
   monopoly or conquest - plus extras that grow with the difficulty. Starting gold, pirates,
   the rivals' strength and your start cargo follow the difficulty too.
   The same number with the same difficulty always gives the same adventure, so you can play
   a map again or give the number to a friend. The same number with another difficulty
-  replaces the file.
+  is an adventure of its own.
 
   Big maps: every scenario (and every random adventure) has two versions. With "Start
   original" the classic map applies (500 x 350, mostly 17-20 islands). With "Play with extensions",

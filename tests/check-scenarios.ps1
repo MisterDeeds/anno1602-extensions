@@ -15,7 +15,7 @@
   - small map 500 x 350 and big version ('GROS') inside the map and without overlaps, resources, villages
   - ships: positions in the water in all map versions, cargo space and cannons match the ship type,
     cargo (house no. known, whole tons, at most one hold per slot of the ship type), names
-  - random adventures ("Abenteuer <seed>" / "Adventure <seed>"): game id = seed and difficulty
+  - random adventures ("Abenteuer <seed> <difficulty>" / "Adventure <seed> <difficulty>"): game id = seed and difficulty, name
   Exit code 1 if a check fails.
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\tests\check-scenarios.ps1 -Folder .\src\scenarios
@@ -182,11 +182,15 @@ foreach ($f in Get-ChildItem -LiteralPath $Folder -Filter *.szs | Sort-Object Na
     Write-Info ('   Ships: ' + ($shipInfo -join '; ') + $(if ($conflicts.Count -eq 0) { ' - all in the water in every map version' } else { '' }))
 
     # Random adventures: the game id carries seed and difficulty.
-    if ($f.BaseName -match '^(Abenteuer|Adventure) (\d+)$') {
-        $seed = [int]$Matches[2]; $lang = if ($Matches[1] -eq 'Abenteuer') { 'de' } else { 'en' }; $diff = ($gameId -shr 20) -band 0xF
+    # Name "Abenteuer <seed> <difficulty>" (since 2.2.0) or the older "Abenteuer <seed>".
+    if ($f.BaseName -match '^(Abenteuer|Adventure) (\d+)(?: (\S+))?$') {
+        $m = $Matches.Clone()
+        $seed = [int]$m[2]; $lang = if ($m[1] -eq 'Abenteuer') { 'de' } else { 'en' }; $diff = ($gameId -shr 20) -band 0xF
+        $levelNames = if ($lang -eq 'de') { @('Einfach', 'Durchschnittlich', 'Fordernd', 'Schwer') } else { @('Easy', 'Average', 'Demanding', 'Hard') }
+        if ($m[3]) { Assert-Check "Adventure name ends with its difficulty ($($levelNames[$diff]))" ($m[3] -ceq $levelNames[$diff]) }
         Assert-Check ('Adventure game id 0x{0:X8} = seed {1}, difficulty {2}' -f $gameId, $seed, $diff) (($gameId -band 0xFFC00000) -eq 0x53000000 -and ($gameId -band 0xFFFFF) -eq $seed)
         Assert-Check "Adventure language $lang matches the text" (($lang -eq 'de' -and $de) -or ($lang -eq 'en' -and $en))
-        $adventures.Add(@{ File = $f.FullName; Seed = $seed; Language = $lang; Difficulty = @('Easy', 'Average', 'Demanding', 'Hard')[$diff] })
+        $adventures.Add(@{ File = $f.FullName; Seed = $seed; Language = $lang; Difficulty = @('Easy', 'Average', 'Demanding', 'Hard')[$diff]; Expected = ('{0} {1} {2}.szs' -f $m[1], $seed, $levelNames[$diff]) })
     }
 }
 
@@ -197,7 +201,8 @@ if ($Reproduce -and $adventures.Count) {
         foreach ($adv in $adventures) {
             $gp = @{}; if ($GamePath) { $gp.GamePath = $GamePath }
             & (Join-Path (Split-Path -Parent $PSScriptRoot) 'src\random-adventure.ps1') -Seed $adv.Seed -Difficulty $adv.Difficulty -Language $adv.Language -OutFolder $tmp @gp | Out-Null
-            $new = Join-Path $tmp ([IO.Path]::GetFileName($adv.File))
+            # The regenerated file has the current name (with the difficulty); the content does not contain the name.
+            $new = Join-Path $tmp $adv.Expected
             $same = (Test-Path -LiteralPath $new) -and ((Get-FileHash -LiteralPath $new).Hash -eq (Get-FileHash -LiteralPath $adv.File).Hash)
             Assert-Check "Reproduced byte for byte: $([IO.Path]::GetFileName($adv.File)) (seed $($adv.Seed), $($adv.Difficulty), $($adv.Language))" $same
         }

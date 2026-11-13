@@ -1,7 +1,7 @@
 ﻿<#
 .SYNOPSIS
   Random adventure generator for Anno 1602 History Edition: builds a fresh, fair scenario from a seed
-  and a difficulty ("Abenteuer <seed>" / "Adventure <seed>").
+  and a difficulty ("Abenteuer <seed> <difficulty>" / "Adventure <seed> <difficulty>", e.g. "Abenteuer 4711 Fordernd").
 
 .DESCRIPTION
   Uses the same chapter builder as the campaigns (src\build-scenarios.ps1, loaded as a library):
@@ -406,7 +406,8 @@ function New-Adventure([int]$attempt) {
         $text[$lang] = ($lines -join "`n") + "`n"
     }
 
-    $sc.Title = @{ de = "Abenteuer $AdvSeed"; en = "Adventure $AdvSeed" }
+    # The difficulty is part of the name, so the same number with another difficulty is a scenario of its own.
+    $sc.Title = @{ de = "Abenteuer $AdvSeed $($LevelText[$lv].de)"; en = "Adventure $AdvSeed $($LevelText[$lv].en)" }
     $sc.Text = $text
     $sc.Mission = $mission
     $sc.Amounts = $amounts
@@ -422,8 +423,7 @@ for ($attempt = 0; $attempt -lt 5 -and -not $result; $attempt++) {
     try { $result = Build-Scenario $adv.Scenario }
     catch { if ($attempt -ge 4) { throw }; Write-Verbose "Attempt $attempt failed: $($_.Exception.Message)" }
 }
-$lvText = $LevelText[$AdvLevel][$Language]
-'{0} ({1}): {2}' -f (Get-Localized $adv.Scenario.Title), $lvText, $result.Path
+'{0}: {1}' -f (Get-Localized $adv.Scenario.Title), $result.Path
 '  {0}, main goal {1}: {2}' -f $adv.MapKind, $adv.Primary, $result.Summary
 foreach ($b in $adv.Bullets) { '  - ' + $b[$Language] }
 if ($AdvInstall) {

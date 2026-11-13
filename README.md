@@ -178,7 +178,8 @@ anno1602-extensions/
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
 │   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site (556 checks)
-│   └── check-scenarios.ps1        checks built scenarios and random adventures (-Reproduce)
+│   ├── check-scenarios.ps1        checks built scenarios and random adventures (-Reproduce)
+│   └── test-install.ps1           installs and removes for real, in a sandbox (17 checks)
 ├── dev/                           helpers for development
 │   ├── check-game.ps1             shows the patched values in the running game (read only)
 │   ├── check-islands.ps1          islands, ore and fertility of the running game
@@ -192,7 +193,9 @@ anno1602-extensions/
 ```
 
 Run the offline test: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (needs the installed
-game; the game is not started). Changes per version: [CHANGELOG.md](CHANGELOG.md).
+game; the game is not started), installer test: `tests\test-install.ps1`. Changes per version:
+[CHANGELOG.md](CHANGELOG.md).
+
 ## Legal
 
 An unofficial fan project, not affiliated with Ubisoft. "Anno" is a trademark of Ubisoft.

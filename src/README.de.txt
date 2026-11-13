@@ -173,15 +173,15 @@ Kampagnen und Herausforderungen (23 eigene Szenarien mit Geschichte und Auftrag)
 
   Zufallsabenteuer (Registerkarte "Abenteuer"): Schwierigkeit waehlen (Einfach,
   Durchschnittlich, Fordernd, Schwer), freiwillig eine Nummer von 0 bis 999999 eingeben und
-  "Abenteuer wuerfeln" klicken. Das Szenario "Abenteuer <Nummer>" erscheint unter "Eigene
-  Szenarien". Jedes Abenteuer hat eine eigene Inselwelt (klassisch, ein Archipel kleiner
+  "Abenteuer wuerfeln" klicken. Das Szenario "Abenteuer <Nummer> <Schwierigkeit>" (zum
+  Beispiel "Abenteuer 4711 Fordernd") erscheint unter "Eigene Szenarien". Jedes Abenteuer hat eine eigene Inselwelt (klassisch, ein Archipel kleiner
   Inseln oder wenige riesige Kontinente) und ein Hauptziel - Staedte, ein Inselreich aus
   vielen Siedlungen, Handel, ein Monopol oder Eroberung - dazu Zusatzziele, die mit der
   Schwierigkeit wachsen. Startgold, Piraten, Staerke der Rivalen und deine Startladung richten
   sich ebenfalls nach der Schwierigkeit.
   Dieselbe Nummer mit derselben Schwierigkeit ergibt immer dasselbe Abenteuer: So kannst du
   eine Karte nochmals spielen oder die Nummer einem Freund geben. Dieselbe Nummer mit einer
-  anderen Schwierigkeit ersetzt die Datei.
+  anderen Schwierigkeit ist ein eigenes Abenteuer.
 
   Grosse Karten: Jedes Szenario (und jedes Zufallsabenteuer) hat zwei Fassungen. Mit "Original
   starten" gilt die klassische Karte (500 x 350, meist 17-20 Inseln). Mit "Mit Erweiterungen

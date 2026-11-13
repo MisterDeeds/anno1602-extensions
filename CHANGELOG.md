@@ -3,6 +3,13 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 2.2.0 – 2026-11-13
+
+- Random adventures carry the difficulty in their name ("Abenteuer 4711 Fordernd" / "Adventure 4711 Demanding"):
+  the same number with another difficulty no longer replaces the earlier adventure.
+- New test `tests/test-install.ps1`: installs and removes for real in a sandbox (an older version present, a language
+  switch, the player's own files) and checks that nothing outside the sandbox changes – 17 checks.
+
 ## 2.1.0 – 2026-11-13
 
 - Repository tidied up: `src/` (everything that gets installed), `tests/`, `dev/` (helpers for development),

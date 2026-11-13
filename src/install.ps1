@@ -17,7 +17,10 @@ param(
     # For testing only: different target folder; with -NoShortcuts no shortcuts, settings, scenarios
     # or older installation are touched.
     [string]$TargetFolder = (Join-Path $env:LOCALAPPDATA 'Programs\Anno1602-Extensions'),
-    [switch]$NoShortcuts
+    [switch]$NoShortcuts,
+    # For testing only (tests\test-install.ps1): every user folder - programs, settings, documents, desktop, start
+    # menu - lies below this folder instead of the real ones. The game itself is only read.
+    [Parameter(DontShow)][string]$SandboxRoot
 )
 $ErrorActionPreference = 'Stop'
 
@@ -25,25 +28,32 @@ $ErrorActionPreference = 'Stop'
 $UiGerman = if ($env:ANNO_EXTENSIONS_LANG) { $env:ANNO_EXTENSIONS_LANG -eq 'de' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'de' }
 function Txt([string]$en, [string]$de) { if ($UiGerman) { $de } else { $en } }
 
+# The user folders (in a test: below -SandboxRoot).
+if ($SandboxRoot) {
+    $LocalAppData = Join-Path $SandboxRoot 'LocalAppData'; $AppData = Join-Path $SandboxRoot 'AppData'; $Documents = Join-Path $SandboxRoot 'Documents'
+    $DesktopFolder = Join-Path $SandboxRoot 'Desktop'; $StartMenu = Join-Path $SandboxRoot 'StartMenu'
+    if (-not $PSBoundParameters.ContainsKey('TargetFolder')) { $TargetFolder = Join-Path $LocalAppData 'Programs\Anno1602-Extensions' }
+}
+else {
+    $LocalAppData = $env:LOCALAPPDATA; $AppData = $env:APPDATA; $Documents = [Environment]::GetFolderPath('MyDocuments')
+    $DesktopFolder = [Environment]::GetFolderPath('Desktop')
+    if (-not $DesktopFolder) { try { $DesktopFolder = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders').Desktop } catch { } }
+    $StartMenu = [Environment]::GetFolderPath('Programs')
+}
+
 $ShortcutName = Txt 'Anno 1602 - Extensions.lnk' 'Anno 1602 - Erweiterungen.lnk'
 # Both names, so that a shortcut from an older version or the other language is replaced or removed.
 $AllShortcutNames = @('Anno 1602 - Erweiterungen.lnk', 'Anno 1602 - Extensions.lnk')
-$OldInstallFolder = Join-Path $env:LOCALAPPDATA 'Programs\Anno1602-Erweiterungen'
-$SettingsFolders = @((Join-Path $env:APPDATA 'Anno1602-Extensions'), (Join-Path $env:APPDATA 'Anno1602-Erweiterungen'))
+$OldInstallFolder = Join-Path $LocalAppData 'Programs\Anno1602-Erweiterungen'
+$SettingsFolders = @((Join-Path $AppData 'Anno1602-Extensions'), (Join-Path $AppData 'Anno1602-Erweiterungen'))
 $ExpectedHash = '7731972f696204faf6929b592ddedbf621b03426f85f9dd595c0c35904bdb7a1'
 
-function Get-DesktopFolder {
-    $d = [Environment]::GetFolderPath('Desktop')
-    if (-not $d) { try { $d = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders').Desktop } catch { } }
-    $d
-}
 # Campaigns and challenges: own scenarios, shown in the game under "Own Scenarios" ("Eigene Szenarien").
-$OwnScenarios = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Anno 1602 History Edition\Own Scenarios'
+$OwnScenarios = Join-Path $Documents 'Anno 1602 History Edition\Own Scenarios'
 # File names of the scenarios made by this project, both languages, including the random adventures.
-$ScenarioNames = '^((Smaragdinseln|Wettlauf|Sturmsee|Emerald Isles|Race|Storm Sea) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+)\.szs$'
-$ShortcutFolders = @([Environment]::GetFolderPath('Programs'))
-$desk = Get-DesktopFolder
-if ($desk) { $ShortcutFolders += $desk }
+$ScenarioNames = '^((Smaragdinseln|Wettlauf|Sturmsee|Emerald Isles|Race|Storm Sea) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+( [A-Za-z]+)?)\.szs$'
+$ShortcutFolders = @($StartMenu)
+if ($DesktopFolder) { $ShortcutFolders += $DesktopFolder }
 $Shortcuts = @($ShortcutFolders | ForEach-Object { Join-Path $_ $ShortcutName })
 
 # Deletes the shortcuts with any of the known names (current and older versions, both languages),

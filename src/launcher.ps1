@@ -613,8 +613,9 @@ function Get-MissionResults {
     $results
 }
 # Campaign of a scenario file: "Smaragdinseln 3 - Zwei Kolonien" -> "Smaragdinseln", "Herausforderung - Goldrausch"
-# -> "Herausforderung", "Abenteuer 4711" -> "Abenteuer".
+# -> "Herausforderung", "Abenteuer 4711 Fordernd" -> "Abenteuer".
 function Get-CampaignName([string]$name) {
+    if ($name -match '^(Abenteuer|Adventure) \d+') { return $Matches[1] }   # random adventures, also with the difficulty in the name
     if ($name -match '^(.+?)\s+\d+(\s+-\s+.*)?$') { return $Matches[1] }
     if ($name -match '^(.+?)\s+-\s+') { return $Matches[1] }
     $name

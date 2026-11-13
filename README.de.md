@@ -182,7 +182,8 @@ anno1602-extensions/
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
 │   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle (556 Prüfungen)
-│   └── check-scenarios.ps1        prüft gebaute Szenarien und Zufallsabenteuer (-Reproduce)
+│   ├── check-scenarios.ps1        prüft gebaute Szenarien und Zufallsabenteuer (-Reproduce)
+│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung (17 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung
 │   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
 │   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel
@@ -196,7 +197,9 @@ anno1602-extensions/
 ```
 
 Offline-Test starten: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (braucht das installierte
-Spiel; es wird nicht gestartet). Änderungen je Version: [CHANGELOG.md](CHANGELOG.md).
+Spiel; es wird nicht gestartet), Installer-Test: `tests\test-install.ps1`. Änderungen je Version:
+[CHANGELOG.md](CHANGELOG.md).
+
 ## Rechtliches
 
 Ein inoffizielles Fan-Projekt, nicht mit Ubisoft verbunden. „Anno“ ist eine Marke von Ubisoft.
