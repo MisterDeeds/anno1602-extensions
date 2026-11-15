@@ -4,8 +4,8 @@
 
 Ein Fan-Projekt für **Anno 1602 History Edition** (Ubisoft Connect): grössere Welt, mehr Inseln,
 stärkere Gegner, günstigeres Bauen und reichere Städte, Turbo bis 16-fach, zufällige Ereignisse
-während des Spiels, 41 eigene Szenarien mit Geschichte und Auftrag (fünf Kampagnen und 13
-Herausforderungen, einige gegen die Uhr), ein Szenario-Baukasten, Zufalls- und Tagesabenteuer und
+während des Spiels, 49 eigene Szenarien mit Geschichte und Auftrag (sechs Kampagnen – eine davon für die
+Riesenwelt gebaut – und 15 Herausforderungen, einige gegen die Uhr), ein Szenario-Baukasten, Zufalls- und Tagesabenteuer und
 ein Logbuch-Fenster mit Verlaufskurven neben dem Spiel.
 
 Das Werkzeug ändert **keine Datei des Spiels**. Es passt nur den Arbeitsspeicher des laufenden
@@ -56,12 +56,13 @@ Das Startfenster hat drei Registerkarten:
 </p>
 
 - **Neues Spiel**: alle Optionen zum Anklicken, in vier Gruppen (Welt, Wirtschaft, Gegner und
-  Gefahren – mit den Ereignissen –, Schiffe und Tempo), dazu fünf Vorlagen:
+  Gefahren – mit den Ereignissen –, Schiffe und Tempo), dazu sechs Vorlagen:
 
   | Vorlage | Einstellungen |
   |---|---|
   | **Alles gross** | 1000 × 700, riesige Inseln, viele Rohstoffe, 7 + 7 Dörfer, dreimal so viele Händler, Gegner wie „Schwer“ mit 60 000 Gold, Piraten greifen an mit bis zu 8 Schiffen, Einwohner ×5, Lager ×5, Laderaum ×3, Produktion und Schiffe ×2, Turbo 16-fach, dein Gold 50 000 |
   | **Für Kampagnen** | grosse Karte und Turbo 16-fach, alles andere wie im Szenario vorgesehen |
+  | **Riesenwelt** | 2000 × 1400 für die Karten der [Riesenwelt](#riesenwelt), Schiffe ×2 für die langen Seewege, Turbo 16-fach, alles andere wie im Szenario vorgesehen |
   | **Gemütlich** | Bau- und Betriebskosten halbiert, Steuern ×2, Radius ×1,5, jede Pflanze überall, unerschöpfliche Minen, keine Piraten, keine Katastrophen, 100 000 Gold, Einwohner ×2, Produktion ×2, Lager ×3, grosse Inseln, viele Rohstoffe, Turbo 16-fach |
   | **Harte Probe** | Gegner wie „Schwer“ mit 100 000 Gold, starke Piraten mit bis zu 12 Schiffen, mehr Katastrophen, 4 + 4 Dörfer, Turbo 16-fach |
   | **Alles auf Standard** | 1000 × 700 mit mehr Inseln und mehr Rohstoffen, sonst wie im Original |
@@ -96,8 +97,9 @@ Ein Szenario zum Zusammenklicken: Name, Karte (klassisch, Archipel oder Kontinen
 Kartennummer eine eigene Welt), Schwierigkeit, dein Gold und Gold und Stärke der Gegner, Piraten,
 Ureinwohner, Rohstoffe, Startladung und bis zu drei weitere Schiffe, dazu der Auftrag – Städte mit
 einer Stufe, jede Siedlung mindestens, Zahl der Siedlungen, Einwohner insgesamt, Bilanz,
-Handelsbilanz, Waren im Lager, Monopole, bestimmte Gegner besiegen und auf Wunsch ein Zeitlimit. Den
-Auftragstext schreibt der Baukasten (mit einer Geschichte, die du ändern kannst) und zeigt ihn genau
+Handelsbilanz, Waren im Lager, Monopole, bestimmte Gegner besiegen und auf Wunsch ein Zeitlimit. Mit dem Häkchen
+*auch für die Riesenwelt* bekommt das Szenario eine dritte Karte mit fünf Inselreichen für 2000 × 1400
+([Riesenwelt](#riesenwelt)). Den Auftragstext schreibt der Baukasten (mit einer Geschichte, die du ändern kannst) und zeigt ihn genau
 so, wie ihn das Spiel zeigen wird. *Szenario erstellen* legt ihn als „Eigenes - &lt;Name&gt;“ zu deinen
 eigenen Szenarien. Die Karten folgen denselben Regeln wie die Kampagnen, so finden die Gegner immer
 Platz.
@@ -162,10 +164,18 @@ zwischen den 14 Dörfern der Ureinwohner; ein Szenario aus dem Baukasten lädt m
 Schiffen und dem genannten Gegner. Noch nicht durchgespielt: die Balance der mit † markierten
 Szenarien.
 
+Im laufenden Spiel geprüft am 15. November 2026 (Version 3.1.0): Mit der Vorlage *Riesenwelt* lädt
+„Weltreich 1“ alle 50 Inseln genau dort, wo die Riesenwelt-Karte sie hinlegt (10 mit 100 × 90, 35 mit
+70 × 60, 5 mit 50 × 52 auf 2000 × 1400), und nach über einer Spielstunde mit 16-fach haben alle drei
+Gegner gesiedelt, zwei davon in fernen Reichen; bei 1000 × 700 gilt die grosse Fassung, und das
+Originalspiel ohne Erweiterungen spielt dieselbe Datei auf seiner klassischen Karte mit 18 Inseln.
+
 ## Kampagnen und Herausforderungen
 
-41 eigene Szenarien, im Spiel unter *Einzelspieler → Neues Spiel → Eigene Szenarien*. Jedes hat
-eine klassische Karte (500 × 350) und eine grosse Fassung (1000 × 700, bis 50 Inseln).
+49 eigene Szenarien, im Spiel unter *Einzelspieler → Neues Spiel → Eigene Szenarien*. Jedes hat
+eine klassische Karte (500 × 350) und eine grosse Fassung (1000 × 700, bis 50 Inseln); das Weltreich
+und die mit 🌍 markierten Herausforderungen dazu eine Riesenwelt-Fassung (2000 × 1400, siehe
+[Riesenwelt](#riesenwelt)).
 
 | Deutscher Titel | Englischer Titel | Auftrag |
 |---|---|---|
@@ -197,6 +207,12 @@ eine klassische Karte (500 × 350) und eine grosse Fassung (1000 × 700, bis 50 
 | 4 Das Baumwollkartell † | 4 The Cotton Cartel † | Baumwollmonopol, 50 t Kleidung im Lager, Handelsbilanz +300, Piraten |
 | 5 Die Bank der Liga † | 5 The League Bank † | 1200 Einw. (600 Kaufleute), Bilanz +500, Handelsbilanz +400 |
 | 6 Der Fürst der Kaufleute † | 6 The Merchant Prince † | 2000 Einw. (700 Aristokraten), 50 t Schmuck im Lager, Handelsbilanz +500, Bilanz +800, Piraten |
+| **Das Weltreich** 1 Die grosse Fahrt † 🌍 | **The World Empire** 1 The Great Voyage † 🌍 | 500 Einw. (250 Siedler), 3 Siedlungen, 900 Einw. insgesamt |
+| 2 Das Nebelmeer † 🌍 | 2 The Mist Sea † 🌍 | 50 t Stoffe und 40 t Tabakwaren im Lager, 800 Einw. (300 Bürger), 4 Siedlungen |
+| 3 Die Gewürzroute † 🌍 | 3 The Spice Route † 🌍 | 60 t Gewürze im Lager, Handelsbilanz +250, 1200 Einw. (400 Kaufleute), Piraten |
+| 4 Die Korallensee † 🌍 | 4 The Coral Sea † 🌍 | Baumwoll- und Kakaomonopol, 5 Siedlungen mit zusammen 3000 Einw., Piraten |
+| 5 Krieg der Kronen † 🌍 | 5 War of the Crowns † 🌍 | Haus Morvan besiegen (nur diesen Rivalen), 5 Siedlungen, 4000 Einw. insgesamt |
+| 6 Das Weltreich † 🌍 | 6 The World Empire † 🌍 | 3000 Einw. (1200 Aristokraten), 2000 (800 Kaufleute) und 1200 (500 Bürger), 7 Siedlungen, 8000 insgesamt, Bilanz +1500, Piraten |
 | **Herausforderung** Inselreich | **Challenge** Island Realm | 8 eigene Siedlungen mit zusammen 3000 Einwohnern |
 | Handelsimperium | Trade Empire | 50 t Schmuck und 80 t Kleidung im Lager, Handelsbilanz +300 |
 | Goldrausch | Gold Rush | 60 t Gold und 40 t Schmuck im Lager, Piraten |
@@ -210,6 +226,8 @@ eine klassische Karte (500 × 350) und eine grosse Fassung (1000 × 700, bis 50 
 | Habenichts † | Shoestring † | 600 Einw. (250 Bürger), Bilanz +200 – mit 8000 Gold und fast leerem Schiff |
 | Gegen die Uhr † ⏱ | Against the Clock † ⏱ | 500 Einw. (250 Siedler) in 3 Stunden |
 | Die Frist des Königs † ⏱ | The Royal Deadline † ⏱ | 1000 Einw. (400 Bürger) und Bilanz +300 in 6 Stunden, Piraten |
+| Sieben Meere † 🌍 | Seven Seas † 🌍 | 7 Siedlungen, jede mit 300 Einw. (120 Siedler), 4000 insgesamt, Bilanz +300, Piraten |
+| Die Weltumsegelung † 🌍 | Around the World † 🌍 | Weinmonopol (Norden) und Gewürzmonopol (Süden), Handelsbilanz +400, Piraten |
 
 † Neu im November 2026 und noch nicht im Spiel auf die Balance geprüft: Die Schwierigkeit ist in
 Anlehnung an die gemessenen Kapitel ausgelegt.
@@ -219,12 +237,35 @@ ein Limit gesetzt ist (bei 180:00 sind drei Stunden um); Pause hält sie an, der
 sie. Das Limit gilt nur, wenn das Spiel mit den Erweiterungen läuft (sie setzen es bei jedem Start
 und jedem Laden); ohne sie hat das Szenario kein Limit.
 
+🌍 Für die Riesenwelt gebaut: am besten mit der Vorlage *Riesenwelt*; bei einer kleineren Karte gilt
+die grosse oder die klassische Fassung.
+
 Im Wettlauf gewinnt, wer den Auftrag zuerst erfüllt. Gemessen ohne Zutun des Spielers: Die Rivalen
 schaffen Kapitel 1 nach rund 5, Kapitel 2 nach rund 7½, Kapitel 3 nach rund 8 und Kapitel 4 nach
 rund 20 Stunden Spielzeit.
 
 Die Szenarien liegen nicht in diesem Repository. Der Installer baut sie aus den Endlos-Vorlagen
 deines eigenen Spiels (`src/build-scenarios.ps1`).
+
+## Riesenwelt
+
+<p align="center">
+  <img src="docs/images/giant-world-de.png" alt="Weltreich 1: grosse Fassung und Riesenwelt" width="90%">
+</p>
+
+Das Spiel kennt höchstens 50 Inseln und davon höchstens 10 der grössten Sorte (100 × 90) – mehr Land
+trägt keine Karte, egal wie gross sie ist. Gleichmässig über 2000 × 1400 verteilt, wären 50 Inseln fast
+nur Wasser. Die Riesenwelt-Karten fassen sie deshalb zu **fünf Inselreichen** zusammen, mit offenem Meer
+dazwischen: die Kronsee im Nordwesten, wo alle Schiffe starten, das Nebelmeer im Nordosten, die
+Mittelsee, die Korallensee im Südwesten und die Gewürzinseln im Südosten. Jedes Reich hat 8 bis 11
+Inseln – zusammen 10 mit 100 × 90, 35 mit 70 × 60 und 5 mit 50 × 52 –, im Norden mit nördlichem und im
+Süden mit südlichem Klima: Tabak, Zuckerrohr und Wein wachsen nahe der Heimat, Gewürze, Kakao und
+Baumwolle erst nach einer langen Seereise. Jedes Szenario bekommt seine eigene Form der Reiche.
+
+Gespielt wird mit der Vorlage **Riesenwelt**: Karte 2000 × 1400, Schiffe doppelt so schnell, Turbo
+16-fach. Die Szenarien haben weiterhin die klassische Karte und die Fassung für 1000 × 700, und das
+Werkzeug nimmt immer die grösste Fassung, die zur gewählten Kartengrösse passt; ohne die Erweiterungen
+gilt die klassische Karte. Ältere Szenarien werden wie bisher auf 2000 × 1400 gestreckt.
 
 ## Installieren
 
@@ -263,14 +304,14 @@ anno1602-extensions/
 │   ├── anno-patcher.ps1           das Werkzeug: prüft die Spielversion und patcht den Speicher
 │   ├── launcher.ps1               das Startfenster (deutsch oder englisch, je nach Windows)
 │   ├── logbook.ps1                das Logbuch-Fenster (liest den Speicher des Spiels nur)
-│   ├── build-scenarios.ps1        baut die 41 Szenarien deutsch oder englisch
+│   ├── build-scenarios.ps1        baut die 49 Szenarien deutsch oder englisch
 │   ├── scenario-lib.ps1           Dateiformat .szs und Aufträge AUFTRAG4 (entschlüsselt)
 │   ├── random-adventure.ps1       Generator für Zufalls- und Tagesabenteuer (Nummer + Schwierigkeit)
 │   ├── scenario-designer.ps1      das Fenster des Szenario-Baukastens
 │   ├── install.ps1                Installer hinter install.cmd / uninstall.cmd
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
-│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (640 Prüfungen)
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (655 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
 │   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung (27 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung

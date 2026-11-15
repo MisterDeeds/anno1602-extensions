@@ -81,6 +81,10 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
   wie im Original. So sind die Kampagnen so schwer wie vorgesehen, und das Startgold kommt aus dem
   Szenario.
 
+  Knopf "Riesenwelt": die Riesenwelt 2000 x 1400 fuer die Kampagne "Das Weltreich" und die
+  Riesen-Herausforderungen (siehe "Riesenwelt" weiter unten), Schiffe x2 fuer die langen Reisen,
+  Turbo 16-fach, alles andere wie im Szenario vorgesehen.
+
   Knopf "Gemuetlich": in Ruhe bauen (1000 x 700, grosse Inseln, viele Rohstoffe, jede Pflanze
   ueberall, unerschoepfliche Minen, Bau- und Betriebskosten halbiert, Steuern x2, Radius x1,5,
   keine Piraten, keine Katastrophen, dein Gold 100 000, Einwohner x2, Produktion x2, Lager x3,
@@ -148,15 +152,16 @@ Logbuch
   "history" daneben. Daraus zeigt die Registerkarte "Abenteuer", welche Kapitel du gewonnen
   hast - also das Logbuch offen haben, waehrend du ein Kapitel spielst.
 
-Kampagnen und Herausforderungen (41 eigene Szenarien mit Geschichte und Auftrag)
+Kampagnen und Herausforderungen (49 eigene Szenarien mit Geschichte und Auftrag)
   Im Spiel: Einzelspieler -> Neues Spiel -> in der Liste ganz nach unten zu "Eigene Szenarien".
   Ist der Auftrag erfuellt, endet das Szenario mit der Bewertung.
   Die Szenarien werden in der Sprache von Windows installiert: deutsch auf einem deutschen
   Windows, englisch sonst.
   Noch nicht im Spiel auf die Balance geprueft (mit * markiert): die Kampagnen "Die Sturmsee"
-  (November 2026), "Die Neue Welt" und "Die Handelsliga" (neu in Version 3.0.0) und die
-  Herausforderungen Archipel, Kontinente, Handelsflotte, Seemacht und die sechs neuen von
-  Kolonialherr bis Die Frist des Koenigs. Ihre Schwierigkeit ist in Anlehnung an die
+  (November 2026), "Die Neue Welt" und "Die Handelsliga" (neu in Version 3.0.0), "Das
+  Weltreich" (neu in Version 3.1.0) und die Herausforderungen Archipel, Kontinente,
+  Handelsflotte, Seemacht, die sechs von Kolonialherr bis Die Frist des Koenigs und die
+  Riesen-Herausforderungen Sieben Meere und Die Weltumsegelung. Ihre Schwierigkeit ist in Anlehnung an die
   gemessenen Kapitel ausgelegt.
 
   Kampagne "Die Smaragdinseln" (der Reihe nach spielen):
@@ -248,6 +253,29 @@ Kampagnen und Herausforderungen (41 eigene Szenarien mit Geschichte und Auftrag)
       Kaufleute         Handelsbilanz +500, Bilanz +800, Piraten; ein grosses
                         Handelsschiff mit Baumaterial und ein grosses Kriegsschiff      Schwer
 
+  Kampagne "Das Weltreich" (der Reihe nach spielen; fuer die Riesenwelt gebaut) *:
+  Fuenf Inselreiche, getrennt durch Wochen auf offener See: Von der Kronsee im Nordwesten aus
+  greifst du nach dem Nebelmeer, den Gewuerzinseln und der Korallensee, besiegst das Haus Morvan
+  und baust das erste Weltreich auf.
+    1 Die grosse Fahrt  Stadt mit 500 Einw./250 Siedler, mindestens 3 Siedlungen, zusammen
+                        900 Einwohner; ein grosses Handelsschiff mit Werkzeug, Holz und
+                        Nahrung                                                         Einfach
+    2 Das Nebelmeer     50 t Stoffe und 40 t Tabakwaren im Lager, 800 Einw./300 Buerger,
+                        mindestens 4 Siedlungen                                         Durchschnittlich
+    3 Die Gewuerzroute  60 t Gewuerze im Lager, Handelsbilanz +250, 1200 Einw./400 Kauf-
+                        leute, Piraten greifen an; ein grosses Handelsschiff und ein
+                        kleines Kriegsschiff                                            Durchschnittlich
+    4 Die Korallensee   Baumwollmonopol UND Kakaomonopol, mindestens 5 Siedlungen mit
+                        zusammen 3000 Einwohnern, Piraten greifen an                    Fordernd
+    5 Krieg der Kronen  das Haus Morvan besiegen (Rivale 2, 80 000 Gold, Flaggschiff
+                        "Eiserne Faust"; die beiden anderen duerfen bleiben), mindestens
+                        5 Siedlungen, zusammen 4000 Einwohner; Rivalen wie auf Schwer;
+                        ein grosses und ein kleines Kriegsschiff                        Fordernd
+    6 Das Weltreich     3000 Einw./1200 Aristokraten, 2000 Einw./800 Kaufleute und
+                        1200 Einw./500 Buerger, mindestens 7 Siedlungen, zusammen 8000,
+                        Bilanz +1500, Piraten; ein grosses Handelsschiff mit Baumaterial
+                        und ein grosses Kriegsschiff                                    Schwer
+
   Herausforderungen (einzeln):
     Inselreich          8 eigene Siedlungen mit zusammen 3000 Einwohnern
     Handelsimperium     50 t Schmuck und 80 t Kleidung im Lager, Handelsbilanz +300
@@ -272,6 +300,17 @@ Kampagnen und Herausforderungen (41 eigene Szenarien mit Geschichte und Auftrag)
     Gegen die Uhr *     500 Einw./250 Siedler - ZEITLIMIT 3 Stunden
     Die Frist des       1000 Einw./400 Buerger, Bilanz +300 - ZEITLIMIT 6 Stunden; Piraten
       Koenigs *         greifen an; Start mit kleinem Kriegsschiff
+    Sieben Meere *      (Riesenwelt) mindestens 7 Siedlungen, JEDE mit 300 Einw./120 Siedler,
+                        zusammen 4000, Bilanz +300, Piraten
+    Die Welt-           (Riesenwelt) Weinmonopol (Norden) UND Gewuerzmonopol (Sueden),
+      umsegelung *      Handelsbilanz +400, Piraten greifen an
+
+  Riesenwelt: Das Spiel kennt hoechstens 50 Inseln (10 der groessten Sorte). Die Riesenwelt-
+  Karten von "Das Weltreich", Sieben Meere und Die Weltumsegelung fassen sie deshalb zu fuenf
+  Inselreichen mit offenem Meer dazwischen zusammen - die Kronsee im Nordwesten (dort starten
+  alle Schiffe), das Nebelmeer im Nordosten, die Mittelsee, die Korallensee im Suedwesten und
+  die Gewuerzinseln im Suedosten. Vor dem Spielen den Knopf "Riesenwelt" waehlen (Karte
+  2000 x 1400). Bei einer kleineren Karte gilt die Fassung fuer 1000 x 700 oder die klassische.
 
   Zeitlimits: "Gegen die Uhr", "Die Frist des Koenigs" und selbst gebaute Szenarien koennen
   eines haben. Laeuft die Zeit ab, ist der Auftrag verloren.
@@ -316,7 +355,8 @@ Kampagnen und Herausforderungen (41 eigene Szenarien mit Geschichte und Auftrag)
   Fenster, in dem du dir einen Auftrag selbst zusammenstellst.
     Szenario   Name (bis 40 Zeichen), Karte (Klassisch, Archipel oder Kontinente),
                Kartennummer ("Neue Karte" wuerfelt eine andere; dieselbe Nummer ergibt immer
-               dieselbe Karte), Schwierigkeit
+               dieselbe Karte), Schwierigkeit und auf Wunsch "auch fuer die Riesenwelt
+               2000 x 1400" (eine dritte Karte mit fuenf Inselreichen)
     Welt       dein Startgold, Gold und Staerke der Gegner (Zoegerlich bis Stark), Piraten
                (nur gesichtet oder greifen an), Ureinwohner, Rohstoffe, Startladung
                (Standard, Reichlich, Knapp, Schiffbruch), bis 3 weitere Handels- oder

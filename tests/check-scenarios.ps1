@@ -12,7 +12,8 @@
   - text: language recognised (German "Euer Auftrag" / English "Your orders"), at most 2047 bytes, no CR,
     English texts and all file names in plain ASCII
   - race setting (rivals with the same mission and goal bit 0x800) or rivals without a mission
-  - small map 500 x 350 and big version ('GROS') inside the map and without overlaps, resources, villages
+  - small map 500 x 350 and big version ('GROS') inside the map and without overlaps, resources, villages; since 3.1 the
+    giant world version (second 'GROS' block, 2000 x 1400, all 50 island slots) with the same checks
   - ships: positions in the water in all map versions, cargo space and cannons match the ship type,
     cargo (house no. known, whole tons, at most one hold per slot of the ship type), names
   - random adventures ("Abenteuer <seed> <difficulty>" / "Adventure <seed> <difficulty>"): game id = seed and difficulty, name;
@@ -171,10 +172,20 @@ foreach ($f in Get-ChildItem -LiteralPath $Folder -Filter *.szs | Sort-Object Na
     $line = Test-IslandBlock $s 0 500 350 'small'; Write-Info ('   ' + $line)
     if ($s.Length -ge 2360 -and [Text.Encoding]::ASCII.GetString($s, 0x494, 4) -eq 'GROS') {
         $bw = [BitConverter]::ToInt32($s, 0x498); $bh = [BitConverter]::ToInt32($s, 0x49C)
-        Assert-Check "big version: length $($s.Length)" ($s.Length -eq 2360)
+        Assert-Check "big version: length $($s.Length) (2360, or 3548 with the giant world)" ($s.Length -eq 2360 -or $s.Length -eq 3548)
         $line = Test-IslandBlock $s 0x4A4 $bw $bh "big $bw x $bh"; Write-Info ('   ' + $line)
     }
     else { Assert-Check 'big version present' $false }
+    # Giant world (since 3.1): a second version behind the big one, designed for 2000 x 1400 (the patcher takes the
+    # last version whose size the map reaches, so they must grow in this order).
+    $hasGiant = $s.Length -eq 3548
+    if ($hasGiant) {
+        $gw = [BitConverter]::ToInt32($s, 0x93C); $gh = [BitConverter]::ToInt32($s, 0x940)
+        Assert-Check "giant version: marker 'GROS', designed for $gw x $gh, version $([BitConverter]::ToInt32($s, 0x944)), bigger than the big version" ([Text.Encoding]::ASCII.GetString($s, 0x938, 4) -eq 'GROS' -and $gw -eq 2000 -and $gh -eq 1400 -and [BitConverter]::ToInt32($s, 0x944) -eq 1 -and $gw -gt $bw -and $gh -gt $bh)
+        $line = Test-IslandBlock $s 0x948 $gw $gh "giant $gw x $gh"; Write-Info ('   ' + $line)
+        $gc = [BitConverter]::ToInt32($s, 0x948 + 0x64)
+        Assert-Check "giant version: all 50 island slots used ($gc)" ($gc -eq 50)
+    }
 
     # Ships: names, types, cargo; positions in the water in all map versions (ships are not stretched, islands are).
     $sh = (Get-Section $l 'SHIP4').Data; $conflicts = @(); $shipInfo = @(); $ownCargo = @()
@@ -202,6 +213,7 @@ foreach ($f in Get-ChildItem -LiteralPath $Folder -Filter *.szs | Sort-Object Na
     foreach ($w in 0, 1) { if ($bits -band (0x1000 -shl $w)) { $nr = [int]$a[0x868 + 4 * $w]; Assert-Check "Goal good $nr ($($goodsNames[$nr])) not in the start cargo" ($ownCargo -notcontains $nr) } }
     $versions = @(@(0, 1.0, 'small 500'), @(0, 1.5, 'small 750'), @(0, 2.0, 'small 1000'), @(0, 4.0, 'small 2000'))
     if ($s.Length -ge 2360) { $versions += @(@(0x4A4, 1.0, 'big 1000'), @(0x4A4, 2.0, 'big 2000')) }
+    if ($hasGiant) { $versions += , @(0x948, 1.0, 'giant 2000') }
     foreach ($v in $versions) {
         $n = [BitConverter]::ToInt32($s, $v[0] + 0x64)
         for ($i = 0; $i -lt $n; $i++) {
@@ -230,6 +242,7 @@ foreach ($f in Get-ChildItem -LiteralPath $Folder -Filter *.szs | Sort-Object Na
     }
     $blocks = @(@{ Name = 'small'; B = (Get-SceneBlock $s 0) })
     if ($s.Length -ge 2360) { $blocks += @{ Name = 'big'; B = (Get-SceneBlock $s 0x4A4) } }
+    if ($hasGiant) { $blocks += @{ Name = 'giant'; B = (Get-SceneBlock $s 0x948) } }
     foreach ($bk in $blocks) {
         $b = $bk.B
         Assert-Check "$($bk.Name): at most 7 villages per climate ($($b.North)+$($b.South))" ($b.North -ge 0 -and $b.North -le 7 -and $b.South -ge 0 -and $b.South -le 7)

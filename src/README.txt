@@ -78,6 +78,10 @@ What is changed (only in memory, no game file is modified):
   as in the original. That way the campaigns are as hard as intended, and the starting gold
   comes from the scenario.
 
+  Button "Giant world": the giant world 2000 x 1400 for the campaign "The World Empire" and
+  the giant challenges (see "Giant world" below), ships x2 for the long voyages, turbo 16x,
+  everything else as the scenario intends.
+
   Button "Relaxed": build in peace (1000 x 700, large islands, lots of resources, every crop
   everywhere, inexhaustible mines, building costs and running costs halved, taxes x2, radius
   x1.5, no pirates, no disasters, your gold 100,000, residents x2, production x2, storage x3,
@@ -136,16 +140,16 @@ Logbook
   "history" next to it. The "Adventures" tab shows from logbook.json which chapters you have
   won - so keep the logbook open while you play a chapter.
 
-Campaigns and challenges (41 own scenarios with a story and a mission)
+Campaigns and challenges (49 own scenarios with a story and a mission)
   In the game: Single Player -> New Game -> at the very bottom of the list, "Own Scenarios"
   ("Eigene Szenarien" in the German game).
   When the mission is fulfilled, the scenario ends with the score screen.
   The scenarios are installed in the language of Windows: English titles and mission texts
   on an English Windows (German names given in brackets below), German on a German Windows.
   Not yet balance-tested in play (marked *): the campaigns "The Storm Sea" (November 2026),
-  "The New World" and "The Trade League" (new in version 3.0.0) and the challenges
-  Archipelago, Continents, Merchant Fleet, Sea Power and the six new ones from Colonial Lord
-  to The Royal Deadline. Their difficulty is designed by analogy with the measured chapters.
+  "The New World" and "The Trade League" (new in version 3.0.0), "The World Empire" (new in
+  version 3.1.0) and the challenges Archipelago, Continents, Merchant Fleet, Sea Power, the six
+  from Colonial Lord to The Royal Deadline and the giant ones Seven Seas and Around the World. Their difficulty is designed by analogy with the measured chapters.
 
   Campaign "Emerald Isles" ("Die Smaragdinseln"; play the chapters in order):
     1 Landfall            (Landung) town of 250 residents (150 settlers),
@@ -246,6 +250,30 @@ Campaigns and challenges (41 own scenarios with a story and a mission)
                           pirates; a large trading ship with building materials and
                           a large warship                                                Hard
 
+  Campaign "The World Empire" ("Das Weltreich"; play the chapters in order; made for the
+  giant world) *:
+  Five island realms, weeks of open sea apart: from the Crown Sea in the north-west you reach
+  out to the Mist Sea, the Spice Islands and the Coral Sea, defeat House Morvan and build the
+  first world empire.
+    1 The Great Voyage    (Die grosse Fahrt) town of 500 res./250 settlers, at least
+                          3 settlements, 900 residents in total; a large trading ship
+                          with tools, wood and food                                      Easy
+    2 The Mist Sea        (Das Nebelmeer) 50 t cloth and 40 t tobacco goods in store,
+                          800 res./300 citizens, at least 4 settlements                Average
+    3 The Spice Route     (Die Gewuerzroute) 60 t spices in store, trade balance +250,
+                          1200 res./400 merchants, pirates attack; a large trading
+                          ship and a small warship                                    Average
+    4 The Coral Sea       (Die Korallensee) cotton monopoly AND cocoa monopoly, at least
+                          5 settlements with 3000 residents in total, pirates attack  Demanding
+    5 War of the Crowns   (Krieg der Kronen) defeat House Morvan (rival 2, 80,000 gold,
+                          flagship "Iron Fist"; the other two rivals may stay), at least
+                          5 settlements, 4000 residents in total; rivals like Hard;
+                          a large and a small warship                               Demanding
+    6 The World Empire    (Das Weltreich) 3000 res./1200 aristocrats, 2000 res./
+                          800 merchants and 1200 res./500 citizens, at least
+                          7 settlements, 8000 in total, balance +1500, pirates; a large
+                          trading ship with building materials and a large warship       Hard
+
   Challenges (single scenarios):
     Island Realm          (Inselreich) 8 own settlements with 3000 residents in total
     Trade Empire          (Handelsimperium) 50 t jewellery and 80 t clothes in store,
@@ -273,6 +301,17 @@ Campaigns and challenges (41 own scenarios with a story and a mission)
     Against the Clock *   (Gegen die Uhr) 500 res./250 settlers - TIME LIMIT 3 hours
     The Royal Deadline *  (Die Frist des Koenigs) 1000 res./400 citizens, balance +300 -
                           TIME LIMIT 6 hours; pirates attack; start with a small warship
+    Seven Seas *          (Sieben Meere; giant world) at least 7 settlements, EVERY one with
+                          300 res./120 settlers, 4000 in total, balance +300, pirates
+    Around the World *    (Die Weltumsegelung; giant world) wine monopoly (north) AND spice
+                          monopoly (south), trade balance +400, pirates attack
+
+  Giant world: the game holds at most 50 islands (10 of the biggest kind), so the giant maps
+  of "The World Empire", Seven Seas and Around the World group them into five island realms
+  with open sea between them - the Crown Sea in the north-west (where all ships start), the
+  Mist Sea in the north-east, the Middle Sea, the Coral Sea in the south-west and the Spice
+  Islands in the south-east. Choose the button "Giant world" before you play (map 2000 x 1400).
+  With a smaller map the 1000 x 700 version or the classic map applies.
 
   Time limits: "Against the Clock", "The Royal Deadline" and scenarios you build yourself can
   have one. When the time runs out, the mission is lost.
@@ -313,7 +352,8 @@ Campaigns and challenges (41 own scenarios with a story and a mission)
   in which you put a mission together yourself.
     Scenario   name (up to 40 characters), map (Classic, Archipelago or Continents), map
                number ("New map" rolls another; the same number always gives the same map),
-               difficulty
+               difficulty, and if you like "also for the giant world 2000 x 1400" (a third map
+               with five island realms)
     World      your starting gold, the rivals' gold and strength (Hesitant to Strong),
                pirates (only sighted or attacking), natives, resources, start cargo
                (Standard, Rich, Lean, Shipwreck), up to 3 extra trading ships or warships

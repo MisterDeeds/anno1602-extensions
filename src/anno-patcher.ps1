@@ -44,6 +44,9 @@
                                   SZENE section, e.g. the campaigns from src\build-scenarios.ps1):
                                   from the map size they were designed for (1000 x 700) on the big
                                   version is used (code cave RVA 0xE5E40), otherwise the small one, stretched.
+                                  Since 3.1 a scenario can carry several versions (the campaign
+                                  "Weltreich": 1000 x 700 and the giant world 2000 x 1400); the
+                                  biggest one that fits the map is used.
     Pirates (-Pirates)            Default: as the chosen difficulty.
                                   Active: pirates attack, also on Easy/Average
                                   (otherwise only "occasional sightings" there).
@@ -357,66 +360,80 @@ $ClassW = @(30, 40, 50, 70, 100); $ClassH = @(30, 40, 52, 60, 90)   # .rdata 0xE
 
 function Rel32([long]$target, [long]$end) { [BitConverter]::GetBytes([int32]($target - $end)) }
 
-# Big campaign maps: an own scenario can carry a second version behind the normal SZENE section
-# (1172 bytes, used without the tool): +0x494 'GROS', +0x498 width, +0x49C height it was
-# designed for, +0x4A0 version, from +0x4A4 a complete SZENE block (1172 bytes). Without the tool
-# the loader only reads the fixed offsets of the first block (checked in the game). The code cave
-# at RVA 0xE5E40 checks the length (RCX = section header, +0x10 length), the marker and the map size
-# (at least the designed size), then copies the big block to the front and stretches its positions
-# to the current map size (x*Width/designed width). eax = 1: done, otherwise 0 (normal path).
+# Big campaign maps: an own scenario can carry more versions behind the normal SZENE section
+# (1172 bytes, used without the tool). Each version is 1188 bytes: 'GROS', width, height it was
+# designed for, version (16 bytes), then a complete SZENE block (1172 bytes); the first one starts at
+# +0x494. Since 3.1 a scenario may carry several, sorted by size (1000 x 700, then the giant world
+# 2000 x 1400). Without the tool the loader only reads the fixed offsets of the first block (checked in
+# the game). The code cave at RVA 0xE5E40 walks the versions (RCX = section header, +0x10 length) and
+# takes the LAST one with the marker whose designed size the current map reaches (so the biggest that
+# fits); it copies that block to the front and stretches its positions to the current map size
+# (x*Width/designed width). eax = 1: done, otherwise 0 (normal path; then only eax and edx have changed,
+# rsi and rdi are restored). A file with a single version behaves as before 3.1.
 $BigMapCaveRva = 0xE5E40; $BigMapMarker = 0x534F5247   # 'GROS'
 function Build-BigMapCode {
     $c = New-Object System.Collections.Generic.List[byte]
     $label = @{}; $fixups = New-Object System.Collections.Generic.List[object]
     $E = { param([byte[]]$b) foreach ($x in $b) { $c.Add($x) } }
-    $J8 = { param([byte]$op, [string]$target) $c.Add($op); $fixups.Add(@($c.Count, $target, 8)); $c.Add(0) }
-    # Early exits to "ret" (end of the code cave): 32-bit jump, Jcc rel8 -> 0F (op+0x10) rel32.
-    $J32 = { param([byte]$op8, [string]$target) $c.Add(0x0F); $c.Add([byte]($op8 + 0x10)); $fixups.Add(@($c.Count, $target, 32)); 1..4 | ForEach-Object { $c.Add(0) } }
+    $J8 = { param([byte]$op, [string]$target) $c.Add($op); $fixups.Add(@($c.Count, $target)); $c.Add(0) }
     $Rip = { param([byte[]]$op, [long]$targetRva) foreach ($x in $op) { $c.Add($x) }; foreach ($x in (Rel32 $targetRva ($BigMapCaveRva + $c.Count + 4))) { $c.Add($x) } }
-    & $E 0x31, 0xC0                                              # xor eax,eax
+    & $E 0x56, 0x57                                              # push rsi / push rdi
     & $E 0x8B, 0x51, 0x10                                        # mov edx,[rcx+0x10]   section length
-    & $E 0x81, 0xFA, 0x38, 0x09, 0x00, 0x00                      # cmp edx,2360
-    & $J32 0x72 'ret'                                             # jb ret
-    & $E 0x41, 0x81, 0xBF, 0x94, 0x04, 0x00, 0x00; & $E ([BitConverter]::GetBytes([int32]$BigMapMarker))   # cmp dword [r15+0x494],'GROS'
-    & $J32 0x75 'ret'                                             # jne ret
-    & $E 0x41, 0x83, 0xBF, 0x98, 0x04, 0x00, 0x00, 0x64          # cmp dword [r15+0x498],100
-    & $J32 0x7C 'ret'                                             # jl ret
-    & $E 0x41, 0x83, 0xBF, 0x9C, 0x04, 0x00, 0x00, 0x64          # cmp dword [r15+0x49C],100
-    & $J32 0x7C 'ret'                                             # jl ret
-    & $Rip ([byte[]](0x8B, 0x15)) 0x5EBE40                       # mov edx,[Width]
-    & $E 0x41, 0x3B, 0x97, 0x98, 0x04, 0x00, 0x00                # cmp edx,[r15+0x498]
-    & $J32 0x7C 'ret'                                             # jl ret
-    & $Rip ([byte[]](0x8B, 0x15)) 0x5EBE98                       # mov edx,[Height]
-    & $E 0x41, 0x3B, 0x97, 0x9C, 0x04, 0x00, 0x00                # cmp edx,[r15+0x49C]
-    & $J32 0x7C 'ret'                                             # jl ret
-    & $E 0x49, 0x8D, 0xB7, 0xA4, 0x04, 0x00, 0x00                # lea rsi,[r15+0x4A4]
+    & $E 0x81, 0xEA, 0x94, 0x04, 0x00, 0x00                      # sub edx,1172         bytes behind the normal block
+    & $E 0x49, 0x8D, 0xB7, 0x94, 0x04, 0x00, 0x00                # lea rsi,[r15+0x494]  first version
+    & $E 0x31, 0xFF                                              # xor edi,edi          none chosen yet
+    $label.search = $c.Count
+    & $E 0x81, 0xFA, 0xA4, 0x04, 0x00, 0x00                      # cmp edx,1188
+    & $J8 0x7C 'pick'                                            # jl pick              no complete version left
+    & $E 0x81, 0x3E; & $E ([BitConverter]::GetBytes([int32]$BigMapMarker))   # cmp dword [rsi],'GROS'
+    & $J8 0x75 'pick'                                            # jne pick
+    & $E 0x83, 0x7E, 0x04, 0x64                                  # cmp dword [rsi+4],100
+    & $J8 0x7C 'next'                                            # jl next
+    & $E 0x83, 0x7E, 0x08, 0x64                                  # cmp dword [rsi+8],100
+    & $J8 0x7C 'next'                                            # jl next
+    & $Rip ([byte[]](0x8B, 0x05)) 0x5EBE40                       # mov eax,[Width]
+    & $E 0x3B, 0x46, 0x04                                        # cmp eax,[rsi+4]
+    & $J8 0x7C 'next'                                            # jl next              map narrower than designed
+    & $Rip ([byte[]](0x8B, 0x05)) 0x5EBE98                       # mov eax,[Height]
+    & $E 0x3B, 0x46, 0x08                                        # cmp eax,[rsi+8]
+    & $J8 0x7C 'next'                                            # jl next
+    & $E 0x48, 0x89, 0xF7                                        # mov rdi,rsi          fits: remember it
+    $label.next = $c.Count
+    & $E 0x48, 0x81, 0xC6, 0xA4, 0x04, 0x00, 0x00                # add rsi,1188
+    & $E 0x81, 0xEA, 0xA4, 0x04, 0x00, 0x00                      # sub edx,1188
+    & $J8 0xEB 'search'                                          # jmp search
+    $label.pick = $c.Count
+    & $E 0x31, 0xC0                                              # xor eax,eax
+    & $E 0x48, 0x85, 0xFF                                        # test rdi,rdi
+    & $J8 0x74 'exit'                                            # jz exit              normal path
+    & $E 0x49, 0x89, 0xF9                                        # mov r9,rdi           header of the chosen version
+    & $E 0x48, 0x8D, 0x77, 0x10                                  # lea rsi,[rdi+0x10]
     & $E 0x4C, 0x89, 0xFF                                        # mov rdi,r15
     & $E 0xB9, 0x94, 0x04, 0x00, 0x00                            # mov ecx,1172
     & $E 0xF3, 0xA4                                              # rep movsb
-    & $E 0x45, 0x8B, 0x47, 0x64                                  # mov r8d,[r15+0x64]
+    & $E 0x45, 0x8B, 0x47, 0x64                                  # mov r8d,[r15+0x64]   island count
     & $E 0x41, 0x83, 0xF8, 0x32                                  # cmp r8d,50
     & $J8 0x77 'done'                                            # ja done
-    & $E 0x4D, 0x8D, 0x8F, 0x74, 0x01, 0x00, 0x00                # lea r9,[r15+0x174]
+    & $E 0x49, 0x8D, 0xB7, 0x74, 0x01, 0x00, 0x00                # lea rsi,[r15+0x174]
     $label.loop = $c.Count
     & $E 0x45, 0x85, 0xC0                                        # test r8d,r8d
     & $J8 0x7E 'done'                                            # jle done
-    & $E 0x41, 0x8B, 0x41, 0x08                                  # mov eax,[r9+8]
+    & $E 0x8B, 0x46, 0x08                                        # mov eax,[rsi+8]
     & $Rip ([byte[]](0x0F, 0xAF, 0x05)) 0x5EBE40                 # imul eax,[Width]
-    & $E 0x99, 0x41, 0xF7, 0xBF, 0x98, 0x04, 0x00, 0x00          # cdq / idiv dword [r15+0x498]
-    & $E 0x41, 0x89, 0x41, 0x08                                  # mov [r9+8],eax
-    & $E 0x41, 0x8B, 0x41, 0x0C                                  # mov eax,[r9+0xc]
+    & $E 0x99, 0x41, 0xF7, 0x79, 0x04                            # cdq / idiv dword [r9+4]
+    & $E 0x89, 0x46, 0x08                                        # mov [rsi+8],eax
+    & $E 0x8B, 0x46, 0x0C                                        # mov eax,[rsi+0xc]
     & $Rip ([byte[]](0x0F, 0xAF, 0x05)) 0x5EBE98                 # imul eax,[Height]
-    & $E 0x99, 0x41, 0xF7, 0xBF, 0x9C, 0x04, 0x00, 0x00          # cdq / idiv dword [r15+0x49C]
-    & $E 0x41, 0x89, 0x41, 0x0C                                  # mov [r9+0xc],eax
-    & $E 0x49, 0x83, 0xC1, 0x10                                  # add r9,16
+    & $E 0x99, 0x41, 0xF7, 0x79, 0x08                            # cdq / idiv dword [r9+8]
+    & $E 0x89, 0x46, 0x0C                                        # mov [rsi+0xc],eax
+    & $E 0x48, 0x83, 0xC6, 0x10                                  # add rsi,16
     & $E 0x41, 0xFF, 0xC8                                        # dec r8d
     & $J8 0xEB 'loop'                                            # jmp loop
     $label.done = $c.Count
     & $E 0xB8, 0x01, 0x00, 0x00, 0x00                            # mov eax,1
-    $label.ret = $c.Count
-    & $E 0xC3                                                    # ret
+    $label.exit = $c.Count
+    & $E 0x5F, 0x5E, 0xC3                                        # pop rdi / pop rsi / ret
     foreach ($f in $fixups) {
-        if ($f[2] -eq 32) { $b4 = [BitConverter]::GetBytes([int32]($label[$f[1]] - ($f[0] + 4))); for ($i = 0; $i -lt 4; $i++) { $c[$f[0] + $i] = $b4[$i] }; continue }
         $d = $label[$f[1]] - ($f[0] + 1); if ($d -lt -128 -or $d -gt 127) { throw (Txt "Internal error: jump to $($f[1]) too far." "Interner Fehler: Sprung zu $($f[1]) zu weit.") }
         $c[$f[0]] = [byte]($d -band 0xFF)
     }

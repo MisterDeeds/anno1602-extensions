@@ -1,10 +1,11 @@
 ﻿<#
 .SYNOPSIS
-  Builds the 41 custom scenarios for Anno 1602 History Edition: the campaigns "Die Smaragdinseln"
+  Builds the 49 custom scenarios for Anno 1602 History Edition: the campaigns "Die Smaragdinseln"
   (The Emerald Isles, 6 chapters), "Wettlauf der Haeuser" (Race of the Houses, 4 chapters),
-  "Die Sturmsee" (The Storm Sea, 6 chapters), "Die Neue Welt" (The New World, 6 chapters) and
-  "Die Handelsliga" (The Trade League, 6 chapters) and 13 single challenges (two of them with a time
-  limit that needs the extensions) - in German or English.
+  "Die Sturmsee" (The Storm Sea, 6 chapters), "Die Neue Welt" (The New World, 6 chapters),
+  "Die Handelsliga" (The Trade League, 6 chapters) and "Das Weltreich" (The World Empire, 6 chapters,
+  made for the giant world 2000 x 1400) and 15 single challenges (two of them with a time limit that
+  needs the extensions, two for the giant world) - in German or English.
 
 .DESCRIPTION
   Based on the endless-game templates Szenes\[[48]]<difficulty><layout>.szs (only read).
@@ -15,6 +16,9 @@
   with the patcher's island planner, with resources growing along and more villages) behind the SZENE
   section (marker 'GROS', see the big campaign maps in anno-patcher.ps1). The patcher uses it when the
   map is at least 1000 x 700 and "more islands" is selected; otherwise the small version applies.
+  Scenarios with the key Giant (since 3.1) carry a third version for the giant world 2000 x 1400 behind
+  that: the 50 islands grouped into five realms with open sea between them (Get-GiantPlan); the patcher
+  takes the biggest version that fits the map.
 
   -Language de|en: language of the file names (= titles in the game), mission texts and ship names.
   Default: German on a German Windows, English otherwise; override with $env:ANNO_EXTENSIONS_LANG.
@@ -37,6 +41,8 @@
     AddIslands       fill the small map with more islands up to this count (AddClasses, default 0, 1)
     Continents       @{ Lar = n; Big = n; Small = n }: few huge islands built from the template positions
     BigIslandSize    Normal/Large/Huge for the big version; BigVillages (default 5), BigAmounts
+    Giant            @{ Villages = n (or @(north, south), default 7); Amounts = @{...}; Islands = per realm
+                     @(lar, big, med, mit) (default $GiantDefault); Seed = n }: the giant world version
     Amounts          OreSmall, OreLarge, Gold, Treasure (islands) or a crop (Cotton, Tobacco, Cocoa,
                      Sugar, Spices, Wine: fertility islands)
     VillagesNorth/VillagesSouth, Gold, RivalGold, Pirates ($true = they attack), Race ($true)
@@ -200,10 +206,11 @@ function Get-IslandRects([byte[]]$s, [int]$o0, [double]$f) {
         @{ X = [math]::Truncate([BitConverter]::ToInt32($s, $o + 8) * $f); Y = [math]::Truncate([BitConverter]::ToInt32($s, $o + 12) * $f); W = $ClassW[$c]; H = $ClassH[$c] }
     }
 }
-function Find-FreeStartPoint([byte[]]$small, [byte[]]$big, [int]$x0, [int]$y0, [int]$distance = 14) {
+function Find-FreeStartPoint([byte[]]$small, [byte[]]$big, [int]$x0, [int]$y0, [int]$distance = 14, [byte[]]$giant = $null) {
     $rects = @()
     foreach ($f in 1, 1.5, 2, 4) { $rects += @(Get-IslandRects $small 0 $f) }
     foreach ($f in 1, 2) { $rects += @(Get-IslandRects $big 0 $f) }
+    if ($giant) { $rects += @(Get-IslandRects $giant 0 1) }
     $best = $null; $bestD = [double]::MaxValue
     for ($y = 20; $y -le 330; $y += 2) {
         for ($x = 20; $x -le 480; $x += 2) {
@@ -218,6 +225,60 @@ function Find-FreeStartPoint([byte[]]$small, [byte[]]$big, [int]$x0, [int]$y0, [
 }
 function Set-Amount([byte[]]$s, [int]$house, [int]$amount) {
     for ($o = 0x94; $o -le 0x114; $o += 8) { if ([BitConverter]::ToUInt16($s, $o) -eq $house) { Set-U16 $s ($o + 2) $amount } }
+}
+
+# --- Giant world (since 3.1) ----------------------------------------------------------------------------------
+# A third version for 2000 x 1400 ('GROS', 2000, 1400) behind the big one; the patcher takes the biggest version that
+# fits the map. The game knows at most 50 islands (at most 10 of class lar), so spread evenly they would leave the
+# giant world almost empty. Here they are grouped into five realms instead - dense archipelagos with long sea routes
+# between them. The starting ships are not stretched and stay in the north-west, so the home realm lies around them.
+$GiantWidth = 2000; $GiantHeight = 1400
+# Realms: x, y, width, height, climate (0 north, 1 south, 2 = by the island's centre: north above the middle).
+$GiantRealms = [ordered]@{
+    Home   = @(20, 20, 760, 540, 0)
+    North  = @(1180, 20, 800, 560, 0)
+    Middle = @(720, 500, 600, 420, 2)
+    South  = @(20, 860, 800, 520, 1)
+    East   = @(1220, 840, 760, 540, 1)
+}
+# Islands per realm: lar (100 x 90), big (70 x 60), med (50 x 52), mit (40 x 40); 50 in all with 10 lar and 35 big,
+# about as much land as the game can hold (the big version "Huge" at 1000 x 700 has 10 lar and 40 big).
+$GiantDefault = [ordered]@{ Home = @(2, 8, 1, 0); North = @(2, 7, 1, 0); Middle = @(1, 6, 1, 0); South = @(2, 7, 1, 0); East = @(3, 7, 1, 0) }
+# Places the islands realm by realm (largest first, LCG from $seed, $gap fields between islands, 8 from the map edge,
+# no island within $clear fields of a starting ship). A class that finds no room falls back to the next smaller one.
+function Get-GiantPlan($counts, [int]$seed, $keepFree = @(), [int]$gap = 24, [int]$clear = 40) {
+    $list = New-Object System.Collections.Generic.List[object]
+    $rng = [long](([long]$seed * 7919 + 4099) % 2147483648); $lar = 0
+    $next = { $script:giantRng = ($script:giantRng * 1103515245 + 12345) % 2147483648; [int]($script:giantRng -shr 16) }
+    $script:giantRng = $rng
+    foreach ($realm in $GiantRealms.Keys) {
+        $r = $GiantRealms[$realm]; $n = $counts[$realm]; if (-not $n) { continue }
+        # Every scenario shifts the realms a little (up to 40 fields), so no two giant maps look alike.
+        $rx = $r[0] + ((& $next) % 81) - 40; $ry = $r[1] + ((& $next) % 81) - 40
+        $rx = [math]::Min([math]::Max(8, $rx), $GiantWidth - 8 - $r[2]); $ry = [math]::Min([math]::Max(8, $ry), $GiantHeight - 8 - $r[3])
+        $classes = @(); for ($k = 0; $k -lt 4; $k++) { $classes += @(4 - $k) * [int]$n[$k] }
+        foreach ($c0 in $classes) {
+            $placed = $false
+            foreach ($c in (@($c0, ($c0 - 1)) | Where-Object { $_ -ge 1 })) {
+                if ($c -eq 4 -and $lar -ge 10) { continue }
+                $w = $ClassW[$c]; $h = $ClassH[$c]
+                for ($t = 0; $t -lt 1500 -and -not $placed; $t++) {
+                    $x = $rx + (& $next) % [math]::Max(1, $r[2] - $w); $y = $ry + (& $next) % [math]::Max(1, $r[3] - $h)
+                    if ($x -lt 8 -or $y -lt 8 -or $x + $w -gt $GiantWidth - 8 -or $y + $h -gt $GiantHeight - 8) { continue }
+                    $free = $true
+                    foreach ($p in $list) { if ($x -lt $p.X + $ClassW[$p.Class] + $gap -and $p.X -lt $x + $w + $gap -and $y -lt $p.Y + $ClassH[$p.Class] + $gap -and $p.Y -lt $y + $h + $gap) { $free = $false; break } }
+                    foreach ($sp in $keepFree) { if ($free -and $sp[0] -gt $x - $clear -and $sp[0] -lt $x + $w + $clear -and $sp[1] -gt $y - $clear -and $sp[1] -lt $y + $h + $clear) { $free = $false } }
+                    if ($free) {
+                        $climate = if ($r[4] -lt 2) { $r[4] } elseif ($y + $h / 2 -lt $GiantHeight / 2) { 0 } else { 1 }
+                        $list.Add(@{ Climate = $climate; Class = $c; X = $x; Y = $y; Village = $false; File = $null; Realm = $realm }); $placed = $true
+                    }
+                }
+                if ($placed) { if ($c -eq 4) { $lar++ }; break }
+            }
+        }
+    }
+    if ($list.Count -gt 50) { throw 'Giant plan: more than 50 islands.' }
+    $list.ToArray()
 }
 
 # Builds one scenario file; returns @{ Path; Summary }.
@@ -254,13 +315,34 @@ function Build-Scenario($sc) {
     $marker = New-Object byte[] 16
     [Array]::Copy([Text.Encoding]::ASCII.GetBytes('GROS'), $marker, 4); Set-I32 $marker 4 $BigWidth; Set-I32 $marker 8 $BigHeight; Set-I32 $marker 12 1
     $sceneData = [byte[]]($scene + $marker + $big)
+    $ships = [byte[]](Get-Section $template 'SHIP4').Data.Clone()
+    $sx0 = [BitConverter]::ToInt16($ships, 0x1C); $sy0 = [BitConverter]::ToInt16($ships, 0x1E)
+
+    # Giant world (key Giant, since 3.1): five realms on 2000 x 1400, resources growing along, 7 + 7 villages.
+    $giant = $null
+    if ($sc.Giant) {
+        $gs = $sc.Giant
+        $tplShips = @(for ($i = 0; $i -lt $ships.Length / 0x1B4; $i++) { , @([BitConverter]::ToInt16($ships, $i * 0x1B4 + 0x1C), [BitConverter]::ToInt16($ships, $i * 0x1B4 + 0x1E)) })
+        $gi = @(Get-GiantPlan $(if ($gs.Islands) { $gs.Islands } else { $GiantDefault }) ([int]$sc.Number * 31 + [int]$gs.Seed) $tplShips)
+        $giant = [byte[]]$scene.Clone()
+        Set-Islands $giant $gi
+        foreach ($o in $ResourceAmountOffsets) {
+            $m = [BitConverter]::ToUInt16($giant, $o)
+            if ($m) { Set-U16 $giant $o ([math]::Min($gi.Count, [int][math]::Round($m * $gi.Count / $islands.Count))) }
+        }
+        $gv = if ($gs.Villages) { @($gs.Villages) } else { @(7) }
+        Set-I32 $giant 0x40 $gv[0]; Set-I32 $giant 0x44 $gv[-1]
+        if ($gs.Amounts) { foreach ($m in $gs.Amounts.GetEnumerator()) { if ($ResourceEntry.ContainsKey($m.Key)) { Set-U16 $giant ($ResourceEntry[$m.Key] + 2) $m.Value } else { Set-Amount $giant $PlantHouse[$m.Key] $m.Value } } }
+        Assert-Map @(Get-IslandList $giant) ($title + ' (giant)') $GiantWidth $GiantHeight
+        $marker2 = New-Object byte[] 16
+        [Array]::Copy([Text.Encoding]::ASCII.GetBytes('GROS'), $marker2, 4); Set-I32 $marker2 4 $GiantWidth; Set-I32 $marker2 8 $GiantHeight; Set-I32 $marker2 12 1
+        $sceneData = [byte[]]($sceneData + $marker2 + $giant)
+    }
 
     # Put the starting ships on a free water point (distances between them as in the template).
     # 14 fields from every island; crowded maps (archipelago) fall back to 12 or 10.
-    $ships = [byte[]](Get-Section $template 'SHIP4').Data.Clone()
-    $sx0 = [BitConverter]::ToInt16($ships, 0x1C); $sy0 = [BitConverter]::ToInt16($ships, 0x1E)
     $start = $null
-    foreach ($distance in 14, 12, 10) { $start = Find-FreeStartPoint $scene $big $sx0 $sy0 $distance; if ($start) { break } }
+    foreach ($distance in 14, 12, 10) { $start = Find-FreeStartPoint $scene $big $sx0 $sy0 $distance $giant; if ($start) { break } }
     if (-not $start) { throw "$($title): no free starting point found for the ships." }
     for ($i = 0; $i -lt $ships.Length / 0x1B4; $i++) {
         $o = $i * 0x1B4
@@ -342,6 +424,7 @@ function Build-Scenario($sc) {
     Write-Scenario $path $list
     $summary = '{0,-36} {1,2} islands (big {2}, {3}), start {9},{10} (template {11},{12}), difficulty {4}, pirates {5}, gold {6}/{7}, text {8}' -f $title, $islands.Count, $plan.Count, $sc.BigIslandSize, $(if ($sc.ContainsKey('AI')) { '{0} (rivals {1})' -f $sc.Difficulty, $sc.AI } else { $sc.Difficulty }), $(if ($sc.Pirates) { 'active' } else { 'sighted' }), $sc.Gold, $sc.RivalGold, $mission.Text.Length, $start[0], $start[1], $sx0, $sy0
     if ($mission.TimeLimitHours) { $summary += ', time limit {0} h' -f $mission.TimeLimitHours }
+    if ($giant) { $summary += ', giant world {0} islands ({1} lar)' -f $gi.Count, @($gi | Where-Object { $_.Class -eq 4 }).Count }
     @{ Path = $path; Summary = $summary }
 }
 
@@ -1550,6 +1633,268 @@ Your orders:
 - Time limit: 6 hours. The clock shows the elapsed game time; at 360:00 the mission is lost.
 
 The helmsman's advice: The time limit only applies when you play with the Anno 1602 Extensions; the logbook shows you the time left. A second island with another climate supplies what your citizens demand. The "Royal Seal" escorts your trading ships - the pirates will not wait.
+'@ }
+    }
+
+    # --- Campaign 6: Das Weltreich (The World Empire), 2026-11-15 ---------------------------------------
+    # Made for the giant world (key Giant: 50 islands in five realms on 2000 x 1400, see Get-GiantPlan); the big
+    # version (1000 x 700, Huge) and the small map stay as with every scenario. Home realm in the north-west around
+    # the starting ships; cloth and tobacco from the north-east, spices from the far south, two crop monopolies in
+    # the south, a war against one named house, finale with three towns, seven settlements and 8000 residents.
+    @{ Number = 71; BigIslandSize = 'Huge'; BigVillages = 6; Giant = @{ Villages = 6 }; Title = @{ de = 'Weltreich 1 - Die grosse Fahrt'; en = 'World Empire 1 - The Great Voyage' }; Difficulty = 0; AI = 0; Layout = 0; MirrorX = $true; MirrorY = $false; Enlarge = 3
+        Gold = 40000; RivalGold = 15000; Pirates = $false; VillagesNorth = 3; VillagesSouth = 3
+        ShipName = @{ de = 'Morgenstern'; en = 'Morning Star' }
+        Fleet = @(@{ Type = 23; Name = @{ de = 'Fernweh'; en = 'Wanderlust' }; Cargo = @(@{ Good = 'Tools'; Tons = 30 }, @{ Good = 'Wood'; Tons = 40 }, @{ Good = 'Food'; Tons = 20 }) })
+        Mission = @{ Towns = @(@{ Residents = 500; Stage = 1; OfWhich = 250 }); TownCount = 3; TotalResidents = 900 }
+        Text = @{ de = @'
+DAS WELTREICH - Kapitel 1: Die grosse Fahrt
+
+Kapitän, die Krone schickt Euch auf die grösste Reise, die je ein Schiff gewagt hat: hinaus auf ein Meer, so weit, dass selbst die kühnsten Kartographen aufgeben. Fünf Inselreiche sollen dort liegen, getrennt durch Wochen auf offener See - die Kronsee hier im Nordwesten, das Nebelmeer im fernen Nordosten, die Mittelsee, die Korallensee im Süden und ganz im Südosten die sagenhaften Gewürzinseln. Wer sie alle verbindet, wird ein Weltreich regieren.
+
+Euer Auftrag:
+- Gründet eine erste Stadt mit mindestens 500 Einwohnern, davon 250 Siedler oder höher.
+- Mindestens 3 eigene Siedlungen.
+- Alle Eure Siedlungen zusammen sollen mindestens 900 Einwohner haben.
+
+Rat des Steuermanns: Diese Kampagne ist für die Riesenwelt gebaut - spielt sie mit den Anno 1602 Erweiterungen in der Kartengrösse Riesig (2000 x 1400), am einfachsten mit dem Knopf "Riesenwelt" im Starter. Die "Fernweh" hat Werkzeug, Holz und Nahrung für eine zweite Siedlung an Bord. Erkundet zuerst die Kronsee, bevor Ihr in die Ferne segelt.
+'@; en = @'
+THE WORLD EMPIRE - Chapter 1: The Great Voyage
+
+Captain, the Crown is sending you on the greatest voyage any ship has ever dared: out onto a sea so vast that even the boldest cartographers give up. Five island realms are said to lie there, weeks of open sea apart - the Crown Sea here in the north-west, the Mist Sea in the far north-east, the Middle Sea, the Coral Sea in the south and, far in the south-east, the fabled Spice Islands. Whoever links them all will rule a world empire.
+
+Your orders:
+- Found a first town with at least 500 residents, 250 of them settlers or higher.
+- At least 3 settlements of your own.
+- All your settlements together shall have at least 900 residents.
+
+The helmsman's advice: This campaign is made for the giant world - play it with the Anno 1602 Extensions at map size Huge (2000 x 1400), easiest with the "Giant world" button in the launcher. The "Wanderlust" carries tools, wood and food for a second settlement. Explore the Crown Sea first, before you sail far away.
+'@ }
+    }
+    @{ Number = 72; BigIslandSize = 'Huge'; BigVillages = 6; BigAmounts = @{ Tobacco = 5 }; Giant = @{ Villages = 6; Amounts = @{ Tobacco = 8 } }; Title = @{ de = 'Weltreich 2 - Das Nebelmeer'; en = 'World Empire 2 - The Mist Sea' }; Difficulty = 1; AI = 1; Layout = 1; MirrorX = $false; MirrorY = $true; Enlarge = 3
+        Gold = 35000; RivalGold = 25000; Pirates = $false; VillagesNorth = 3; VillagesSouth = 3
+        ShipName = @{ de = 'Morgenstern'; en = 'Morning Star' }
+        Amounts = @{ Tobacco = 3 }
+        Fleet = @(@{ Type = 21; Name = @{ de = 'Nordlicht'; en = 'Northern Light' }; Cargo = @(@{ Good = 'Tools'; Tons = 20 }, @{ Good = 'Wood'; Tons = 30 }) })
+        Mission = @{ Goods1 = @{ Good = 19; Tons = 50 }; Goods2 = @{ Good = 15; Tons = 40 }; Towns = @(@{ Residents = 800; Stage = 2; OfWhich = 300 }); TownCount = 4 }
+        Text = @{ de = @'
+DAS WELTREICH - Kapitel 2: Das Nebelmeer
+
+Weit im Osten, hinter Wochen auf offener See, liegt das Nebelmeer: kühle Inseln voller Wälder und Weiden, auf denen der beste Tabak der Welt wächst. Die Krone braucht Stoffe für ihre Flotte und Tabakwaren für ihre Höflinge - und Ihr sollt die Brücke über das Meer schlagen. Auch die Rivalen haben ihre Schiffe nach Osten geschickt.
+
+Euer Auftrag:
+- Lagert mindestens 50 Tonnen Stoffe und 40 Tonnen Tabakwaren in Euren Kontoren.
+- Eine Stadt mit mindestens 800 Einwohnern, davon 300 Bürger oder höher.
+- Mindestens 4 eigene Siedlungen.
+
+Rat des Steuermanns: In der Riesenwelt (2000 x 1400, mit den Erweiterungen) liegt das Nebelmeer im Nordosten, weit weg von der Kronsee. Ein Kontor dort spart Euren Schiffen die lange Reise: Lasst Tabak und Wolle vor Ort verarbeiten und holt nur die fertigen Waren heim. Die "Nordlicht" bringt Werkzeug und Holz für den Aufbau.
+'@; en = @'
+THE WORLD EMPIRE - Chapter 2: The Mist Sea
+
+Far to the east, beyond weeks of open sea, lies the Mist Sea: cool islands full of forests and pastures, where the finest tobacco in the world grows. The Crown needs cloth for its fleet and tobacco goods for its courtiers - and you are to bridge the sea. The rivals, too, have sent their ships east.
+
+Your orders:
+- Store at least 50 tons of cloth and 40 tons of tobacco goods in your warehouses.
+- A town with at least 800 residents, 300 of them citizens or higher.
+- At least 4 settlements of your own.
+
+The helmsman's advice: In the giant world (2000 x 1400, with the extensions) the Mist Sea lies in the north-east, far from the Crown Sea. A warehouse there spares your ships the long voyage: have tobacco and wool processed on the spot and bring home only the finished goods. The "Northern Light" brings tools and wood for the building work.
+'@ }
+    }
+    @{ Number = 73; BigIslandSize = 'Huge'; BigVillages = 6; BigAmounts = @{ Spices = 5 }; Giant = @{ Villages = 6; Amounts = @{ Spices = 8 } }; Title = @{ de = 'Weltreich 3 - Die Gewuerzroute'; en = 'World Empire 3 - The Spice Route' }; Difficulty = 1; AI = 2; Layout = 2; MirrorX = $true; MirrorY = $false; Enlarge = 3
+        Gold = 35000; RivalGold = 30000; Pirates = $true; VillagesNorth = 3; VillagesSouth = 3
+        ShipName = @{ de = 'Morgenstern'; en = 'Morning Star' }
+        Amounts = @{ Spices = 3 }
+        Fleet = @(@{ Type = 23; Name = @{ de = 'Pfefferkorn'; en = 'Peppercorn' } }, @{ Type = 25; Name = @{ de = 'Geleit'; en = 'Escort' } })
+        Mission = @{ Goods1 = @{ Good = 16; Tons = 60 }; TradeBalance = 250; Towns = @(@{ Residents = 1200; Stage = 3; OfWhich = 400 }) }
+        Text = @{ de = @'
+DAS WELTREICH - Kapitel 3: Die Gewürzroute
+
+Im fernen Südosten liegen die Gewürzinseln, heiss und grün, wo der Pfeffer wächst, nach dem die halbe Welt verlangt. Wer die Route dorthin beherrscht, füllt die Schatzkammer der Krone. Doch die Reise ist lang, und die Piraten kennen die Seewege besser als jeder Lotse.
+
+Euer Auftrag:
+- Lagert mindestens 60 Tonnen Gewürze in Euren Kontoren.
+- Erreicht eine Handelsbilanz von mindestens +250 Talern: Eure Verkäufe müssen Eure Einkäufe deutlich übersteigen.
+- Eine Stadt mit mindestens 1200 Einwohnern, davon 400 Kaufleute oder höher.
+
+Rat des Steuermanns: Gewürze wachsen nur auf Inseln des Südens. In der Riesenwelt (2000 x 1400, mit den Erweiterungen) liegen sie in der Korallensee und auf den Gewürzinseln - eine Handelsroute dorthin braucht Zeit und Geleitschutz. Die "Pfefferkorn" fasst viel Ladung, die "Geleit" hält Euch die Piraten vom Leib.
+'@; en = @'
+THE WORLD EMPIRE - Chapter 3: The Spice Route
+
+Far in the south-east lie the Spice Islands, hot and green, where the pepper grows that half the world craves. Whoever masters the route there fills the Crown's treasury. But the voyage is long, and the pirates know the sea lanes better than any pilot.
+
+Your orders:
+- Store at least 60 tons of spices in your warehouses.
+- Reach a trade balance of at least +250 talers: your sales must clearly exceed your purchases.
+- A town with at least 1200 residents, 400 of them merchants or higher.
+
+The helmsman's advice: Spices grow only on southern islands. In the giant world (2000 x 1400, with the extensions) they lie in the Coral Sea and on the Spice Islands - a trade route there takes time and an escort. The "Peppercorn" holds a lot of cargo, the "Escort" keeps the pirates off your back.
+'@ }
+    }
+    @{ Number = 74; BigIslandSize = 'Huge'; BigVillages = 7; BigAmounts = @{ Cotton = 3; Cocoa = 3 }; Giant = @{ Villages = 7; Amounts = @{ Cotton = 3; Cocoa = 3 } }; Title = @{ de = 'Weltreich 4 - Die Korallensee'; en = 'World Empire 4 - The Coral Sea' }; Difficulty = 2; AI = 2; Layout = 0; MirrorX = $false; MirrorY = $true; Enlarge = 3
+        Gold = 40000; RivalGold = 35000; Pirates = $true; VillagesNorth = 4; VillagesSouth = 4
+        ShipName = @{ de = 'Morgenstern'; en = 'Morning Star' }
+        Amounts = @{ Cotton = 2; Cocoa = 2 }   # monopolies = all islands with the crop (the game counts them at start)
+        Fleet = @(@{ Type = 21; Name = @{ de = 'Seeschwalbe'; en = 'Tern' }; Cargo = @(@{ Good = 'Tools'; Tons = 20 }, @{ Good = 'Wood'; Tons = 30 }) }, @{ Type = 25; Name = @{ de = 'Riffwache'; en = 'Reef Guard' } })
+        Mission = @{ Monopoly1 = @{ Resource = 0x31; Islands = 1 }; Monopoly2 = @{ Resource = 0x33; Islands = 1 }; TownCount = 5; TotalResidents = 3000 }
+        Text = @{ de = @'
+DAS WELTREICH - Kapitel 4: Die Korallensee
+
+Die Flotte der Krone braucht Segeltuch, und am Hof trinkt man Kakao aus feinem Porzellan. Baumwolle und Kakao wachsen nur im warmen Süden, und die Händler der Korallensee verkaufen sie an den Meistbietenden. Die Krone will das ändern: Jede dieser Inseln soll unter ihrer Flagge stehen.
+
+Euer Auftrag:
+- Sichert Euch das Baumwollmonopol: eine eigene Siedlung auf JEDER Insel, auf der Baumwolle wächst, und keine fremde dort.
+- Sichert Euch ebenso das Kakaomonopol: eine eigene Siedlung auf JEDER Insel, auf der Kakao wächst.
+- Mindestens 5 eigene Siedlungen mit zusammen mindestens 3000 Einwohnern.
+
+Rat des Steuermanns: Prüft im Inselinfo, wo Baumwolle und Kakao wachsen - in der Riesenwelt (2000 x 1400, mit den Erweiterungen) sind diese Inseln über den ganzen Süden verstreut. Die Rivalen werden Euch zuvorkommen wollen. Dörfer der Ureinwohner stören die Monopole nicht. Die "Riffwache" schützt die "Seeschwalbe" auf ihren Fahrten.
+'@; en = @'
+THE WORLD EMPIRE - Chapter 4: The Coral Sea
+
+The Crown's fleet needs sailcloth, and at court they drink cocoa from fine porcelain. Cotton and cocoa grow only in the warm south, and the traders of the Coral Sea sell them to the highest bidder. The Crown wants to change that: every one of those islands shall fly its flag.
+
+Your orders:
+- Secure the cotton monopoly: a settlement of your own on EVERY island where cotton grows, and no foreign one there.
+- Secure the cocoa monopoly as well: a settlement of your own on EVERY island where cocoa grows.
+- At least 5 settlements of your own with at least 3000 residents together.
+
+The helmsman's advice: Check the island info for where cotton and cocoa grow - in the giant world (2000 x 1400, with the extensions) those islands are scattered across the whole south. The rivals will try to get there first. Native villages do not spoil the monopolies. The "Reef Guard" protects the "Tern" on her voyages.
+'@ }
+    }
+    @{ Number = 75; BigIslandSize = 'Huge'; BigVillages = 6; Giant = @{ Villages = 6; Amounts = @{ OreSmall = 14; OreLarge = 20 } }; Title = @{ de = 'Weltreich 5 - Krieg der Kronen'; en = 'World Empire 5 - War of the Crowns' }; Difficulty = 2; AI = 3; Layout = 1; MirrorX = $true; MirrorY = $true; Enlarge = 3
+        Gold = 45000; RivalGold = 25000; Pirates = $false; VillagesNorth = 3; VillagesSouth = 3
+        Rivals = @(@{ Player = 2; Gold = 80000; Name = @{ de = 'Haus Morvan'; en = 'House Morvan' }; Ship = @{ de = 'Eiserne Faust'; en = 'Iron Fist' } })
+        ShipName = @{ de = 'Morgenstern'; en = 'Morning Star' }
+        Amounts = @{ OreSmall = 6; OreLarge = 10 }
+        Fleet = @(@{ Type = 27; Name = @{ de = 'Löwenherz'; en = 'Lionheart' } }, @{ Type = 25; Name = @{ de = 'Habicht'; en = 'Goshawk' } })
+        Mission = @{ Defeat = @(2); TownCount = 5; TotalResidents = 4000 }
+        Text = @{ de = @'
+DAS WELTREICH - Kapitel 5: Krieg der Kronen
+
+Das Haus Morvan beansprucht die Seewege zwischen den Inselreichen für sich. Seine Kaperschiffe überfallen Eure Handelsfahrer, seine Söldner besetzen Inseln, die der Krone zustehen. Nun ist es genug: Die Krone schickt Euch die "Löwenherz", ihr stärkstes Kriegsschiff, und erklärt dem Haus Morvan den Krieg.
+
+Euer Auftrag:
+- Besiegt das Haus Morvan. Ihr erkennt es an seinem Flaggschiff, der "Eiserne Faust". Ein Rivale gilt als besiegt, wenn er keine Siedlung und kein Schiff mehr besitzt.
+- Haltet mindestens 5 eigene Siedlungen.
+- Alle Eure Siedlungen zusammen sollen mindestens 4000 Einwohner haben.
+
+Die beiden anderen Rivalen müsst Ihr nicht besiegen.
+
+Rat des Steuermanns: In der Riesenwelt (2000 x 1400, mit den Erweiterungen) können Morvans Kontore weit verstreut liegen - schickt den schnellen "Habicht" als Kundschafter voraus, bevor die Flotte ausläuft. Erz für Kanonen und Schwerter findet Ihr in den Bergen vieler Inseln. Ein Krieg gegen alle drei Häuser zugleich wäre Euer Ende.
+'@; en = @'
+THE WORLD EMPIRE - Chapter 5: War of the Crowns
+
+House Morvan claims the sea lanes between the island realms for itself. Its privateers raid your trading ships, its mercenaries occupy islands that belong to the Crown. Enough is enough: the Crown sends you the "Lionheart", its strongest warship, and declares war on House Morvan.
+
+Your orders:
+- Defeat House Morvan. You will know it by its flagship, the "Iron Fist". A rival counts as defeated when he owns no settlement and no ship any more.
+- Hold at least 5 settlements of your own.
+- All your settlements together shall have at least 4000 residents.
+
+You do not have to defeat the other two rivals.
+
+The helmsman's advice: In the giant world (2000 x 1400, with the extensions) Morvan's warehouses may lie far apart - send the swift "Goshawk" ahead as a scout before the fleet sets sail. Ore for cannons and swords is found in the mountains of many islands. A war against all three houses at once would be your end.
+'@ }
+    }
+    @{ Number = 76; BigIslandSize = 'Huge'; BigVillages = 7; Giant = @{ Villages = 7 }; Title = @{ de = 'Weltreich 6 - Das Weltreich'; en = 'World Empire 6 - The World Empire' }; Difficulty = 3; AI = 3; Layout = 2; MirrorX = $true; MirrorY = $false; Enlarge = 4
+        Gold = 60000; RivalGold = 50000; Pirates = $true; VillagesNorth = 4; VillagesSouth = 4
+        ShipName = @{ de = 'Morgenstern'; en = 'Morning Star' }
+        Amounts = @{ OreSmall = 6; OreLarge = 10; Gold = 3 }
+        Fleet = @(@{ Type = 23; Name = @{ de = 'Morgenstern II'; en = 'Morning Star II' }; Cargo = @(@{ Good = 'Tools'; Tons = 50 }, @{ Good = 'Bricks'; Tons = 50 }, @{ Good = 'Wood'; Tons = 40 }) }, @{ Type = 27; Name = @{ de = 'Kaiserkrone'; en = 'Imperial Crown' } })
+        Mission = @{ Towns = @(@{ Residents = 3000; Stage = 4; OfWhich = 1200 }, @{ Residents = 2000; Stage = 3; OfWhich = 800 }, @{ Residents = 1200; Stage = 2; OfWhich = 500 }); TownCount = 7; TotalResidents = 8000; Balance = 1500 }
+        Text = @{ de = @'
+DAS WELTREICH - Kapitel 6: Das Weltreich
+
+Morvan ist geschlagen, die Seewege sind frei. Nun soll aus Euren Kolonien ein Reich werden, das von der Kronsee bis zu den Gewürzinseln reicht - das erste Weltreich der Geschichte. Die Krone verlangt eine Hauptstadt voller Paläste, blühende Städte in allen Teilen des Meeres und eine Kasse, die überquillt. Doch die übrigen Häuser wollen sich nicht beugen, und Piraten lauern auf den langen Routen.
+
+Euer Auftrag:
+- Eine Hauptstadt mit mindestens 3000 Einwohnern, davon 1200 Aristokraten.
+- Eine zweite Stadt mit mindestens 2000 Einwohnern, davon 800 Kaufleute oder höher.
+- Eine dritte Stadt mit mindestens 1200 Einwohnern, davon 500 Bürger oder höher.
+- Mindestens 7 eigene Siedlungen mit zusammen mindestens 8000 Einwohnern.
+- Eine Bilanz von mindestens +1500 Talern.
+
+Rat des Steuermanns: Dies ist die grösste Aufgabe der Erweiterungen - plant viele Spielstunden ein. Die "Morgenstern II" bringt Werkzeug, Ziegel und Holz für die neuen Städte, die "Kaiserkrone" schützt Eure Routen. Am schönsten in der Riesenwelt (2000 x 1400, mit den Erweiterungen).
+
+Dies ist das letzte Kapitel des Weltreichs. Möge Euer Name über alle Meere getragen werden!
+'@; en = @'
+THE WORLD EMPIRE - Chapter 6: The World Empire
+
+Morvan is beaten, the sea lanes are free. Now your colonies shall become an empire that reaches from the Crown Sea to the Spice Islands - the first world empire in history. The Crown demands a capital full of palaces, thriving towns in every part of the sea and a treasury that overflows. But the remaining houses will not bow, and pirates lurk on the long routes.
+
+Your orders:
+- A capital with at least 3000 residents, 1200 of them aristocrats.
+- A second town with at least 2000 residents, 800 of them merchants or higher.
+- A third town with at least 1200 residents, 500 of them citizens or higher.
+- At least 7 settlements of your own with at least 8000 residents together.
+- A balance of at least +1500 talers.
+
+The helmsman's advice: This is the biggest task of the extensions - plan for many hours of play. The "Morning Star II" brings tools, bricks and wood for the new towns, the "Imperial Crown" guards your routes. Best in the giant world (2000 x 1400, with the extensions).
+
+This is the last chapter of the World Empire. May your name be carried across every sea!
+'@ }
+    }
+
+    # Two challenges for the giant world: seven settlements that all have to grow, and two crop monopolies at the
+    # opposite ends of the map (wine only grows in the north, spices only in the south).
+    @{ Number = 67; BigIslandSize = 'Huge'; BigVillages = 6; Giant = @{ Villages = 6 }; Title = @{ de = 'Herausforderung - Sieben Meere'; en = 'Challenge - Seven Seas' }; Difficulty = 2; AI = 2; Layout = 1; MirrorX = $true; MirrorY = $false; Enlarge = 3
+        Gold = 50000; RivalGold = 30000; Pirates = $true; VillagesNorth = 3; VillagesSouth = 3
+        ShipName = @{ de = 'Windrose'; en = 'Compass Rose' }
+        Fleet = @(@{ Type = 23; Name = @{ de = 'Fernhafen'; en = 'Far Harbour' }; Cargo = @(@{ Good = 'Tools'; Tons = 40 }, @{ Good = 'Wood'; Tons = 40 }, @{ Good = 'Bricks'; Tons = 20 }) }, @{ Type = 21; Name = @{ de = 'Möwe'; en = 'Gull' }; Cargo = @(@{ Good = 'Tools'; Tons = 20 }, @{ Good = 'Wood'; Tons = 30 }) })
+        Mission = @{ TownCount = 7; AllTowns = @{ Residents = 300; Stage = 1; OfWhich = 120 }; TotalResidents = 4000; Balance = 300 }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Sieben Meere
+
+Ein Kapitän, der auf sieben Meeren seine Flagge gehisst hat, gilt in jedem Hafen als Legende. Gründet sieben Siedlungen und macht aus jeder einen richtigen Ort - keine leeren Kontore, sondern lebendige Städtchen.
+
+Euer Auftrag:
+- Mindestens 7 eigene Siedlungen.
+- JEDE Eurer Siedlungen braucht mindestens 300 Einwohner, davon 120 Siedler oder höher. Auch ein Kontor ohne Häuser zählt als Siedlung!
+- Alle Siedlungen zusammen mindestens 4000 Einwohner.
+- Eine Bilanz von mindestens +300 Talern.
+
+Rat des Steuermanns: Gebaut für die Riesenwelt (2000 x 1400, mit den Erweiterungen): Verteilt Eure Siedlungen über mehrere Inselreiche, damit jede genug Platz zum Wachsen hat. Die "Fernhafen" und die "Möwe" bringen Baumaterial für die ersten Aussenposten. Piraten kreuzen auf den langen Routen.
+'@; en = @'
+CHALLENGE: Seven Seas
+
+A captain who has raised his flag on seven seas is a legend in every harbour. Found seven settlements and make each of them a proper place - not empty warehouses, but lively little towns.
+
+Your orders:
+- At least 7 settlements of your own.
+- EVERY one of your settlements needs at least 300 residents, 120 of them settlers or higher. Even a warehouse without houses counts as a settlement!
+- All settlements together at least 4000 residents.
+- A balance of at least +300 talers.
+
+The helmsman's advice: Made for the giant world (2000 x 1400, with the extensions): spread your settlements over several island realms so that each has room to grow. The "Far Harbour" and the "Gull" bring building material for the first outposts. Pirates cruise the long routes.
+'@ }
+    }
+    @{ Number = 68; BigIslandSize = 'Huge'; BigVillages = 6; BigAmounts = @{ Wine = 3; Spices = 3 }; Giant = @{ Villages = 6; Amounts = @{ Wine = 3; Spices = 3 } }; Title = @{ de = 'Herausforderung - Die Weltumsegelung'; en = 'Challenge - Around the World' }; Difficulty = 2; AI = 1; Layout = 0; MirrorX = $false; MirrorY = $true; Enlarge = 3
+        Gold = 45000; RivalGold = 25000; Pirates = $true; VillagesNorth = 3; VillagesSouth = 3
+        ShipName = @{ de = 'Weltenbummler'; en = 'Globetrotter' }
+        Amounts = @{ Wine = 2; Spices = 2 }   # monopolies = all islands with the crop (the game counts them at start)
+        Fleet = @(@{ Type = 21; Name = @{ de = 'Passat'; en = 'Trade Wind' }; Cargo = @(@{ Good = 'Tools'; Tons = 20 }, @{ Good = 'Wood'; Tons = 30 }) }, @{ Type = 25; Name = @{ de = 'Wellenreiter'; en = 'Wave Rider' } })
+        Mission = @{ Monopoly1 = @{ Resource = 0x32; Islands = 1 }; Monopoly2 = @{ Resource = 0x2F; Islands = 1 }; TradeBalance = 400 }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Die Weltumsegelung
+
+Die Kaufleute der Alten Welt wetten, dass niemand den Wein des Nordens und die Gewürze des Südens zugleich beherrschen kann - zu weit liegen die Inseln auseinander. Beweist das Gegenteil: Umsegelt die Welt und hisst Eure Flagge auf jeder Insel, die Wein oder Gewürze trägt.
+
+Euer Auftrag:
+- Sichert Euch das Weinmonopol: eine eigene Siedlung auf JEDER Insel, auf der Wein wächst, und keine fremde dort.
+- Sichert Euch ebenso das Gewürzmonopol: eine eigene Siedlung auf JEDER Insel, auf der Gewürze wachsen.
+- Erreicht eine Handelsbilanz von mindestens +400 Talern.
+
+Rat des Steuermanns: Wein wächst nur im Norden, Gewürze nur im Süden. In der Riesenwelt (2000 x 1400, mit den Erweiterungen) liegen diese Inseln in verschiedenen Inselreichen - ohne gute Routen ist das nicht zu schaffen. Dörfer der Ureinwohner stören die Monopole nicht. Der "Wellenreiter" begleitet die "Passat" auf ihren langen Fahrten.
+'@; en = @'
+CHALLENGE: Around the World
+
+The merchants of the Old World are betting that no one can master the wine of the north and the spices of the south at the same time - the islands lie too far apart. Prove them wrong: sail around the world and raise your flag on every island that bears wine or spices.
+
+Your orders:
+- Secure the wine monopoly: a settlement of your own on EVERY island where wine grows, and no foreign one there.
+- Secure the spice monopoly as well: a settlement of your own on EVERY island where spices grow.
+- Reach a trade balance of at least +400 talers.
+
+The helmsman's advice: Wine grows only in the north, spices only in the south. In the giant world (2000 x 1400, with the extensions) those islands lie in different island realms - without good routes it cannot be done. Native villages do not spoil the monopolies. The "Wave Rider" escorts the "Trade Wind" on her long voyages.
 '@ }
     }
 )

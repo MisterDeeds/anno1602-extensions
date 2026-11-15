@@ -61,7 +61,9 @@
     Y  50 islands at 1000 x 700; all options together, code caves do not overlap.
     Z  Big campaign maps: extended SZENE section ('GROS' + second block) in the image;
        1000 x 700 and 2000 x 1400 -> big version (stretched), 750 x 525 and 500 x 350 -> small
-       version, wrong marker / too short -> small version. H: without the big map code cave.
+       version, wrong marker / too short -> small version. Since 3.1 a third version for the giant
+       world: 2000 x 1400 -> giant version, 1999 x 1400 / 2000 x 1399 / 1500 x 1050 / 1000 x 700 -> big,
+       broken giant version -> big x 2, unknown first marker -> small. H: without the big map code cave.
   The cases below (2 letters) run the game's own haeuser.cod parser FUN_140090660 (and FUN_140092e00)
   in the helper process: its CRT imports are resolved there and it runs in the game folder, so the
   building table and the population groups hold exactly the values of the running game.
@@ -1460,11 +1462,11 @@ try {
         $x = New-Object byte[] 16; [Array]::Copy([Text.Encoding]::ASCII.GetBytes($marker), $x, 4); [Array]::Copy((I32 1000), 0, $x, 4, 4); [Array]::Copy((I32 700), 0, $x, 8, 4); [Array]::Copy((I32 1), 0, $x, 12, 4)
         $l = [byte[]]($k + $x + $g); , [byte[]]$l[0..($l.Length - 1 - $shorter)]
     }
-    function Get-StretchedBig([byte[]]$g, [int]$w, [int]$h) {
+    function Get-StretchedBig([byte[]]$g, [int]$w, [int]$h, [int]$dw = 1000, [int]$dh = 700) {
         $e = [byte[]]$g.Clone(); $n = [BitConverter]::ToInt32($g, 0x64)
         for ($i = 0; $i -lt $n; $i++) { $p = 0x174 + 16 * $i
-            [Array]::Copy((I32 ([int][math]::Truncate([BitConverter]::ToInt32($g, $p + 8) * $w / 1000))), 0, $e, $p + 8, 4)
-            [Array]::Copy((I32 ([int][math]::Truncate([BitConverter]::ToInt32($g, $p + 12) * $h / 700))), 0, $e, $p + 12, 4) }
+            [Array]::Copy((I32 ([int][math]::Truncate([BitConverter]::ToInt32($g, $p + 8) * $w / $dw))), 0, $e, $p + 8, 4)
+            [Array]::Copy((I32 ([int][math]::Truncate([BitConverter]::ToInt32($g, $p + 12) * $h / $dh))), 0, $e, $p + 12, 4) }
         , $e
     }
     $long = Join-Versions $small $bigB
@@ -1480,6 +1482,34 @@ try {
         $actual = Invoke-IslandCode $a $case[1] 1000 700
         Assert-Check "Z $($case[0]): only the small version stretched" ((Hex ([byte[]]$actual[0..1171])) -eq (Hex (Get-StretchedScene $small 1000 700)))
     }
+    # Since 3.1: a third version for the giant world (designed for 2000 x 1400) behind the big one; the code cave takes
+    # the last version that fits the map, so the giant one at 2000 x 1400 and the big one below.
+    $planG = Get-IslandPlan (Read-Template (Join-Path $GameFolder 'Szenes\[[48]]10.szs')) 2000 1400 $false 'Large'
+    $giantB = [byte[]]$small.Clone(); [Array]::Copy((I32 $planG.Count), 0, $giantB, 0x64, 4)
+    for ($i = 0; $i -lt 50; $i++) { $q = if ($i -lt $planG.Count) { $planG[$i] } else { New-Object byte[] 16 }; [Array]::Copy($q, 0, $giantB, 0x174 + 16 * $i, 16) }
+    [Array]::Copy((I32 7), 0, $giantB, 0x40, 4); [Array]::Copy((I32 7), 0, $giantB, 0x44, 4)
+    function New-VersionHead([string]$marker, [int]$w, [int]$h) {
+        $x = New-Object byte[] 16; [Array]::Copy([Text.Encoding]::ASCII.GetBytes($marker), $x, 4); [Array]::Copy((I32 $w), 0, $x, 4, 4); [Array]::Copy((I32 $h), 0, $x, 8, 4); [Array]::Copy((I32 1), 0, $x, 12, 4); , $x
+    }
+    $three = [byte[]]($long + (New-VersionHead 'GROS' 2000 1400) + $giantB)
+    Assert-Check "Z three versions: $($three.Length) bytes, giant version with $($planG.Count) islands" ($three.Length -eq 3548 -and $planG.Count -ge 40)
+    foreach ($case in @(@(2000, 1400, 'giant'), @(1999, 1400, 'big'), @(2000, 1399, 'big'), @(1500, 1050, 'big'), @(1000, 700, 'big'), @(750, 525, 'small'))) {
+        $actual = Invoke-IslandCode $a $three $case[0] $case[1]
+        $front = switch ($case[2]) { 'giant' { Get-StretchedBig $giantB $case[0] $case[1] 2000 1400 } 'big' { Get-StretchedBig $bigB $case[0] $case[1] } default { Get-StretchedScene $small $case[0] $case[1] } }
+        $ok = ((Hex ([byte[]]$actual[0..1171])) -eq (Hex $front)) -and ((Hex ([byte[]]$actual[1172..3547])) -eq (Hex ([byte[]]$three[1172..3547])))
+        Assert-Check ('Z three versions, {0} x {1}: {2} version ({3} islands, island 0 at {4}/{5}, villages {6}), rest unchanged' -f $case[0], $case[1], $case[2], [BitConverter]::ToInt32($actual, 0x64), [BitConverter]::ToInt32($actual, 0x17C), [BitConverter]::ToInt32($actual, 0x180), [BitConverter]::ToInt32($actual, 0x40)) $ok
+        if ($case[2] -ne 'small') { $e = @(for ($i = 0; $i -lt [BitConverter]::ToInt32($actual, 0x64); $i++) { , [byte[]]$actual[(0x174 + 16 * $i)..(0x174 + 16 * $i + 15)] }); Test-Geometry $e $case[0] $case[1] "Z three versions $($case[0]) x $($case[1])" }
+    }
+    # A broken giant version is skipped: wrong marker, or 10 bytes missing -> the big version, stretched x 2.
+    $wrongG = [byte[]]($long + (New-VersionHead 'GROX' 2000 1400) + $giantB)
+    $shortG = [byte[]]($three[0..($three.Length - 11)])
+    foreach ($case in @(@('wrong marker of the giant version', $wrongG), @('giant version 10 bytes short', $shortG))) {
+        $actual = Invoke-IslandCode $a $case[1] 2000 1400
+        Assert-Check "Z $($case[0]): big version x 2 at 2000 x 1400" ((Hex ([byte[]]$actual[0..1171])) -eq (Hex (Get-StretchedBig $bigB 2000 1400)))
+    }
+    # The search stops at the first version without the marker: unknown first marker -> small version.
+    $actual = Invoke-IslandCode $a ([byte[]]($small + (New-VersionHead 'XXXX' 1000 700) + $bigB + (New-VersionHead 'GROS' 2000 1400) + $giantB)) 2000 1400
+    Assert-Check 'Z first version unknown: small version stretched (later versions are not searched)' ((Hex ([byte[]]$actual[0..1171])) -eq (Hex (Get-StretchedScene $small 2000 1400)))
     Assert-Check 'Z helper process still alive' (-not $a.Proc.HasExited)
     Stop-ImageProcess $a
 

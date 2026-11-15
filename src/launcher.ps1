@@ -201,6 +201,14 @@ $ForCampaigns = @{
     Turbo = '16'
 }
 
+# "Giant world" (since 3.1): the giant version of the World Empire maps (2000 x 1400, five island realms), ships twice
+# as fast for the long sea routes, turbo; gold, rivals and economy as the scenario intends. Other scenarios get their
+# big version stretched to this size, the endless game 50 islands spread over the giant world.
+$GiantWorld = @{
+    World = '2000x1400'; Islands = 'More'; RivalGold = 'Difficulty'; StartGold = 'Difficulty'
+    ShipSpeed = '2'; Turbo = '16'
+}
+
 # "Relaxed": build in peace - cheap buildings, more taxes, every crop everywhere, no pirates and no disasters.
 $Relaxed = @{
     World = '1000x700'; Islands = 'More'; IslandSize = 'Large'; Resources = 'Lots'; Fertility = 'Everywhere'; Mines = 'Infinite'
@@ -436,6 +444,7 @@ if ($PrintArgs) {
     'default: ' + ((Get-PatcherArgs (Complete-Choice @{})) -join ' ')
     'everything-big: ' + ((Get-PatcherArgs (Complete-Choice $EverythingBig)) -join ' ')
     'campaigns: ' + ((Get-PatcherArgs (Complete-Choice $ForCampaigns)) -join ' ')
+    'giant-world: ' + ((Get-PatcherArgs (Complete-Choice $GiantWorld)) -join ' ')
     'saved: ' + ((Get-PatcherArgs (Complete-Choice $saved)) -join ' ')
     'relaxed: ' + ((Get-PatcherArgs (Complete-Choice $Relaxed)) -join ' ')
     'tough: ' + ((Get-PatcherArgs (Complete-Choice $Tough)) -join ' ')
@@ -621,16 +630,19 @@ $presetLabel = New-Label (Txt 'Presets:' 'Vorlagen:') $true 9 0
 $presetRow.Controls.Add($presetLabel)
 $buttonBig = New-Button (Txt 'Everything big' 'Alles gross') $presetRow
 $buttonCampaigns = New-Button (Txt 'For campaigns' 'Für Kampagnen') $presetRow
+$buttonGiant = New-Button (Txt 'Giant world' 'Riesenwelt') $presetRow
 $buttonRelaxed = New-Button (Txt 'Relaxed' 'Gemütlich') $presetRow
 $buttonTough = New-Button (Txt 'Tough test' 'Harte Probe') $presetRow
 $buttonDefaults = New-Button (Txt 'Reset to defaults' 'Alles auf Standard') $presetRow
 $presetTips = New-Object Windows.Forms.ToolTip
 $presetTips.SetToolTip($buttonBig, (Txt 'Big world, huge islands, lots of everything, strong rivals, turbo 16×' 'Grosse Welt, riesige Inseln, von allem viel, starke Gegner, Turbo 16-fach'))
 $presetTips.SetToolTip($buttonCampaigns, (Txt 'Big campaign maps and turbo; everything else as the scenario intends' 'Grosse Kampagnenkarten und Turbo; alles andere wie im Szenario vorgesehen'))
+$presetTips.SetToolTip($buttonGiant, (Txt 'Giant world 2000 × 1400 for the World Empire campaign: five island realms, ships twice as fast, turbo; everything else as the scenario intends' 'Riesenwelt 2000 × 1400 für die Kampagne Weltreich: fünf Inselreiche, Schiffe doppelt so schnell, Turbo; alles andere wie im Szenario vorgesehen'))
 $presetTips.SetToolTip($buttonRelaxed, (Txt 'Build in peace: cheap buildings, more taxes, every crop everywhere, no pirates, no disasters' 'In Ruhe bauen: günstige Gebäude, mehr Steuern, jede Pflanze überall, keine Piraten, keine Katastrophen'))
 $presetTips.SetToolTip($buttonTough, (Txt 'Rivals at their strongest, strong pirates with a huge fleet, more disasters' 'Gegner in Höchstform, starke Piraten mit riesiger Flotte, mehr Katastrophen'))
 $buttonBig.Add_Click({ Set-Selection (Complete-Choice $EverythingBig) })
 $buttonCampaigns.Add_Click({ Set-Selection (Complete-Choice $ForCampaigns) })
+$buttonGiant.Add_Click({ Set-Selection (Complete-Choice $GiantWorld) })
 $buttonRelaxed.Add_Click({ Set-Selection (Complete-Choice $Relaxed) })
 $buttonTough.Add_Click({ Set-Selection (Complete-Choice $Tough) })
 $buttonDefaults.Add_Click({ Set-Selection (Complete-Choice @{}) })
@@ -691,8 +703,8 @@ $buttonSaveFolder.Add_Click({ if (Test-Path -LiteralPath $SaveFolder) { Start-Pr
 
 # --- Tab 3: adventures ---------------------------------------------------------------------------------------
 $pageAdventures = New-Tab (Txt 'Adventures' 'Abenteuer')
-$pageAdventures.Controls.Add((New-Label (Txt ('Your own scenarios (in the game under “New Game” → “Own Scenarios”). The logbook notes every mission' + [Environment]::NewLine + 'you win; the next open chapter of each campaign is marked.') `
-                ('Deine eigenen Szenarien (im Spiel unter „Neues Spiel“ → „Eigene Szenarien“). Das Logbuch merkt sich jede' + [Environment]::NewLine + 'gewonnene Mission; das nächste offene Kapitel jeder Kampagne ist markiert.') $true 0 10)))
+$pageAdventures.Controls.Add((New-Label (Txt ('Your own scenarios (in the game under “New Game” → “Own Scenarios”). The logbook notes every mission' + [Environment]::NewLine + 'you win; the next open chapter of each campaign is marked. The World Empire campaign is made for the giant world:' + [Environment]::NewLine + 'choose the preset “Giant world” on the “New game” tab before you play it.') `
+                ('Deine eigenen Szenarien (im Spiel unter „Neues Spiel“ → „Eigene Szenarien“). Das Logbuch merkt sich jede' + [Environment]::NewLine + 'gewonnene Mission; das nächste offene Kapitel jeder Kampagne ist markiert. Die Kampagne Weltreich ist für die' + [Environment]::NewLine + 'Riesenwelt gebaut: vorher im Tab „Neues Spiel“ die Vorlage „Riesenwelt“ wählen.') $true 0 10)))
 $scenarioList = New-Object Windows.Forms.ListView
 $scenarioList.View = 'Details'
 $scenarioList.FullRowSelect = $true
@@ -983,6 +995,7 @@ if ($TestClicks) {
             Write-Step 'preset Relaxed, logbook with the game, Play with extensions'; $checkLogbook.Checked = $true; Invoke-Click $buttonRelaxed; Invoke-Click $buttonStart
             $script:Started.Add('SETTINGS LogbookWithGame=' + (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).LogbookWithGame); $checkLogbook.Checked = $false
             Write-Step 'preset Tough test, Start original'; Invoke-Click $buttonTough; Invoke-Click $buttonOriginal
+            Write-Step 'preset Giant world, Play with extensions'; Invoke-Click $buttonGiant; Invoke-Click $buttonStart
             Write-Step 'Open logbook'; Invoke-Click $buttonLogbook
             # As a player would: switch to the tab first (the list only reports a selection once it is shown).
             $tabs.SelectedIndex = 1

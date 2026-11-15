@@ -6,14 +6,15 @@
 .DESCRIPTION
   A window (German on a German Windows, English otherwise; $env:ANNO_EXTENSIONS_LANG) with
     Scenario   name, map kind (classic / archipelago / continents, the map rules of the random adventures),
-               map number (the same number gives the same map), difficulty
+               map number (the same number gives the same map), difficulty, and since 3.1 optionally a third map
+               version for the giant world 2000 x 1400 (five island realms, build-scenarios.ps1 key Giant)
     World      your starting gold, the rivals' gold and strength, pirates, natives, resources, start cargo,
                extra trading ships and warships
     Mission    any combination of the goal types the campaigns use: up to 3 towns with a stage goal, every
                settlement at least, number of settlements, total residents, balance, trade balance, up to 2 goods
                in stock, up to 2 crop monopolies, defeat chosen rivals
     Story      generated from the text blocks of the random adventures, freely editable
-  The preview shows the mission text exactly as the game shows it (and the map of both versions). "Create" builds
+  The preview shows the mission text exactly as the game shows it (and the map of every version). "Create" builds
   the scenario with build-scenarios.ps1 (through random-adventure.ps1 -Library), checks that the computer rivals
   find islands of class med or bigger, and puts it into Documents\Anno 1602 History Edition\Own Scenarios.
   The last design is remembered in %APPDATA%\Anno1602-Extensions\designer.json.
@@ -93,7 +94,7 @@ function New-DefaultDesign {
         Name = (Txt 'My Isles' 'Meine Inseln'); MapKind = 'Classic'; MapNumber = (Get-Random -Minimum 1 -Maximum 1000000); Difficulty = 1
         Gold = 30000; RivalGold = 25000; RivalStrength = 1; Pirates = $false; Natives = 'Normal'; Resources = 'Normal'; Cargo = 'Standard'; Ships = @()
         Towns = @(@{ Residents = 500; Stage = 2; OfWhich = 250 }); AllTowns = $null; TownCount = 0; TotalResidents = 0
-        Balance = 0; TradeBalance = $null; Goods = @(); Monopolies = @(); Defeat = @(); TimeLimitHours = 0
+        Balance = 0; TradeBalance = $null; Goods = @(); Monopolies = @(); Defeat = @(); TimeLimitHours = 0; GiantWorld = $false
         StorySeed = (Get-Random -Minimum 1 -Maximum 1000000); Story = $null
     }
 }
@@ -107,6 +108,7 @@ function ConvertTo-Design($obj) {
     foreach ($k in 'MapNumber', 'Difficulty', 'Gold', 'RivalGold', 'RivalStrength', 'TownCount', 'TotalResidents', 'StorySeed', 'TimeLimitHours') { if ($p.ContainsKey($k) -and $null -ne $p[$k]) { $d[$k] = [int]$p[$k] } }
     foreach ($k in 'Balance', 'TradeBalance') { if ($p.ContainsKey($k)) { $d[$k] = if ($null -eq $p[$k]) { $null } else { [int]$p[$k] } } }
     if ($p.ContainsKey('Pirates')) { $d.Pirates = [bool]$p.Pirates }
+    if ($p.ContainsKey('GiantWorld')) { $d.GiantWorld = [bool]$p.GiantWorld }
     if ($p.ContainsKey('Story')) { $d.Story = if ($null -eq $p.Story) { $null } else { [string]$p.Story } }
     if ($p.ContainsKey('Ships')) { $d.Ships = @($p.Ships | Where-Object { $null -ne $_ } | ForEach-Object { [int]$_ }) }
     if ($p.ContainsKey('Towns')) { $d.Towns = @($p.Towns | Where-Object { $_ } | ForEach-Object { & $town $_ }) }
@@ -230,6 +232,8 @@ function ConvertTo-DesignScenario($d, [int]$attempt = 0) {
     Add-AdvCropsForGoods $amounts $goodIds
     $sc.Amounts = $amounts
     if ($bigAmounts.Count) { $sc.BigAmounts = $bigAmounts }
+    # Giant world (since 3.1): a third map version for 2000 x 1400 with five island realms; the map number is its seed.
+    if ($d.GiantWorld) { $sc.Giant = @{ Villages = $nat[2]; Seed = [int]$d.MapNumber }; if ($bigAmounts.Count) { $sc.Giant.Amounts = $bigAmounts } }
 
     # Ships: start cargo (bricks give way to food when bricks are a goal), extra ships with names.
     $cargoNote = $null
@@ -267,6 +271,7 @@ function ConvertTo-DesignScenario($d, [int]$attempt = 0) {
     $story = (ConvertTo-PlainText $(if ($null -ne $d.Story) { $d.Story } else { $generated })).Trim()
     $titleLine = if ($Language -eq 'de') { 'EIGENES SZENARIO: ' + ($d.Name -replace '\s+', ' ').Trim() } else { 'CUSTOM SCENARIO: ' + (ConvertTo-AsciiName $d.Name) }
     $advice = @($mainHint) + @($hints | Select-Object -First 2)
+    if ($d.GiantWorld) { $advice += , (New-AdvText 'Am schönsten in der Riesenwelt: im Starter die Vorlage "Riesenwelt" wählen (2000 x 1400).' 'Best in the giant world: choose the preset "Giant world" in the launcher (2000 x 1400).') }
     $text = Format-AdvText $Language $titleLine $lv $story $bullets (Get-AdvDefeatNote $(if ($targets.Count -lt 3) { $targets.Count } else { 0 })) $advice $parts.Closing
     $sc.Title = @{ $Language = (Get-DesignTitle $d) }
     $sc.Text = @{ $Language = $text }
@@ -277,7 +282,7 @@ function ConvertTo-DesignScenario($d, [int]$attempt = 0) {
 # --- Maps: the small map (500 x 350) as Build-Scenario makes it, and its big version (1000 x 700) ----------------------
 # Used for the checks of a design (islands per climate, number of islands) and for the map preview.
 $script:MapCache = @{}
-function Get-DesignMaps($d, [switch]$Big) {
+function Get-DesignMaps($d, [switch]$Big, [switch]$Giant) {
     $key = '{0}|{1}|{2}' -f $d.MapKind, $d.MapNumber, $d.Difficulty
     if (-not $script:MapCache.ContainsKey($key)) {
         $sc = @{ Number = 0; GameId = 0x54000000 + ([int]$d.Difficulty -shl 20) + [int]$d.MapNumber; Difficulty = [int]$d.Difficulty }
@@ -291,9 +296,13 @@ function Get-DesignMaps($d, [switch]$Big) {
         if ($sc.ContainsKey('MaxClass')) { foreach ($e in $islands) { if ($e.Class -gt $sc.MaxClass) { $e.Class = [int]$sc.MaxClass } } }
         if ($sc.AddIslands) { $islands = @(Add-Islands $islands $sc.AddIslands @(0, 1) ([int]$sc.Number + [int]$sc.GameId)) }
         if ($sc.Enlarge) { Expand-Islands $islands $sc.Enlarge }
-        $script:MapCache[$key] = @{ Small = $islands; Scene = $scene; BigSize = $sc.BigIslandSize; Big = $null }
+        $ships = (Get-Section $template 'SHIP4').Data
+        $shipPoints = @(for ($i = 0; $i -lt $ships.Length / 0x1B4; $i++) { , @([BitConverter]::ToInt16($ships, $i * 0x1B4 + 0x1C), [BitConverter]::ToInt16($ships, $i * 0x1B4 + 0x1E)) })
+        $script:MapCache[$key] = @{ Small = $islands; Scene = $scene; BigSize = $sc.BigIslandSize; Big = $null; Ships = $shipPoints; Giant = $null }
     }
     $m = $script:MapCache[$key]
+    # Giant world: the same plan as Build-Scenario (scenario number 0, the map number as seed).
+    if ($Giant -and $null -eq $m.Giant) { $m.Giant = @(Get-GiantPlan $GiantDefault ([int]$d.MapNumber) $m.Ships) }
     if ($Big -and $null -eq $m.Big) {
         $scene = [byte[]]$m.Scene.Clone(); Set-Islands $scene $m.Small
         $small16 = @(for ($i = 0; $i -lt $m.Small.Count; $i++) { , [byte[]]$scene[(0x174 + 16 * $i)..(0x174 + 16 * $i + 15)] })
@@ -399,7 +408,8 @@ function Invoke-DesignBuild($d) {
                 if (@($counts | Where-Object { $_ -lt 4 }).Count) { throw "too few islands of class med or bigger for the rivals ($($counts -join ' / '))" }
                 # The same map checks as for the preview, on both versions of the file (a retry builds another variant).
                 $s = (Get-Section (Read-Scenario $built.Path) 'SZENE').Data
-                foreach ($block in @(, $s) + @(, [byte[]]$s[0x4A4..($s.Length - 1)])) { $p = Get-DesignMapProblem $d @(Get-IslandList $block); if ($p) { throw $p } }
+                $blocks = @(, $s) + @(, [byte[]]$s[0x4A4..($s.Length - 1)]); if ($s.Length -ge 3548) { $blocks += , [byte[]]$s[0x948..($s.Length - 1)] }
+                foreach ($block in $blocks) { $p = Get-DesignMapProblem $d @(Get-IslandList $block); if ($p) { throw $p } }
                 New-Item -ItemType Directory -Force -Path $DesignTarget | Out-Null
                 $target = Join-Path $DesignTarget ([IO.Path]::GetFileName($built.Path))
                 Copy-Item -LiteralPath $built.Path -Destination $target -Force
@@ -539,6 +549,9 @@ Add-Row $gridScenario (Txt 'Map number' 'Kartennummer') @($mapNumber, $buttonNew
 $difficultyCombo = New-Combo @($LevelText | ForEach-Object { $_[$Language] }) 170
 $tips.SetToolTip($difficultyCombo, (Txt 'The game''s difficulty and the template of the map.' 'Schwierigkeit des Spiels und Vorlage der Karte.'))
 Add-Row $gridScenario (Txt 'Difficulty' 'Schwierigkeit') $difficultyCombo
+$checkGiant = New-Check (Txt 'also for the giant world 2000 × 1400' 'auch für die Riesenwelt 2000 × 1400')
+$tips.SetToolTip($checkGiant, (Txt 'A third map version: 50 islands in five island realms with open sea between them. It is used with the launcher preset “Giant world”.' 'Eine dritte Kartenversion: 50 Inseln in fünf Inselreichen mit offenem Meer dazwischen. Sie gilt mit der Vorlage „Riesenwelt“ im Starter.'))
+Add-Row $gridScenario (Txt 'Giant world' 'Riesenwelt') $checkGiant
 
 # --- World and rivals ---
 $gridWorld = New-Group (Txt 'World, rivals and ships' 'Welt, Gegner und Schiffe') $leftColumn
@@ -741,6 +754,7 @@ function Set-DesignControls($d) {
         }
         for ($k = 0; $k -lt 3; $k++) { $defeatChecks[$k].Checked = @($d.Defeat) -contains ($k + 1) }
         $checkTime.Checked = [bool]$d.TimeLimitHours; Set-Number $timeBox $(if ($d.TimeLimitHours) { $d.TimeLimitHours } else { 4 })
+        $checkGiant.Checked = [bool]$d.GiantWorld
         $script:StorySeed = $d.StorySeed
         $script:StoryEdited = $null -ne $d.Story
         if ($script:StoryEdited) { $storyText.Text = $d.Story -replace "`r?`n", "`r`n" }
@@ -764,6 +778,7 @@ function Get-DesignFromControls {
     $d.Monopolies = @($monoRows | Where-Object { $_.Check.Checked } | ForEach-Object { $CropKeys[$_.Crop.SelectedIndex] })
     $d.Defeat = @(for ($k = 0; $k -lt 3; $k++) { if ($defeatChecks[$k].Checked) { $k + 1 } })
     $d.TimeLimitHours = if ($checkTime.Checked) { [int]$timeBox.Value } else { 0 }
+    $d.GiantWorld = $checkGiant.Checked
     $d.StorySeed = $script:StorySeed
     $d.Story = if ($script:StoryEdited) { $storyText.Text } else { $null }
     $d
@@ -775,14 +790,18 @@ function Update-MapPicture {
     $g = [Drawing.Graphics]::FromImage($bmp)
     $g.SmoothingMode = 'AntiAlias'; $g.Clear([Drawing.Color]::White)
     try {
-        $maps = Get-DesignMaps (Get-DesignFromControls) -Big
-        $mw = [math]::Floor(($w - 30) / 2); $mh = [math]::Floor($mw * 0.7)
+        $design = Get-DesignFromControls
+        $maps = Get-DesignMaps $design -Big -Giant:([bool]$design.GiantWorld)
+        $versions = @(@{ List = $maps.Small; W = 500; H = 350; Label = (Txt 'Original 500 × 350: {0} islands' 'Original 500 × 350: {0} Inseln') },
+            @{ List = $maps.Big; W = 1000; H = 700; Label = (Txt 'Extensions 1000 × 700: {0} islands' 'Erweiterungen 1000 × 700: {0} Inseln') })
+        if ($design.GiantWorld) { $versions += @{ List = $maps.Giant; W = 2000; H = 1400; Label = (Txt 'Giant world 2000 × 1400: {0} islands' 'Riesenwelt 2000 × 1400: {0} Inseln') } }
+        $mw = [math]::Floor(($w - 10 * ($versions.Count + 1)) / $versions.Count); $mh = [math]::Floor($mw * 0.7)
+        for ($k = 0; $k -lt $versions.Count; $k++) { $versions[$k].X = 10 + $k * ($mw + 10) }
         $sea = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(70, 130, 180))
         $land = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(222, 205, 140))
         $green = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(96, 150, 70))
         $textBrush = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(40, 40, 40))
-        foreach ($v in @(@{ X = 10; List = $maps.Small; W = 500; H = 350; Label = (Txt 'Original map 500 × 350: {0} islands' 'Originalkarte 500 × 350: {0} Inseln') },
-                @{ X = 20 + $mw; List = $maps.Big; W = 1000; H = 700; Label = (Txt 'With the extensions 1000 × 700: {0} islands' 'Mit Erweiterungen 1000 × 700: {0} Inseln') })) {
+        foreach ($v in $versions) {
             $g.FillRectangle($sea, $v.X, 10, $mw, $mh)
             $f = $mw / $v.W
             foreach ($e in $v.List) {
@@ -791,11 +810,12 @@ function Update-MapPicture {
                 $g.FillEllipse($land, [single]$x, [single]$y, [single]$rw, [single]$rh)
                 $g.FillEllipse($green, [single]($x + $rw * 0.15), [single]($y + $rh * 0.15), [single]($rw * 0.7), [single]($rh * 0.7))
             }
-            $g.DrawString(($v.Label -f @($v.List).Count), $font, $textBrush, [single]$v.X, [single](16 + $mh))
+            $g.DrawString(($v.Label -f @($v.List).Count), $font, $textBrush, (New-Object Drawing.RectangleF([single]$v.X, [single](14 + $mh), [single]$mw, 34)))
         }
         $kindText = @{ Classic = (Txt 'Classic: some islands one size bigger.' 'Klassisch: einige Inseln eine Grösse grösser.'); Archipelago = (Txt 'Archipelago: many small islands (at most 50 × 52).' 'Archipel: viele kleine Inseln (höchstens 50 × 52).'); Continents = (Txt 'Continents: a few huge islands.' 'Kontinente: wenige riesige Inseln.') }[$MapKinds[$mapCombo.SelectedIndex]]
         $note = $kindText + ' ' + (Txt 'Island sizes as drawn; the game draws the coasts itself. The big version is used with the launcher (map 1000 × 700, “More islands”).' 'Inselgrössen wie gezeichnet; die Küsten zeichnet das Spiel selbst. Die grosse Version gilt im Starter mit Karte 1000 × 700 und „Mehr Inseln“.')
-        $g.DrawString($note, $font, $textBrush, (New-Object Drawing.RectangleF(10, (40 + $mh), ($w - 20), ($h - 45 - $mh))))
+        if ($design.GiantWorld) { $note += ' ' + (Txt 'The giant world (five island realms) with the preset “Giant world” (2000 × 1400).' 'Die Riesenwelt (fünf Inselreiche) mit der Vorlage „Riesenwelt“ (2000 × 1400).') }
+        $g.DrawString($note, $font, $textBrush, (New-Object Drawing.RectangleF(10, (52 + $mh), ($w - 20), ($h - 57 - $mh))))
     }
     catch { $g.DrawString(((Txt 'No map preview: {0}' 'Keine Kartenvorschau: {0}') -f $_.Exception.Message), $font, [Drawing.Brushes]::DarkRed, (New-Object Drawing.RectangleF(10, 10, ($w - 20), ($h - 20)))) }
     finally { $g.Dispose() }
@@ -833,7 +853,7 @@ function Update-Preview {
 foreach ($c in @($nameBox)) { $c.Add_TextChanged({ Update-Preview }) }
 foreach ($c in @($mapCombo, $difficultyCombo, $strengthCombo, $piratesCombo, $nativesCombo, $resourcesCombo, $cargoCombo) + @($townRows + $allRow | ForEach-Object { $_.Stage }) + @($goodsRows | ForEach-Object { $_.Good }) + @($monoRows | ForEach-Object { $_.Crop })) { $c.Add_SelectedIndexChanged({ Update-Preview }) }
 foreach ($c in @($mapNumber, $goldBox, $rivalGoldBox, $townCountBox, $totalBox, $balanceBox, $tradeBox, $timeBox) +@($shipBoxes.Values) + @($townRows + $allRow | ForEach-Object { $_.Residents; $_.OfWhich }) + @($goodsRows | ForEach-Object { $_.Tons })) { $c.Add_ValueChanged({ Update-Preview }) }
-foreach ($c in @($checkTownCount, $checkTotal, $checkBalance, $checkTrade, $checkTime) + $defeatChecks + @($townRows + $allRow + $goodsRows + $monoRows | ForEach-Object { $_.Check })) { $c.Add_CheckedChanged({ Update-Preview }) }
+foreach ($c in @($checkTownCount, $checkTotal, $checkBalance, $checkTrade, $checkTime, $checkGiant) + $defeatChecks + @($townRows + $allRow + $goodsRows + $monoRows | ForEach-Object { $_.Check })) { $c.Add_CheckedChanged({ Update-Preview }) }
 $storyText.Add_TextChanged({ if (-not $script:Loading) { $script:StoryEdited = $true; Update-Preview } })
 $buttonNewStory.Add_Click({ $script:StorySeed = Get-Random -Minimum 1 -Maximum 1000000; $script:StoryEdited = $false; Update-Preview })
 $buttonNewMap.Add_Click({ $mapNumber.Value = Get-Random -Minimum 1 -Maximum 1000000 })

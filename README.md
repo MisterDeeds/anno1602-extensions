@@ -4,8 +4,8 @@
 
 A fan project for **Anno 1602 History Edition** (Ubisoft Connect): a bigger world, more islands,
 tougher rivals, cheaper building and richer towns, up to 16× game speed, random events while you play,
-41 new scenarios with a story and a mission (five campaigns and 13 challenges, some against the
-clock), a scenario designer, random and daily adventures, and a logbook window with charts next to
+49 new scenarios with a story and a mission (six campaigns – one of them made for the giant world –
+and 15 challenges, some against the clock), a scenario designer, random and daily adventures, and a logbook window with charts next to
 the game.
 
 The tool **does not change any game file**. It only patches the memory of the running game.
@@ -56,12 +56,13 @@ The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiters
 </p>
 
 - **New game**: every option as a click, in four groups (World, Economy, Rivals and dangers – with
-  the events –, Ships and speed), plus five presets:
+  the events –, Ships and speed), plus six presets:
 
   | Preset | Settings |
   |---|---|
   | **Everything big** (*Alles gross*) | 1000 × 700, huge islands, lots of resources, 7 + 7 villages, three times as many traders, rivals like "Hard" with 60,000 gold, pirates attack with up to 8 ships, residents ×5, storage ×5, cargo space ×3, production and ships ×2, turbo 16×, your gold 50,000 |
   | **For campaigns** (*Für Kampagnen*) | big map and turbo 16×, everything else as the scenario intends |
+  | **Giant world** (*Riesenwelt*) | 2000 × 1400 for the [giant world](#giant-world) maps, ships ×2 for the long sea routes, turbo 16×, everything else as the scenario intends |
   | **Relaxed** (*Gemütlich*) | building costs and running costs halved, taxes ×2, radius ×1.5, every crop everywhere, inexhaustible mines, no pirates, no disasters, 100,000 gold, residents ×2, production ×2, storage ×3, large islands, lots of resources, turbo 16× |
   | **Tough test** (*Harte Probe*) | rivals like "Hard" with 100,000 gold, strong pirates with up to 12 ships, more disasters, 4 + 4 villages, turbo 16× |
   | **Reset to defaults** (*Alles auf Standard*) | 1000 × 700 with more islands and more resources, everything else original |
@@ -95,7 +96,8 @@ Click a scenario together: name, map (classic, archipelago or continents, each m
 world), difficulty, your gold and the rivals' gold and strength, pirates, natives, resources, start
 cargo and up to three extra ships, and the mission – towns with a class, every settlement at least,
 number of settlements, residents in total, balance, trade balance, goods in stock, monopolies,
-defeating chosen rivals, and an optional time limit. The mission text is written for you (a story
+defeating chosen rivals, and an optional time limit. Tick *also for the giant world* and the scenario
+gets a third map with five island realms for 2000 × 1400 ([giant world](#giant-world)). The mission text is written for you (a story
 you can change) and shown exactly as the game will show it. *Create scenario* saves it as
 "Custom - &lt;name&gt;" in your own scenarios. The maps follow the same rules as the campaigns, so the
 rivals always find room.
@@ -155,11 +157,18 @@ game; in "The New World 3" all three rivals settle among the 14 native villages;
 loads with its time limit, extra ships and the named rival. Not played through yet: the balance of
 the scenarios marked †.
 
+Checked in the running game on 15 November 2026 (version 3.1.0): with the preset *Giant world* "The World
+Empire 1" loads all 50 islands exactly where the giant map puts them (10 of 100 × 90, 35 of 70 × 60, 5 of
+50 × 52 on 2000 × 1400), and after more than one game hour at 16× all three rivals have settled, two of
+them in far-off realms; at 1000 × 700 the big version applies, and the original game without the
+extensions plays the same file on its classic map with 18 islands.
+
 ## Campaigns and challenges
 
-41 new scenarios, in game under *Single Player → New Game → Own Scenarios* (*Einzelspieler →
+49 new scenarios, in game under *Single Player → New Game → Own Scenarios* (*Einzelspieler →
 Neues Spiel → Eigene Szenarien*). Each one has a classic map (500 × 350) and a big version
-(1000 × 700, up to 50 islands).
+(1000 × 700, up to 50 islands); the World Empire and the challenges marked 🌍 also a giant world
+version (2000 × 1400, see [Giant world](#giant-world)).
 
 | German title | English title | Mission |
 |---|---|---|
@@ -191,6 +200,12 @@ Neues Spiel → Eigene Szenarien*). Each one has a classic map (500 × 350) and 
 | 4 Das Baumwollkartell † | 4 The Cotton Cartel † | cotton monopoly, 50 t clothes in store, trade balance +300, pirates |
 | 5 Die Bank der Liga † | 5 The League Bank † | 1200 residents (600 merchants), balance +500, trade balance +400 |
 | 6 Der Fürst der Kaufleute † | 6 The Merchant Prince † | 2000 residents (700 aristocrats), 50 t jewellery in store, trade balance +500, balance +800, pirates |
+| **Das Weltreich** 1 Die grosse Fahrt † 🌍 | **The World Empire** 1 The Great Voyage † 🌍 | 500 residents (250 settlers), 3 settlements, 900 residents in total |
+| 2 Das Nebelmeer † 🌍 | 2 The Mist Sea † 🌍 | 50 t cloth and 40 t tobacco goods in store, 800 residents (300 citizens), 4 settlements |
+| 3 Die Gewürzroute † 🌍 | 3 The Spice Route † 🌍 | 60 t spices in store, trade balance +250, 1200 residents (400 merchants), pirates |
+| 4 Die Korallensee † 🌍 | 4 The Coral Sea † 🌍 | cotton monopoly and cocoa monopoly, 5 settlements with 3000 residents in total, pirates |
+| 5 Krieg der Kronen † 🌍 | 5 War of the Crowns † 🌍 | defeat House Morvan (only this rival), 5 settlements, 4000 residents in total |
+| 6 Das Weltreich † 🌍 | 6 The World Empire † 🌍 | 3000 residents (1200 aristocrats), 2000 (800 merchants) and 1200 (500 citizens), 7 settlements, 8000 in total, balance +1500, pirates |
 | **Herausforderung** Inselreich | **Challenge** Island Realm | 8 own settlements with 3000 residents in total |
 | Handelsimperium | Trade Empire | 50 t jewellery and 80 t clothes in store, trade balance +300 |
 | Goldrausch | Gold Rush | 60 t gold and 40 t jewellery in store, pirates |
@@ -204,6 +219,8 @@ Neues Spiel → Eigene Szenarien*). Each one has a classic map (500 × 350) and 
 | Habenichts † | Shoestring † | 600 residents (250 citizens), balance +200 – starting with 8000 gold and an almost empty ship |
 | Gegen die Uhr † ⏱ | Against the Clock † ⏱ | 500 residents (250 settlers) within 3 hours |
 | Die Frist des Königs † ⏱ | The Royal Deadline † ⏱ | 1000 residents (400 citizens) and balance +300 within 6 hours, pirates |
+| Sieben Meere † 🌍 | Seven Seas † 🌍 | 7 settlements, every one with 300 residents (120 settlers), 4000 in total, balance +300, pirates |
+| Die Weltumsegelung † 🌍 | Around the World † 🌍 | wine monopoly (north) and spice monopoly (south), trade balance +400, pirates |
 
 † New in November 2026 and not yet balance-tested in play: the difficulty is designed by analogy
 with the measured chapters.
@@ -213,12 +230,35 @@ left as soon as a limit is set (at 180:00 three hours are up); pausing stops it,
 up. The limit only applies when the game runs with the extensions (they set it at every start and
 every load); played without them, the scenario has no limit.
 
+🌍 Made for the giant world: best with the preset *Giant world*; with a smaller map the big or the
+classic version applies.
+
 In the race, whoever fulfils the mission first wins. Measured without any player action, the rivals
 finish chapter 1 after about 5, chapter 2 after about 7½, chapter 3 after about 8 and chapter 4 after
 about 20 hours of game time.
 
 The scenarios are not part of this repository. The installer builds them from the endless-game
 templates of your own copy of the game (`src/build-scenarios.ps1`).
+
+## Giant world
+
+<p align="center">
+  <img src="docs/images/giant-world-en.png" alt="The World Empire 1: big version and giant world" width="90%">
+</p>
+
+The game holds at most 50 islands, and at most 10 of the biggest kind (100 × 90) – that is all the land
+a map can carry, however big it is. Spread evenly over 2000 × 1400, 50 islands would leave a mostly
+empty sea. The giant world maps therefore group them into **five island realms** with open sea between
+them: the Crown Sea in the north-west, where all ships start, the Mist Sea in the north-east, the Middle
+Sea, the Coral Sea in the south-west and the Spice Islands in the south-east. Every realm has 8 to 11
+islands – 10 of 100 × 90, 35 of 70 × 60 and 5 of 50 × 52 in all – northern climate in the north and
+southern climate in the south: tobacco, sugar cane and wine grow near home, spices, cocoa and cotton
+only after a long voyage. Every scenario gets its own shape of the realms.
+
+Play them with the preset **Giant world** (*Riesenwelt*): map 2000 × 1400, ships twice as fast, turbo
+16×. The scenarios still carry the classic map and the 1000 × 700 version, and the tool always takes
+the biggest version that fits the chosen map size; without the extensions the classic map applies.
+Older scenarios are stretched to 2000 × 1400 as before.
 
 ## Install
 
@@ -255,14 +295,14 @@ anno1602-extensions/
 │   ├── anno-patcher.ps1           the tool: checks the game version and patches memory
 │   ├── launcher.ps1               the launcher window (German or English, following Windows)
 │   ├── logbook.ps1                the logbook window (only reads the game's memory)
-│   ├── build-scenarios.ps1        builds the 41 scenarios in German or English
+│   ├── build-scenarios.ps1        builds the 49 scenarios in German or English
 │   ├── scenario-lib.ps1           .szs file format and AUFTRAG4 missions (decoded)
 │   ├── random-adventure.ps1       random and daily adventure generator (number + difficulty)
 │   ├── scenario-designer.ps1      the scenario designer window
 │   ├── install.ps1                installer behind install.cmd / uninstall.cmd
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
-│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (640 checks)
+│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (655 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
 │   └── test-install.ps1           installs and removes for real, in a sandbox (27 checks)
 ├── dev/                           helpers for development

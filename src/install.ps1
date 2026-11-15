@@ -58,7 +58,7 @@ $OwnScenarios = Join-Path $Documents 'Anno 1602 History Edition\Own Scenarios'
 # File names of the scenarios made by this project, both languages: campaigns and challenges (plus the exact titles of
 # every definition in build-scenarios.ps1, see Get-OurScenarioNames), random adventures ("Abenteuer 4711 Fordernd",
 # older "Abenteuer 4711"), daily adventures ("Tagesabenteuer 2026-11-14") and scenarios of the designer ("Eigenes - X").
-$ScenarioNames = '^((Smaragdinseln|Wettlauf|Sturmsee|Neue Welt|Handelsliga|Emerald Isles|Race|Storm Sea|New World|Trade League) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+( [A-Za-z]+)?|(Tagesabenteuer|Daily Adventure) \d{4}-\d{2}-\d{2}|(Eigenes|Custom) - .+)\.szs$'
+$ScenarioNames = '^((Smaragdinseln|Wettlauf|Sturmsee|Neue Welt|Handelsliga|Weltreich|Emerald Isles|Race|Storm Sea|New World|Trade League|World Empire) \d+ - .+|(Herausforderung|Challenge) - .+|(Abenteuer|Adventure) \d+( [A-Za-z]+)?|(Tagesabenteuer|Daily Adventure) \d{4}-\d{2}-\d{2}|(Eigenes|Custom) - .+)\.szs$'
 $Builder = Join-Path $PSScriptRoot 'build-scenarios.ps1'
 # Titles (= file names without .szs) of every scenario definition in build-scenarios.ps1, in both languages - also of
 # campaigns added later. Read in a scope of its own; nothing is built. Empty if the builder cannot be loaded.

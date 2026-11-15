@@ -3,6 +3,22 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.1.0 – 2026-11-15
+
+- Giant world: scenarios can carry a third map version for 2000 × 1400. The game holds at most 50 islands
+  (10 of the biggest kind), so instead of spreading them thinly the giant maps group them into five island
+  realms with open sea between them – home in the north-west, northern crops near home, spices, cocoa and
+  cotton only after a long voyage. The tool takes the biggest version that fits the map size.
+- New campaign "Das Weltreich / The World Empire" (six chapters, made for the giant world, up to 7
+  settlements and 8000 residents) and two giant challenges, "Sieben Meere / Seven Seas" and "Die
+  Weltumsegelung / Around the World": 49 scenarios per language.
+- Launcher preset "Riesenwelt / Giant world": 2000 × 1400, ships ×2, turbo 16×, everything else as the
+  scenario intends.
+- Scenario designer: check box "also for the giant world" with a third map in the preview.
+- Tests: `tests/test-patcher.ps1` 655 checks (three map versions), `tests/check-scenarios.ps1` checks the
+  giant version, the 41 earlier scenarios are byte-identical.
+- Checked in the running game: "Weltreich 1" with the preset Giant world (all 50 islands in place, the rivals
+  settle across the realms), at 1000 × 700 (big version) and in the original game without the extensions (classic map).
 ## 3.0.0 – 2026-11-15
 
 - Two new campaigns with six chapters each: "Die Neue Welt / The New World" (exploration, native

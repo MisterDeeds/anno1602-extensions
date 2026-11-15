@@ -1444,7 +1444,7 @@ function Get-GameKindName([string]$kind) {
 
 # Chapters of a campaign: the highest chapter number among the scenario files in "Own Scenarios",
 # at least the number of chapters known for the campaigns of the extensions.
-$KnownCampaigns = @{ 'Smaragdinseln' = 6; 'Emerald Isles' = 6; 'Wettlauf' = 4; 'Race' = 4; 'Sturmsee' = 6; 'Storm Sea' = 6 }
+$KnownCampaigns = @{ 'Smaragdinseln' = 6; 'Emerald Isles' = 6; 'Wettlauf' = 4; 'Race' = 4; 'Sturmsee' = 6; 'Storm Sea' = 6; 'Neue Welt' = 6; 'New World' = 6; 'Handelsliga' = 6; 'Trade League' = 6; 'Weltreich' = 6; 'World Empire' = 6 }
 function Get-OwnScenariosFolder { Join-Path $script:DocumentsFolder 'Anno 1602 History Edition\Own Scenarios' }
 function Get-CampaignChapterCount([string]$campaign) {
     $n = 0
@@ -3117,17 +3117,17 @@ function Invoke-SelfTest {
     Write-Host 'Long-term achievements (logbook.json)'
     $own = Get-OwnScenariosFolder
     New-Item -ItemType Directory -Force -Path $own | Out-Null
-    foreach ($n in @((1..6 | ForEach-Object { "Sturmsee $_ - Kapitel" }) + @('Neue Welt 1 - Ankunft', 'Neue Welt 2 - Ernte', 'Neue Welt 3 - Krone', 'Herausforderung - Goldrausch'))) { [IO.File]::WriteAllBytes((Join-Path $own "$n.szs"), [byte[]]@(0)) }
-    & $check "chapters per campaign: Sturmsee $(Get-CampaignChapterCount 'Sturmsee'), Neue Welt $(Get-CampaignChapterCount 'Neue Welt') (files), Wettlauf $(Get-CampaignChapterCount 'Wettlauf') (known), unknown $(Get-CampaignChapterCount 'Gibtsnicht')" ((Get-CampaignChapterCount 'Sturmsee') -eq 6 -and (Get-CampaignChapterCount 'Neue Welt') -eq 3 -and (Get-CampaignChapterCount 'Wettlauf') -eq 4 -and (Get-CampaignChapterCount 'Gibtsnicht') -eq 0)
+    foreach ($n in @((1..6 | ForEach-Object { "Sturmsee $_ - Kapitel" }) + @('Inselsaga 1 - Ankunft', 'Inselsaga 2 - Ernte', 'Inselsaga 3 - Krone', 'Herausforderung - Goldrausch'))) { [IO.File]::WriteAllBytes((Join-Path $own "$n.szs"), [byte[]]@(0)) }
+    & $check "chapters per campaign: Sturmsee $(Get-CampaignChapterCount 'Sturmsee'), Inselsaga $(Get-CampaignChapterCount 'Inselsaga') (files), Weltreich $(Get-CampaignChapterCount 'Weltreich') (known), Wettlauf $(Get-CampaignChapterCount 'Wettlauf') (known), unknown $(Get-CampaignChapterCount 'Gibtsnicht')" ((Get-CampaignChapterCount 'Sturmsee') -eq 6 -and (Get-CampaignChapterCount 'Inselsaga') -eq 3 -and (Get-CampaignChapterCount 'Weltreich') -eq 6 -and (Get-CampaignChapterCount 'Wettlauf') -eq 4 -and (Get-CampaignChapterCount 'Gibtsnicht') -eq 0)
     $mk = { param($scen, $res, $h = 5.0) [ordered]@{ scenario = $scen; title = ''; result = $res; date = '2026-11-13T10:00:00'; gameHours = $h } }
     $ms = New-Object Collections.ArrayList
     foreach ($i in 1..6) { [void]$ms.Add((& $mk "Sturmsee $i - Kapitel" 'won')) }
     foreach ($i in 1..4) { [void]$ms.Add((& $mk "Wettlauf $i - Kapitel" 'won')) }
     foreach ($i in 1..5) { [void]$ms.Add((& $mk "Smaragdinseln $i - Kapitel" 'won')) }
-    [void]$ms.Add((& $mk 'Neue Welt 1 - Ankunft' 'lost')); [void]$ms.Add((& $mk 'Neue Welt 1 - Ankunft' 'won')); [void]$ms.Add((& $mk 'Neue Welt 2 - Ernte' 'won')); [void]$ms.Add((& $mk 'Neue Welt 3 - Krone' 'won'))
+    [void]$ms.Add((& $mk 'Inselsaga 1 - Ankunft' 'lost')); [void]$ms.Add((& $mk 'Inselsaga 1 - Ankunft' 'won')); [void]$ms.Add((& $mk 'Inselsaga 2 - Ernte' 'won')); [void]$ms.Add((& $mk 'Inselsaga 3 - Krone' 'won'))
     [void]$ms.Add((& $mk 'Herausforderung - Goldrausch' 'won' 2.4)); [void]$ms.Add((& $mk 'Abenteuer 4711 Fordernd' 'won')); [void]$ms.Add((& $mk 'Tagesabenteuer 2026-11-14' 'won'))
     $fin = @(Get-FinishedCampaigns $ms)
-    & $check "finished campaigns: $($fin -join ', ') (Smaragdinseln has 5 of 6)" (($fin -join ',') -eq 'Neue Welt,Sturmsee,Wettlauf')
+    & $check "finished campaigns: $($fin -join ', ') (Smaragdinseln has 5 of 6)" (($fin -join ',') -eq 'Inselsaga,Sturmsee,Wettlauf')
     $lt = Get-LongTermConditions @{ missions = $ms; games = @(1..10 | ForEach-Object { @{ result = 'quit' } }) }
     $wantLt = 'chapter_won challenge_won adventure_won daily_won fast_win hattrick revenge campaign_done campaigns_3 games_10' -split ' '
     & $check "long-term conditions: $((@($lt.Keys) | Sort-Object) -join ',')" (@($wantLt | Where-Object { -not $lt.ContainsKey($_) }).Count -eq 0 -and $lt.Count -eq $wantLt.Count)

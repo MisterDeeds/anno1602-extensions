@@ -291,7 +291,8 @@ function Add-AdvCropsForGoods($amounts, $goods) {
 # the computer rivals need at least 4 (the same rule as tests\check-scenarios.ps1).
 function Get-AdvRivalIslandCounts([string]$path) {
     $s = (Get-Section (Read-Scenario $path) 'SZENE').Data
-    foreach ($o0 in @(0) + $(if ($s.Length -ge 2360 -and [Text.Encoding]::ASCII.GetString($s, 0x494, 4) -eq 'GROS') { @(0x4A4) } else { @() })) {
+    $giant = if ($s.Length -ge 3548 -and [Text.Encoding]::ASCII.GetString($s, 0x938, 4) -eq 'GROS') { @(0x948) } else { @() }   # giant world (designer)
+    foreach ($o0 in @(0) + $(if ($s.Length -ge 2360 -and [Text.Encoding]::ASCII.GetString($s, 0x494, 4) -eq 'GROS') { @(0x4A4) } else { @() }) + $giant) {
         $n = [BitConverter]::ToInt32($s, $o0 + 0x64); $k = 0
         for ($i = 0; $i -lt $n; $i++) { if ($s[$o0 + 0x174 + 16 * $i + 1] -ge 2) { $k++ } }
         $k
