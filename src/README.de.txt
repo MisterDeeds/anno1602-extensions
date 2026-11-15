@@ -3,18 +3,23 @@ Anno 1602 History Edition - Erweiterungen
 
 Installieren (auch auf einem anderen PC)
   1. Anno 1602 History Edition ueber Ubisoft Connect installieren (eigenes Ubisoft-Konto).
-  2. Das ZIP von GitHub (Code -> Download ZIP) entpacken und im entpackten Ordner
-     "install.cmd" doppelklicken.
-     Falls Windows "Der Computer wurde durch Windows geschuetzt" zeigt:
-     "Weitere Informationen" -> "Trotzdem ausfuehren".
+  2. Windows-Taste druecken, "powershell" tippen, Enter. Diese Zeile einfuegen und Enter:
+       irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex
+     Sie laedt die neuste Version, installiert alles und oeffnet den Starter.
+     (Ohne PowerShell: das ZIP der neusten Version von GitHub entpacken und "install.cmd"
+     doppelklicken.)
   3. Starten ueber "Anno 1602 - Erweiterungen" im Startmenue oder auf dem Desktop
      (auf einem Windows in anderer Sprache heisst die Verknuepfung "Anno 1602 - Extensions").
-  Entfernen: im selben Ordner "uninstall.cmd" doppelklicken. Spiel und Spielstaende bleiben;
-  die Szenarien der Erweiterungen (auch Tagesabenteuer und deine selbst gebauten Szenarien)
-  und der Ordner mit deinen Einstellungen und dem Logbuch werden entfernt.
+  Aktualisieren: Gibt es eine neue Version, zeigt der Starter "Jetzt aktualisieren". Oder die
+  Zeile oben nochmals ausfuehren. Einstellungen, Logbuch und Spielstaende bleiben.
+  Entfernen: Windows-Einstellungen -> Apps -> "Anno 1602 - Erweiterungen" -> Deinstallieren.
+  Spiel und Spielstaende bleiben; die Szenarien der Erweiterungen (auch Tagesabenteuer und
+  deine selbst gebauten Szenarien) und der Ordner mit deinen Einstellungen und dem Logbuch
+  werden entfernt.
   Spielstaende mitnehmen: den Ordner Dokumente\Anno 1602 History Edition\Savegame auf den
   anderen PC an dieselbe Stelle kopieren (vorher dort einmal das Spiel starten).
-  Das ZIP enthaelt keine Spieldateien; das Spiel selbst kommt immer aus Ubisoft Connect.
+  Die Erweiterungen enthalten keine Spieldateien; das Spiel selbst kommt immer aus Ubisoft
+  Connect. Keine Administratorrechte noetig, nichts im Spielordner wird veraendert.
 
 Spielen
   Das Fenster hat drei Registerkarten:

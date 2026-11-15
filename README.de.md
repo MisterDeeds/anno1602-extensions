@@ -1,5 +1,8 @@
 # Anno 1602 – Erweiterungen
 
+[![Neuste Version](https://img.shields.io/github/v/release/MisterDeeds/anno1602-extensions?label=version)](https://github.com/MisterDeeds/anno1602-extensions/releases/latest)
+[![Lizenz: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 *[English version](README.md)*
 
 Ein Fan-Projekt für **Anno 1602 History Edition** (Ubisoft Connect): grössere Welt, mehr Inseln,
@@ -19,6 +22,38 @@ auf einem englischen.
   <img src="docs/images/launcher-tab0-de.png" alt="Startfenster: neues Spiel" width="62%">
   <img src="docs/images/logbook-de.png" alt="Logbuch neben dem Spiel" width="28%">
 </p>
+
+## Installieren
+
+Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über Ubisoft Connect.
+
+1. Die **Windows-Taste** drücken, `powershell` tippen und **Enter** drücken.
+2. Diese Zeile kopieren, ins Fenster einfügen (**Strg+V** bzw. **Ctrl+V** oder Rechtsklick) und **Enter** drücken:
+
+   ```powershell
+   irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex
+   ```
+
+3. Das war's – der Starter öffnet sich. Ab jetzt startest du das Spiel über **„Anno 1602 - Erweiterungen“** im
+   Startmenü oder auf dem Desktop (auf einem Windows in anderer Sprache: „Anno 1602 - Extensions“).
+
+- **Aktualisieren:** Gibt es eine neue Version, zeigt der Starter den Knopf *Jetzt aktualisieren*. Oder die gleiche
+  Zeile nochmals ausführen.
+- **Entfernen:** Windows-Einstellungen → **Apps** → „Anno 1602 – Erweiterungen“ → *Deinstallieren*. Spiel und
+  Spielstände bleiben, wie sie sind.
+- Keine Administratorrechte, nichts im Spielordner. Was die Zeile macht: [get.ps1](get.ps1) lädt die
+  [neuste Version](https://github.com/MisterDeeds/anno1602-extensions/releases/latest), führt
+  [src/install.ps1](src/install.ps1) aus und öffnet den Starter.
+
+<details>
+<summary>Ohne PowerShell: aus dem ZIP installieren</summary>
+
+1. Das Quellcode-ZIP der [neusten Version](https://github.com/MisterDeeds/anno1602-extensions/releases/latest)
+   herunterladen und entpacken.
+2. Im entpackten Ordner `install.cmd` doppelklicken. Zeigt Windows „Der Computer wurde durch Windows geschützt“:
+   *Weitere Informationen → Trotzdem ausführen*. Am Schluss öffnet sich der Starter.
+3. Entfernen mit `uninstall.cmd` im selben Ordner oder über Windows-Einstellungen → Apps.
+</details>
 
 ## Was es kann
 
@@ -267,18 +302,6 @@ Gespielt wird mit der Vorlage **Riesenwelt**: Karte 2000 × 1400, Schiffe doppel
 Werkzeug nimmt immer die grösste Fassung, die zur gewählten Kartengrösse passt; ohne die Erweiterungen
 gilt die klassische Karte. Ältere Szenarien werden wie bisher auf 2000 × 1400 gestreckt.
 
-## Installieren
-
-Voraussetzungen: Windows 10 oder 11 und Anno 1602 History Edition aus Ubisoft Connect.
-
-1. Oben auf **Code → Download ZIP** klicken und das ZIP entpacken.
-2. Im entpackten Ordner `install.cmd` doppelklicken. Zeigt Windows „Der Computer wurde durch Windows geschützt“:
-   *Weitere Informationen → Trotzdem ausführen*.
-3. Starten über **„Anno 1602 – Erweiterungen“** im Startmenü oder auf dem Desktop
-   (auf einem Windows in anderer Sprache heisst die Verknüpfung „Anno 1602 – Extensions“).
-
-Entfernen: im selben Ordner `uninstall.cmd` doppelklicken. Spiel und Spielstände bleiben.
-
 ## Wichtig
 
 - Spielstände aus der grossen Welt nur mit den Erweiterungen und derselben Kartengrösse laden –
@@ -294,12 +317,15 @@ Entfernen: im selben Ordner `uninstall.cmd` doppelklicken. Spiel und Spielständ
   offen: Es führt die Ereignisse aus und schützt den automatischen Spielstand einer grossen Welt.
 - Getestet mit genau einer Spielversion (SHA-256 von `Anno1602.exe` beginnt mit `7731972f`).
   Nach einem Update des Spiels bricht das Werkzeug ab, ohne etwas zu ändern.
+- Der Starter fragt bei jedem Start im Hintergrund bei GitHub nach der Nummer der neusten Version. Sonst wird
+  nichts gesendet.
 
 ## Aufbau
 
 ```
 anno1602-extensions/
-├── install.cmd, uninstall.cmd     installieren oder entfernen (Doppelklick)
+├── get.ps1                        der Einzeiler-Installer (irm … | iex): neuste Version, installieren, Starter
+├── install.cmd, uninstall.cmd     aus einer entpackten Kopie installieren oder entfernen (Doppelklick)
 ├── src/                           alles, was installiert wird (läuft aus einem Ordner)
 │   ├── anno-patcher.ps1           das Werkzeug: prüft die Spielversion und patcht den Speicher
 │   ├── launcher.ps1               das Startfenster (deutsch oder englisch, je nach Windows)
@@ -308,12 +334,12 @@ anno1602-extensions/
 │   ├── scenario-lib.ps1           Dateiformat .szs und Aufträge AUFTRAG4 (entschlüsselt)
 │   ├── random-adventure.ps1       Generator für Zufalls- und Tagesabenteuer (Nummer + Schwierigkeit)
 │   ├── scenario-designer.ps1      das Fenster des Szenario-Baukastens
-│   ├── install.ps1                Installer hinter install.cmd / uninstall.cmd
+│   ├── install.ps1                Installer hinter get.ps1, install.cmd, uninstall.cmd und der Apps-Liste
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
 │   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (655 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
-│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung (27 Prüfungen)
+│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (40 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung
 │   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
 │   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel

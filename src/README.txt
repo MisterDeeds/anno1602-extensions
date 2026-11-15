@@ -3,18 +3,22 @@ Anno 1602 History Edition - Extensions
 
 Install (also on another PC)
   1. Install Anno 1602 History Edition through Ubisoft Connect (your own Ubisoft account).
-  2. Unzip the ZIP from GitHub (Code -> Download ZIP) and double-click "install.cmd" in the
-     unzipped folder.
-     If Windows shows "Windows protected your PC":
-     "More info" -> "Run anyway".
+  2. Press the Windows key, type "powershell", Enter. Paste this line and press Enter:
+       irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex
+     It downloads the newest version, installs everything and opens the launcher.
+     (Without PowerShell: unzip the ZIP of the newest version from GitHub and double-click
+     "install.cmd".)
   3. Start with "Anno 1602 - Extensions" in the Start menu or on the desktop
      (on a German Windows the shortcut is called "Anno 1602 - Erweiterungen").
-  Uninstall: double-click "uninstall.cmd" in the same folder. The game and your saves stay; the
-  scenarios of the extensions (also daily adventures and the scenarios you built yourself) and
-  the folder with your settings and the logbook are removed.
+  Update: when a new version is out, the launcher shows "Update now". Or run the line above
+  again. Settings, logbook and saves stay.
+  Uninstall: Windows Settings -> Apps -> "Anno 1602 - Extensions" -> Uninstall. The game and
+  your saves stay; the scenarios of the extensions (also daily adventures and the scenarios you
+  built yourself) and the folder with your settings and the logbook are removed.
   Taking your saves along: copy the folder Documents\Anno 1602 History Edition\Savegame to the
   same place on the other PC (start the game there once before).
-  The ZIP contains no game files; the game itself always comes from Ubisoft Connect.
+  The extensions contain no game files; the game itself always comes from Ubisoft Connect. No
+  administrator rights needed, nothing in the game folder is changed.
 
 Playing
   The window has three tabs:

@@ -15,8 +15,14 @@
      chapters up to the first one not won (in both languages), challenges and the player's files untouched.
   4. The installed launcher in the sandbox (-TestClicks): the scenario designer builds "Eigenes - Testinsel" into Own
      Scenarios and the list shows it, the daily adventure is built, chapters on shows locks, off copies every chapter back.
-  5. Adventures, daily adventures and designer scenarios appear (both languages); then -Remove: program folders, both
-     shortcut names, both settings folders and all our scenarios are gone, the player's files stay.
+     The update notice: an older release changes nothing, a newer one shows it, its button starts get.ps1.
+  5. Adventures, daily adventures and designer scenarios appear (both languages); then -Remove through the installed
+     copy, as the Windows "Apps" list does it: program folders, both shortcut names, both settings folders, the Apps
+     entry and all our scenarios are gone, the player's files stay.
+  6. The one-line installer get.ps1, run through Invoke-Expression like "irm ... | iex", with a ZIP of the repository
+     in the layout of a GitHub release (ANNO_EXTENSIONS_SOURCE) into a second sandbox: everything installed, the
+     launcher would open, the temporary download folder is gone; a broken ZIP gives a message and no exception.
+  The Apps entry is written to apps-entry.json in the sandbox instead of the registry.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\tests\test-install.ps1
@@ -30,10 +36,11 @@ function Test-That([string]$what, [bool]$cond) {
     if ($cond) { $script:ok++; "  OK    $what" } else { $script:fail++; "  FAIL  $what" }
 }
 function Get-Shortcut([string]$path) { (New-Object -ComObject WScript.Shell).CreateShortcut($path) }
-function Invoke-Installer([string]$lang, [switch]$Remove) {
+function Invoke-Installer([string]$lang, [switch]$Remove, [switch]$StartLauncher, [string]$Script = $installer) {
     $env:ANNO_EXTENSIONS_LANG = $lang
-    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $installer, '-SandboxRoot', $sandbox)
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Script, '-SandboxRoot', $sandbox)
     if ($Remove) { $a += '-Remove' }
+    if ($StartLauncher) { $a += '-StartLauncher' }
     $out = & powershell @a 2>&1 | Out-String
     if ($LASTEXITCODE -ne 0) { throw "Installer failed: $out" }
     $out
@@ -52,8 +59,13 @@ function Get-RealState {
         [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) {
         if (Test-Path -LiteralPath $p) { Get-ChildItem -LiteralPath $p -File -Filter '*' | Where-Object { $_.Name -match 'Anno 1602|\.szs$|\.ps1$|\.json$|\.md$|\.txt$' } | ForEach-Object { '{0}|{1}|{2}' -f $_.FullName, $_.Length, $_.LastWriteTimeUtc.Ticks } }
     }
+    # The real entry in the Windows Apps list.
+    $key = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Anno1602-Extensions'
+    if (Test-Path -LiteralPath $key) { $parts = @($parts) + ('apps|' + ((Get-ItemProperty -LiteralPath $key | Select-Object DisplayVersion, InstallDate, UninstallString | ConvertTo-Json -Compress))) }
     ($parts | Sort-Object) -join "`n"
 }
+# Version of the repository (newest entry of CHANGELOG.md), as install.ps1 writes it to version.txt.
+$repoVersion = ((Select-String -LiteralPath (Join-Path $root 'CHANGELOG.md') -Pattern '^## (\d+\.\d+\.\d+)' | Select-Object -First 1).Matches[0].Groups[1].Value)
 $langBefore = $env:ANNO_EXTENSIONS_LANG
 $realBefore = Get-RealState
 try {
@@ -74,12 +86,18 @@ try {
 
     # --- 2. Install in German ---------------------------------------------------------------------------------------
     "Install (German) into the sandbox $sandbox"
-    $null = Invoke-Installer 'de'
-    $expected = @('anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'README.txt', 'README.de.txt', 'FINDINGS.md')
+    $out = Invoke-Installer 'de' -StartLauncher
+    $copied = @('anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt', 'FINDINGS.md')
+    $expected = $copied + 'version.txt'
     $have = @(Get-ChildItem -LiteralPath $new -File | ForEach-Object Name)
     Test-That "program folder holds exactly the $($expected.Count) files ($($have.Count))" ($have.Count -eq $expected.Count -and -not ($expected | Where-Object { $_ -notin $have }))
-    $differ = @($expected | Where-Object { $src = if ($_ -eq 'FINDINGS.md') { Join-Path $root 'docs\FINDINGS.md' } else { Join-Path $root "src\$_" }; (Get-FileHash -LiteralPath (Join-Path $new $_)).Hash -ne (Get-FileHash -LiteralPath $src).Hash })
-    Test-That "installed files identical to the repository ($($expected.Count - $differ.Count)/$($expected.Count)$(if ($differ.Count) { ', different: ' + ($differ -join ', ') }))" ($differ.Count -eq 0)
+    $differ = @($copied | Where-Object { $src = if ($_ -eq 'FINDINGS.md') { Join-Path $root 'docs\FINDINGS.md' } else { Join-Path $root "src\$_" }; (Get-FileHash -LiteralPath (Join-Path $new $_)).Hash -ne (Get-FileHash -LiteralPath $src).Hash })
+    Test-That "installed files identical to the repository ($($copied.Count - $differ.Count)/$($copied.Count)$(if ($differ.Count) { ', different: ' + ($differ -join ', ') }))" ($differ.Count -eq 0)
+    $installedVersion = (Get-Content -LiteralPath (Join-Path $new 'version.txt') -Raw).Trim()
+    Test-That "version.txt = newest CHANGELOG entry ($installedVersion)" ($installedVersion -eq $repoVersion)
+    $apps = Get-Content -LiteralPath (Join-Path $sandbox 'apps-entry.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+    Test-That "Apps entry: `"$($apps.DisplayName)`" $($apps.DisplayVersion), uninstall runs the installed copy with -Remove" ($apps.DisplayName -eq "Anno 1602 $([char]0x2013) Erweiterungen" -and $apps.DisplayVersion -eq $repoVersion -and $apps.InstallLocation -eq $new -and $apps.UninstallString -like "*-File `"$new\install.ps1`" -Remove -PauseAtEnd" -and $apps.QuietUninstallString -like '*-Remove' -and $apps.EstimatedSize -gt 100)
+    Test-That 'launcher would open at the end (-StartLauncher)' ($out -match ('START .*powershell\.exe .*-WindowStyle Hidden -File "' + [regex]::Escape("$new\launcher.ps1") + '"') -and $out -match 'Fertig!')
     Test-That 'older installation Anno1602-Erweiterungen removed' (-not (Test-Path -LiteralPath $old))
     foreach ($f in $desk, $start) {
         $lnk = Join-Path $f 'Anno 1602 - Erweiterungen.lnk'
@@ -137,21 +155,74 @@ try {
     # The set in the program folder is English now (the last installation).
     Test-That 'chapters off: every chapter of the set back in Own Scenarios, setting saved' ($offLine -match ', 0 locked' -and $offLine -match 'UnlockChapters=0' -and @($titles.en | Where-Object { $_ -match ' \d+ - ' -and -not (Test-Path -LiteralPath (Join-Path $own "$_.szs")) }).Count -eq 0)
     Test-That 'click test: patcher started, no exception' ($clickText -match 'START powershell .*anno-patcher\.ps1' -and $clickText -notmatch 'Exception|Fehler')
+    Test-That 'update notice: hidden for an older release, shown for a newer one, the button runs get.ps1' ($clickText -match 'UPDATE v1\.0\.0 visible: False' -and $clickText -match 'UPDATE v99\.0\.0 visible: True Version 99\.0\.0 ist da\.' -and $clickText -match 'START powershell .*-Command "irm https://raw\.githubusercontent\.com/MisterDeeds/anno1602-extensions/main/get\.ps1 \| iex"')
 
     # --- 5. Remove ----------------------------------------------------------------------------------------------------
     foreach ($n in 'Abenteuer 4711.szs', 'Adventure 99 Easy.szs', 'Tagesabenteuer 2026-11-14.szs', 'Daily Adventure 2026-11-14.szs', 'Custom - My Island.szs') { Set-Content -LiteralPath (Join-Path $own $n) 'made by the extensions' }
     New-Item -ItemType Directory -Force -Path (Join-Path $app 'Anno1602-Extensions') | Out-Null
     Set-Content -LiteralPath (Join-Path $app 'Anno1602-Extensions\settings.json') '{}'
-    'Remove (uninstall.cmd)'
-    $null = Invoke-Installer 'de' -Remove
-    Test-That 'program folder removed' (-not (Test-Path -LiteralPath $new))
+    $before = @(Get-ChildItem -LiteralPath $new -Recurse -File | ForEach-Object { '{0}|{1}' -f $_.FullName, $_.LastWriteTimeUtc.Ticks }) -join "`n"
+    $out = Invoke-Installer 'de' -Script (Join-Path $new 'install.ps1')
+    Test-That 'the installed copy does not install over itself (only removes)' ($out -match 'installierte Kopie' -and $before -eq (@(Get-ChildItem -LiteralPath $new -Recurse -File | ForEach-Object { '{0}|{1}' -f $_.FullName, $_.LastWriteTimeUtc.Ticks }) -join "`n"))
+    'Remove through the installed copy (Windows Apps list)'
+    $null = Invoke-Installer 'de' -Remove -Script (Join-Path $new 'install.ps1')
+    Test-That 'program folder removed, with the installed copy itself' (-not (Test-Path -LiteralPath $new))
+    Test-That 'Apps entry removed' (-not (Test-Path -LiteralPath (Join-Path $sandbox 'apps-entry.json')))
     Test-That 'no shortcut left (both names, desktop and start menu)' (-not (Get-ChildItem -LiteralPath $desk, $start -Filter 'Anno 1602 - *.lnk'))
     Test-That 'both settings folders removed' (-not (Test-Path -LiteralPath (Join-Path $app 'Anno1602-Extensions')) -and -not (Test-Path -LiteralPath (Join-Path $app 'Anno1602-Erweiterungen')))
     $left = @(Get-ChildItem -LiteralPath $own -Filter '*.szs' | ForEach-Object Name | Sort-Object)
     Test-That "only the player's files are left in Own Scenarios ($($left -join ', '))" (($left -join '|') -eq (($playerFiles | Sort-Object) -join '|'))
     Test-That 'savegame untouched' (Test-Path -LiteralPath (Join-Path $docs 'Savegame\Meine Welt.gam'))
+
+    # --- 6. One-line installer (get.ps1) ------------------------------------------------------------------------------
+    # A ZIP like GitHub builds it for a release: one folder anno1602-extensions-<version> with the repository's files
+    # (git ls-files, including files not committed yet; without git: the folders and files the installer needs).
+    $staging = Join-Path $sandbox "zip\anno1602-extensions-$repoVersion"
+    $repoFiles = @()
+    try { $repoFiles = @(& git -C $root ls-files --cached --others --exclude-standard 2>$null) } catch { }
+    if (-not $repoFiles.Count) { $repoFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'src'), (Join-Path $root 'docs') -Recurse -File | ForEach-Object { $_.FullName.Substring($root.Length + 1) }) + @('CHANGELOG.md', 'get.ps1', 'install.cmd', 'uninstall.cmd') }
+    foreach ($f in $repoFiles) {
+        $src = Join-Path $root $f
+        if (-not (Test-Path -LiteralPath $src -PathType Leaf)) { continue }
+        $dst = Join-Path $staging $f
+        New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
+        Copy-Item -LiteralPath $src -Destination $dst
+    }
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = Join-Path $sandbox 'release.zip'
+    [IO.Compression.ZipFile]::CreateFromDirectory((Join-Path $sandbox 'zip'), $zip)
+    $broken = Join-Path $sandbox 'broken.zip'
+    $brokenFolder = Join-Path $sandbox 'broken\anno1602-extensions-0.0.0'
+    New-Item -ItemType Directory -Force -Path $brokenFolder | Out-Null
+    Set-Content -LiteralPath (Join-Path $brokenFolder 'README.md') 'no src folder'
+    [IO.Compression.ZipFile]::CreateFromDirectory((Split-Path $brokenFolder), $broken)
+    $sandbox2 = Join-Path $sandbox 'oneliner'
+    $setupFolders = { @(Get-ChildItem -LiteralPath ([IO.Path]::GetTempPath()) -Directory -Filter 'anno1602-extensions-setup-*').Count }
+    $setupBefore = & $setupFolders
+    # As "irm <url> | iex": the script text through Invoke-Expression, in a PowerShell window of its own; afterwards the
+    # window must still have no variable of the script and the default error preference.
+    $getScript = Join-Path $root 'get.ps1'
+    $command = "Invoke-Expression ([IO.File]::ReadAllText('$getScript')); 'AFTER work=' + [bool](Get-Variable work -ErrorAction SilentlyContinue) + ' pref=' + `$ErrorActionPreference"
+    "One-line installer (get.ps1 through Invoke-Expression, English) into $sandbox2"
+    $env:ANNO_EXTENSIONS_SOURCE = $zip; $env:ANNO_EXTENSIONS_SANDBOX = $sandbox2; $env:ANNO_EXTENSIONS_LANG = 'en'
+    $out = & powershell -NoProfile -Command $command 2>&1 | Out-String
+    $code = $LASTEXITCODE
+    $new2 = Join-Path $sandbox2 'LocalAppData\Programs\Anno1602-Extensions'
+    $differ2 = @($copied | Where-Object { $src = if ($_ -eq 'FINDINGS.md') { Join-Path $root 'docs\FINDINGS.md' } else { Join-Path $root "src\$_" }; -not (Test-Path -LiteralPath (Join-Path $new2 $_)) -or (Get-FileHash -LiteralPath (Join-Path $new2 $_)).Hash -ne (Get-FileHash -LiteralPath $src).Hash })
+    Test-That "get.ps1: installed from the ZIP, files identical to the repository ($($copied.Count - $differ2.Count)/$($copied.Count)), version $repoVersion" ($code -eq 0 -and $differ2.Count -eq 0 -and (Get-Content -LiteralPath (Join-Path $new2 'version.txt') -Raw).Trim() -eq $repoVersion)
+    $own2 = @(Get-ChildItem -LiteralPath (Join-Path $sandbox2 'Documents\Anno 1602 History Edition\Own Scenarios') -Filter '*.szs' -ErrorAction SilentlyContinue)
+    Test-That "get.ps1: all $($definitions.Count) English scenarios, English shortcut on the desktop and in the start menu" ($own2.Count -eq $definitions.Count -and @($titles.en | Where-Object { -not (Test-Path -LiteralPath (Join-Path $sandbox2 "Documents\Anno 1602 History Edition\Own Scenarios\$_.szs")) }).Count -eq 0 -and (Test-Path -LiteralPath (Join-Path $sandbox2 'Desktop\Anno 1602 - Extensions.lnk')) -and (Test-Path -LiteralPath (Join-Path $sandbox2 'StartMenu\Anno 1602 - Extensions.lnk')))
+    $apps2 = if (Test-Path -LiteralPath (Join-Path $sandbox2 'apps-entry.json')) { Get-Content -LiteralPath (Join-Path $sandbox2 'apps-entry.json') -Raw -Encoding UTF8 | ConvertFrom-Json }
+    Test-That "get.ps1: Apps entry `"$($apps2.DisplayName)`" $($apps2.DisplayVersion)" ($apps2 -and $apps2.DisplayName -eq "Anno 1602 $([char]0x2013) Extensions" -and $apps2.DisplayVersion -eq $repoVersion)
+    Test-That 'get.ps1: launcher would open, "Done!" shown' ($out -match ('START .*-File "' + [regex]::Escape("$new2\launcher.ps1") + '"') -and $out -match 'Done!' -and $out -match 'have fun')
+    Test-That "get.ps1: nothing left in the PowerShell window ($(($out -split "`r?`n" | Where-Object { $_ -like 'AFTER*' }) -join ''))" ($out -match 'AFTER work=False pref=Continue')
+    Test-That 'get.ps1: temporary download folder removed' ((& $setupFolders) -eq $setupBefore)
+    $env:ANNO_EXTENSIONS_SOURCE = $broken
+    $out = & powershell -NoProfile -Command $command 2>&1 | Out-String
+    Test-That 'get.ps1 with a broken ZIP: clear message, no exception, window stays usable' ($LASTEXITCODE -eq 0 -and $out -match 'incomplete' -and $out -match 'AFTER work=False pref=Continue' -and $out -notmatch 'At line|ParserError|Exception')
 }
 finally {
+    foreach ($n in 'ANNO_EXTENSIONS_SOURCE', 'ANNO_EXTENSIONS_SANDBOX') { Remove-Item -LiteralPath "Env:$n" -ErrorAction SilentlyContinue }
     $env:ANNO_EXTENSIONS_LANG = $langBefore
     if (Test-Path -LiteralPath $sandbox) { Remove-Item -LiteralPath $sandbox -Recurse -Force }
 }

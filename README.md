@@ -1,5 +1,8 @@
 # Anno 1602 – Extensions
 
+[![Latest release](https://img.shields.io/github/v/release/MisterDeeds/anno1602-extensions?label=version)](https://github.com/MisterDeeds/anno1602-extensions/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 *[Deutsche Fassung](README.de.md)*
 
 A fan project for **Anno 1602 History Edition** (Ubisoft Connect): a bigger world, more islands,
@@ -19,6 +22,37 @@ German Windows.
   <img src="docs/images/launcher-tab0-en.png" alt="Launcher: new game" width="62%">
   <img src="docs/images/logbook-en.png" alt="Logbook next to the game" width="28%">
 </p>
+
+## Install
+
+You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisoft Connect.
+
+1. Press the **Windows key**, type `powershell` and press **Enter**.
+2. Copy this line, paste it into the window (**Ctrl+V** or right-click) and press **Enter**:
+
+   ```powershell
+   irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex
+   ```
+
+3. That's it – the launcher opens. From now on start the game with **"Anno 1602 - Extensions"** in the
+   Start menu or on the desktop (on a German Windows: "Anno 1602 - Erweiterungen").
+
+- **Update:** when a new version is out, the launcher shows a button *Update now*. Or run the same line again.
+- **Uninstall:** Windows Settings → **Apps** → "Anno 1602 – Extensions" → *Uninstall*. The game and your saves
+  stay as they are.
+- No administrator rights, nothing is written to the game folder. What the line does:
+  [get.ps1](get.ps1) downloads the [newest release](https://github.com/MisterDeeds/anno1602-extensions/releases/latest),
+  runs [src/install.ps1](src/install.ps1) and opens the launcher.
+
+<details>
+<summary>Without PowerShell: install from the ZIP</summary>
+
+1. Download the source ZIP of the [newest release](https://github.com/MisterDeeds/anno1602-extensions/releases/latest)
+   and unzip it.
+2. Double-click `install.cmd` in the unzipped folder. If Windows shows "Windows protected your PC":
+   *More info → Run anyway*. The launcher opens when it is done.
+3. Remove it again with `uninstall.cmd` in the same folder, or through Windows Settings → Apps.
+</details>
 
 ## Features
 
@@ -260,18 +294,6 @@ Play them with the preset **Giant world** (*Riesenwelt*): map 2000 × 1400, ship
 the biggest version that fits the chosen map size; without the extensions the classic map applies.
 Older scenarios are stretched to 2000 × 1400 as before.
 
-## Install
-
-Requirements: Windows 10 or 11 and Anno 1602 History Edition from Ubisoft Connect.
-
-1. Click **Code → Download ZIP** at the top and unzip it.
-2. In the unzipped folder, double-click `install.cmd`. If Windows shows "Windows protected your PC":
-   *More info → Run anyway*.
-3. Start with **"Anno 1602 - Extensions"** in the Start menu or on the desktop
-   (on a German Windows the shortcut is called "Anno 1602 - Erweiterungen").
-
-Uninstall: double-click `uninstall.cmd` in the same folder. The game and your saves stay as they are.
-
 ## Good to know
 
 - Load saves from a big world only with the extensions and the same map size – easiest through
@@ -285,12 +307,15 @@ Uninstall: double-click `uninstall.cmd` in the same folder. The game and your sa
   events and keeps the autosave of a big world safe.
 - Tested with exactly one game version (SHA-256 of `Anno1602.exe` starts with `7731972f`).
   After a game update, the tool stops without changing anything.
+- The launcher asks GitHub once per start, in the background, for the number of the newest release. Nothing else
+  is sent.
 
 ## Layout
 
 ```
 anno1602-extensions/
-├── install.cmd, uninstall.cmd     install or remove (double-click)
+├── get.ps1                        the one-line installer (irm … | iex): newest release, install, launcher
+├── install.cmd, uninstall.cmd     install or remove from an unzipped copy (double-click)
 ├── src/                           everything that gets installed (runs from one folder)
 │   ├── anno-patcher.ps1           the tool: checks the game version and patches memory
 │   ├── launcher.ps1               the launcher window (German or English, following Windows)
@@ -299,12 +324,12 @@ anno1602-extensions/
 │   ├── scenario-lib.ps1           .szs file format and AUFTRAG4 missions (decoded)
 │   ├── random-adventure.ps1       random and daily adventure generator (number + difficulty)
 │   ├── scenario-designer.ps1      the scenario designer window
-│   ├── install.ps1                installer behind install.cmd / uninstall.cmd
+│   ├── install.ps1                installer behind get.ps1, install.cmd, uninstall.cmd and the Apps list
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
 │   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (655 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
-│   └── test-install.ps1           installs and removes for real, in a sandbox (27 checks)
+│   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (40 checks)
 ├── dev/                           helpers for development
 │   ├── check-game.ps1             shows the patched values in the running game (read only)
 │   ├── check-islands.ps1          islands, ore and fertility of the running game

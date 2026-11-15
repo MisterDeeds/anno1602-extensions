@@ -27,6 +27,8 @@ param(
     [string]$PreviewImage,
     # For testing only: tab shown in the preview (0 = new game, 1 = continue, 2 = adventures).
     [Parameter(DontShow)][int]$PreviewTab = 0,
+    # For testing only: newest release ("v9.9.9") as if GitHub had reported it, so that the preview shows the update notice.
+    [Parameter(DontShow)][string]$PreviewUpdate = '',
     # Tab shown at the start (the scenario designer opens the adventure list with 2).
     [Parameter(DontShow)][int]$StartTab = 0,
     # For the installer: apply the saved "unlock chapters one by one" setting to Own Scenarios (no window) and exit.
@@ -365,6 +367,12 @@ $LogbookFile = Join-Path $DataFolder 'logbook.json'
 $Generator = Join-Path $PSScriptRoot 'random-adventure.ps1'
 $Designer = Join-Path $PSScriptRoot 'scenario-designer.ps1'
 $Logbook = Join-Path $PSScriptRoot 'logbook.ps1'
+# Installed version (written by install.ps1; missing when the launcher runs from the repository). The launcher asks
+# GitHub once per start, in the background, for the newest release and offers the update (get.ps1) if it is newer.
+$InstalledVersion = $null
+try { $v = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'version.txt') -Raw -ErrorAction Stop).Trim(); if ($v -match '^\d+\.\d+\.\d+$') { $InstalledVersion = [version]$v } } catch { }
+$ReleaseApi = 'https://api.github.com/repos/MisterDeeds/anno1602-extensions/releases/latest'
+$UpdateCommand = 'irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex'
 $ChapterIndexFile = Join-Path $ChapterFolder 'chapters.json'
 
 # Missions recorded by the logbook: scenario name -> best result ('won' beats 'lost') and date.
@@ -479,7 +487,7 @@ Add-Type -Namespace AnnoStarter -Name Dpi -MemberDefinition '[DllImport("user32.
 
 $font = New-Object Drawing.Font('Segoe UI', 10)
 $form = New-Object Windows.Forms.Form
-$form.Text = Txt 'Anno 1602 – Extensions' 'Anno 1602 – Erweiterungen'
+$form.Text = (Txt 'Anno 1602 – Extensions' 'Anno 1602 – Erweiterungen') + $(if ($InstalledVersion) { " $InstalledVersion" })
 $form.Font = $font
 $form.AutoScaleMode = 'Dpi'
 $form.AutoSize = $true
@@ -914,6 +922,30 @@ $buttons.Controls.Add($checkLogbook)
 function Start-LogbookIfWanted { if ($checkLogbook.Checked -and $checkLogbook.Visible) { Start-Logbook } }
 $form.AcceptButton = $buttonStart
 
+# --- Update notice (hidden until GitHub reports a newer release) ----------------------------------------------
+$updateRow = New-ButtonRow $outer
+$updateRow.Visible = $false
+$updateLabel = New-Label '' $false 9 3
+$updateLabel.ForeColor = [Drawing.Color]::DarkGreen
+$updateRow.Controls.Add($updateLabel)
+$buttonUpdate = New-Button (Txt 'Update now' 'Jetzt aktualisieren') $updateRow
+# Shows the notice if $tag ("v3.3.0") is newer than the installed version.
+function Show-UpdateNotice([string]$tag) {
+    if (-not $InstalledVersion -or $tag -notmatch '^v?(\d+\.\d+\.\d+)$') { return }
+    $newest = [version]$Matches[1]
+    if ($newest -le $InstalledVersion) { return }
+    $updateLabel.Text = (Txt 'Version {0} is out.' 'Version {0} ist da.') -f $newest
+    $updateRow.Visible = $true
+}
+# The update runs the one-line installer in a window of its own (it waits for Enter only after an error) and opens
+# the launcher again when it is done.
+$buttonUpdate.Add_Click({
+        Save-Choice
+        $env:ANNO_EXTENSIONS_PAUSE_ON_ERROR = '1'
+        Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "`"$UpdateCommand`"")
+        $form.Close()
+    })
+
 function Save-Choice {
     try {
         New-Item -ItemType Directory -Force -Path (Split-Path $SettingsFile) | Out-Null
@@ -1026,6 +1058,11 @@ if ($TestClicks) {
                 $checkUnlock.Checked = $false
                 $script:Started.Add('OFF ' + (& $listState) + '; SETTINGS UnlockChapters=' + (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).UnlockChapters)
             }
+            # Update notice: an older release changes nothing, a newer one shows the notice; the button starts get.ps1.
+            Write-Step ('Update notice, installed version {0}' -f $(if ($InstalledVersion) { $InstalledVersion } else { 'none' }))
+            Show-UpdateNotice 'v1.0.0'; $script:Started.Add('UPDATE v1.0.0 visible: ' + $updateRow.Visible)
+            Show-UpdateNotice 'v99.0.0'; $script:Started.Add('UPDATE v99.0.0 visible: ' + $updateRow.Visible + ' ' + $updateLabel.Text)
+            if ($updateRow.Visible) { Invoke-Click $buttonUpdate }
             $form.Close()
         })
     [void]$form.ShowDialog()
@@ -1038,6 +1075,7 @@ if ($PreviewImage) {
     $form.ShowInTaskbar = $false
     $form.Add_Shown({
             $tabs.SelectedIndex = $PreviewTab
+            if ($PreviewUpdate) { Show-UpdateNotice $PreviewUpdate }
             $form.Refresh()
             $image = New-Object Drawing.Bitmap($form.Width, $form.Height)
             $form.DrawToBitmap($image, (New-Object Drawing.Rectangle(0, 0, $form.Width, $form.Height)))
@@ -1046,4 +1084,30 @@ if ($PreviewImage) {
         })
 }
 elseif ($StartTab -gt 0 -and $StartTab -lt $tabs.TabCount) { $tabs.SelectedIndex = $StartTab }
+# Ask GitHub for the newest release in the background (at most 8 s, only the version number is fetched; nothing is
+# sent but the request itself). Off with $env:ANNO_EXTENSIONS_NO_UPDATE_CHECK = '1'.
+if (-not $PreviewImage -and $InstalledVersion -and $env:ANNO_EXTENSIONS_NO_UPDATE_CHECK -ne '1') {
+    try {
+        $script:UpdateCheck = [PowerShell]::Create()
+        [void]$script:UpdateCheck.AddScript({
+                param($url)
+                try {
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+                    [string](Invoke-RestMethod -Uri $url -Headers @{ 'User-Agent' = 'anno1602-extensions-launcher' } -TimeoutSec 8).tag_name
+                }
+                catch { '' }
+            }).AddArgument($ReleaseApi)
+        $script:UpdateHandle = $script:UpdateCheck.BeginInvoke()
+        $updateTimer = New-Object Windows.Forms.Timer
+        $updateTimer.Interval = 500
+        $updateTimer.Add_Tick({
+                if (-not $script:UpdateHandle.IsCompleted) { return }
+                $updateTimer.Stop()
+                try { Show-UpdateNotice ([string](@($script:UpdateCheck.EndInvoke($script:UpdateHandle)) | Select-Object -First 1)) } catch { }
+                $script:UpdateCheck.Dispose()
+            })
+        $updateTimer.Start()
+    }
+    catch { }
+}
 [void]$form.ShowDialog()

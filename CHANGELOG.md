@@ -3,6 +3,19 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.2.0 – 2026-11-15
+
+- Install with one line: `irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex`
+  in PowerShell downloads the newest release, installs it and opens the launcher. No ZIP, no unzipping, no
+  "Windows protected your PC", no administrator rights. The same line updates.
+- The extensions are listed in Windows Settings → Apps and can be uninstalled there like any other program
+  (the installer keeps a copy of itself in the program folder for that).
+- The launcher shows its version in the title and checks GitHub in the background for a newer release; if there
+  is one, a button "Update now" runs the one-line installer and reopens the launcher.
+- `install.cmd` opens the launcher when it is done.
+- Tests: `tests/test-install.ps1` also installs through `get.ps1` from a local ZIP in the GitHub layout, checks
+  the Apps entry, the update notice and the removal by the installed copy.
+
 ## 3.1.0 – 2026-11-15
 
 - Giant world: scenarios can carry a third map version for 2000 × 1400. The game holds at most 50 islands
@@ -19,6 +32,7 @@ All versions are for Anno 1602 History Edition (Ubisoft Connect), single player.
   giant version, the 41 earlier scenarios are byte-identical.
 - Checked in the running game: "Weltreich 1" with the preset Giant world (all 50 islands in place, the rivals
   settle across the realms), at 1000 × 700 (big version) and in the original game without the extensions (classic map).
+
 ## 3.0.0 – 2026-11-15
 
 - Two new campaigns with six chapters each: "Die Neue Welt / The New World" (exploration, native

@@ -14,11 +14,20 @@
   campaign chapters), so that the launcher can unlock the chapters one by one; with that option on (settings.json
   UnlockChapters = 1) the installer leaves only the unlocked chapters in Own Scenarios (launcher.ps1 -SyncChapters).
   An older installation (%LOCALAPPDATA%\Programs\Anno1602-Erweiterungen) is replaced.
-  -Remove deletes the installed files, the shortcuts, the settings and our scenarios again (campaigns, challenges,
-  random and daily adventures, scenarios of the designer); saved games and the player's own scenarios stay.
+  Since 3.2 the installer also copies itself and version.txt (the version from ..\CHANGELOG.md) into the program folder
+  and adds the extensions to the Windows "Apps" list (HKCU\...\Uninstall\Anno1602-Extensions, no administrator rights),
+  whose "Uninstall" runs the installed copy with -Remove. -StartLauncher opens the launcher at the end (used by
+  install.cmd and the one-line installer get.ps1).
+  -Remove deletes the installed files, the shortcuts, the settings, the "Apps" entry and our scenarios again
+  (campaigns, challenges, random and daily adventures, scenarios of the designer); saved games and the player's own
+  scenarios stay.
 #>
 param(
     [switch]$Remove,
+    # Open the launcher when the installation is done (only if the game was found).
+    [switch]$StartLauncher,
+    # Wait for Enter at the end, so that the window can be read (used by the "Uninstall" of the Apps list).
+    [switch]$PauseAtEnd,
     # For testing only: different target folder; with -NoShortcuts no shortcuts, settings, scenarios
     # or older installation are touched.
     [string]$TargetFolder = (Join-Path $env:LOCALAPPDATA 'Programs\Anno1602-Extensions'),
@@ -83,8 +92,32 @@ function Remove-Shortcuts([string]$keep) {
 }
 $targetFull = [IO.Path]::GetFullPath($TargetFolder).TrimEnd('\')
 $isOldTarget = $targetFull -eq [IO.Path]::GetFullPath($OldInstallFolder).TrimEnd('\')
+$PowerShellExe = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
+
+# The entry in the Windows "Apps" list (Settings -> Apps; Control Panel -> Programs). In a test (-SandboxRoot) its
+# values go to apps-entry.json in the sandbox instead of the registry.
+$AppsKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Anno1602-Extensions'
+$AppsTestFile = if ($SandboxRoot) { Join-Path $SandboxRoot 'apps-entry.json' } else { $null }
+function Set-AppsEntry([System.Collections.IDictionary]$values) {
+    if ($AppsTestFile) { [IO.File]::WriteAllText($AppsTestFile, ($values | ConvertTo-Json), (New-Object Text.UTF8Encoding($false))); return }
+    if (Test-Path -LiteralPath $AppsKey) { Remove-Item -LiteralPath $AppsKey -Recurse -Force }
+    New-Item -Path $AppsKey -Force | Out-Null
+    foreach ($k in $values.Keys) {
+        $type = if ($values[$k] -is [int]) { 'DWord' } else { 'String' }
+        New-ItemProperty -LiteralPath $AppsKey -Name $k -Value $values[$k] -PropertyType $type -Force | Out-Null
+    }
+}
+function Remove-AppsEntry {
+    if ($AppsTestFile) { if (Test-Path -LiteralPath $AppsTestFile) { Remove-Item -LiteralPath $AppsTestFile -Force }; return }
+    if (Test-Path -LiteralPath $AppsKey) { Remove-Item -LiteralPath $AppsKey -Recurse -Force; Write-Host (Txt 'Removed from the Windows "Apps" list.' 'Aus der Windows-Liste "Apps" entfernt.') }
+}
+function Wait-AtEnd {
+    if ($PauseAtEnd) { try { [void](Read-Host (Txt 'Press Enter to close this window' 'Enter druecken, um dieses Fenster zu schliessen')) } catch { } }
+}
 
 if ($Remove) {
+    # The installed copy of this script removes its own folder: work from elsewhere, so that the folder is not in use.
+    Set-Location -LiteralPath ([IO.Path]::GetTempPath())
     # Our scenario names: the pattern, every title of build-scenarios.ps1 and the chapters of the installed set (read
     # before the program folder goes).
     $ourNames = @{}
@@ -106,17 +139,37 @@ if ($Remove) {
         if (Test-Path -LiteralPath $OwnScenarios) {
             Get-ChildItem -LiteralPath $OwnScenarios -Filter '*.szs' -File | Where-Object { $_.Name -match $ScenarioNames -or $ourNames.ContainsKey($_.Name) } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force; Write-Host (Txt "Removed: $($_.Name)" "Entfernt: $($_.Name)") }
         }
+        Remove-AppsEntry
     }
     Write-Host (Txt 'The extensions have been removed. Game and saved games are unchanged.' 'Die Erweiterungen sind entfernt. Spiel und Spielstaende sind unveraendert.') -ForegroundColor Green
+    Wait-AtEnd
     return
 }
+
+# The copy in the program folder only removes (from the "Apps" list); installing and updating goes through get.ps1
+# or install.cmd of a downloaded copy.
+if ([IO.Path]::GetFullPath($PSScriptRoot).TrimEnd('\') -eq $targetFull) {
+    Write-Host (Txt 'This is the installed copy; it can only remove the extensions (-Remove). To update, run the line from the README again.' 'Das ist die installierte Kopie; sie kann die Erweiterungen nur entfernen (-Remove). Zum Aktualisieren die Zeile aus dem README nochmals ausfuehren.') -ForegroundColor Yellow
+    Wait-AtEnd
+    return
+}
+
+# Version of this copy: the newest entry of ..\CHANGELOG.md ("## 3.2.0 - 2026-11-15").
+$Version = ''
+try {
+    $changelog = Join-Path (Split-Path -Parent $PSScriptRoot) 'CHANGELOG.md'
+    if (Test-Path -LiteralPath $changelog) { $m = Select-String -LiteralPath $changelog -Pattern '^## (\d+\.\d+\.\d+)' | Select-Object -First 1; if ($m) { $Version = $m.Matches[0].Groups[1].Value } }
+}
+catch { }
+if ($Version) { Write-Host ((Txt 'Anno 1602 - Extensions {0}' 'Anno 1602 - Erweiterungen {0}') -f $Version) -ForegroundColor Cyan }
 
 # --- Find the game (as in anno-patcher.ps1) ---------------------------------------------------
 $game = $null
 foreach ($k in 'HKLM:\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\16236', 'HKLM:\SOFTWARE\Ubisoft\Launcher\Installs\16236') {
     try { $d = (Get-ItemProperty -LiteralPath $k -ErrorAction Stop).InstallDir; if ($d) { $game = ($d -replace '/', '\').TrimEnd('\'); break } } catch { }
 }
-if (-not $game -or -not (Test-Path -LiteralPath (Join-Path $game 'Anno1602.exe'))) {
+$gameFound = $game -and (Test-Path -LiteralPath (Join-Path $game 'Anno1602.exe'))
+if (-not $gameFound) {
     Write-Host (Txt 'Anno 1602 History Edition was not found in Ubisoft Connect.' 'Anno 1602 History Edition wurde in Ubisoft Connect nicht gefunden.') -ForegroundColor Yellow
     Write-Host (Txt 'Please install the game through Ubisoft Connect first. The extensions are installed anyway.' 'Bitte zuerst das Spiel ueber Ubisoft Connect installieren. Die Erweiterungen werden trotzdem installiert.') -ForegroundColor Yellow
 }
@@ -130,7 +183,7 @@ else {
 # Repository layout: this script lies in src\, FINDINGS.md in docs\ (optional).
 # The random adventure generator needs the scenario builder, its library and the island planner of the patcher; the
 # scenario designer needs the generator.
-$files = foreach ($n in 'anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'README.txt', 'README.de.txt') {
+$files = foreach ($n in 'anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt') {
     $f = Join-Path $PSScriptRoot $n
     if (-not (Test-Path -LiteralPath $f)) { throw (Txt "File missing next to install.ps1: $n" "Datei fehlt neben install.ps1: $n") }
     Get-Item -LiteralPath $f
@@ -147,6 +200,10 @@ $files | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination $TargetFolder -Force
     try { Unblock-File -LiteralPath (Join-Path $TargetFolder $_.Name) } catch { }   # remove the downloaded-from-the-internet mark
 }
+# The launcher shows the version and compares it with the newest release on GitHub.
+$versionFile = Join-Path $TargetFolder 'version.txt'
+if ($Version) { [IO.File]::WriteAllText($versionFile, $Version, (New-Object Text.UTF8Encoding($false))) }
+elseif (Test-Path -LiteralPath $versionFile) { Remove-Item -LiteralPath $versionFile -Force }
 Write-Host (Txt "Installed to: $TargetFolder" "Installiert nach: $TargetFolder")
 
 # --- Scenarios --------------------------------------------------------------------------------
@@ -212,5 +269,47 @@ if (-not $NoShortcuts) {
         $l.Save()
         Write-Host (Txt "Shortcut: $v" "Verknuepfung: $v")
     }
+
+    # --- Entry in the Windows "Apps" list, for removing it like any other program ---------------------------------
+    $size = 0
+    try { $size = [int][math]::Ceiling(((Get-ChildItem -LiteralPath $TargetFolder -Recurse -File | Measure-Object -Property Length -Sum).Sum) / 1KB) } catch { }
+    $removeCommand = "`"$PowerShellExe`" -NoProfile -ExecutionPolicy Bypass -File `"$TargetFolder\install.ps1`" -Remove"
+    $entry = [ordered]@{
+        DisplayName          = Txt "Anno 1602 $([char]0x2013) Extensions" "Anno 1602 $([char]0x2013) Erweiterungen"
+        DisplayVersion       = $(if ($Version) { $Version } else { '0.0.0' })
+        Publisher            = 'MisterDeeds (fan project)'
+        DisplayIcon          = $(if ($gameFound) { Join-Path $game 'Anno1602.exe' } else { $PowerShellExe })
+        InstallLocation      = $TargetFolder
+        InstallDate          = (Get-Date -Format 'yyyyMMdd')
+        URLInfoAbout         = 'https://github.com/MisterDeeds/anno1602-extensions'
+        HelpLink             = 'https://github.com/MisterDeeds/anno1602-extensions#readme'
+        UninstallString      = "$removeCommand -PauseAtEnd"
+        QuietUninstallString = $removeCommand
+        NoModify             = 1
+        NoRepair             = 1
+        EstimatedSize        = $size
+    }
+    try { Set-AppsEntry $entry; Write-Host (Txt 'Listed under Windows Settings -> Apps (for removing it).' 'Eingetragen unter Windows-Einstellungen -> Apps (zum Entfernen).') }
+    catch { Write-Host (Txt "Could not add the entry to the Apps list: $($_.Exception.Message)" "Eintrag in der Apps-Liste nicht moeglich: $($_.Exception.Message)") -ForegroundColor Yellow }
 }
-Write-Host (Txt 'Done. Start with "Anno 1602 - Extensions" in the Start menu or on the desktop.' 'Fertig. Start ueber "Anno 1602 - Erweiterungen" im Startmenue oder auf dem Desktop.') -ForegroundColor Green
+
+$name = Txt 'Anno 1602 - Extensions' 'Anno 1602 - Erweiterungen'
+Write-Host ''
+Write-Host (Txt 'Done!' 'Fertig!') -ForegroundColor Green
+Write-Host ((Txt '  Play:      "{0}" in the Start menu or on the desktop' '  Spielen:       "{0}" im Startmenue oder auf dem Desktop') -f $name)
+Write-Host (Txt '  Update:    run the same line again (or the update button in the launcher)' '  Aktualisieren: die gleiche Zeile nochmals ausfuehren (oder im Starter auf Aktualisieren)')
+Write-Host ((Txt '  Remove:    Windows Settings -> Apps -> "{0}" -> Uninstall' '  Entfernen:     Windows-Einstellungen -> Apps -> "{0}" -> Deinstallieren') -f ($name -replace ' - ', " $([char]0x2013) "))
+if ($StartLauncher -and -not $NoShortcuts) {
+    if (-not $gameFound) {
+        Write-Host ''
+        Write-Host (Txt 'Install Anno 1602 History Edition through Ubisoft Connect, then run the line again: it builds the campaigns from the game files.' 'Anno 1602 History Edition ueber Ubisoft Connect installieren und die Zeile danach nochmals ausfuehren: sie baut die Kampagnen aus den Spieldateien.') -ForegroundColor Yellow
+    }
+    else {
+        $launch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$TargetFolder\launcher.ps1`"")
+        # In a test only the command is printed.
+        if ($SandboxRoot) { Write-Host ('START {0} {1}' -f $PowerShellExe, ($launch -join ' ')) }
+        else { Start-Process -FilePath $PowerShellExe -ArgumentList $launch -WindowStyle Hidden }
+        Write-Host (Txt 'The launcher is opening - have fun!' 'Der Starter oeffnet sich - viel Spass!') -ForegroundColor Green
+    }
+}
+Wait-AtEnd
