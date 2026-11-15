@@ -3,6 +3,10 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## Unreleased
+
+- The installer's closing lines say that updates come by themselves.
+
 ## 3.3.0 – 2026-11-15
 
 - Automatic updates: when GitHub has a newer release, the launcher installs it by itself and opens again –

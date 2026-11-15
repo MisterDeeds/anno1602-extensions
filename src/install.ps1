@@ -297,7 +297,7 @@ $name = Txt 'Anno 1602 - Extensions' 'Anno 1602 - Erweiterungen'
 Write-Host ''
 Write-Host (Txt 'Done!' 'Fertig!') -ForegroundColor Green
 Write-Host ((Txt '  Play:      "{0}" in the Start menu or on the desktop' '  Spielen:       "{0}" im Startmenue oder auf dem Desktop') -f $name)
-Write-Host (Txt '  Update:    run the same line again (or the update button in the launcher)' '  Aktualisieren: die gleiche Zeile nochmals ausfuehren (oder im Starter auf Aktualisieren)')
+Write-Host (Txt '  Update:    by itself - the launcher installs new versions (or run the line again)' '  Aktualisieren: von selbst - der Starter installiert neue Versionen (oder die Zeile nochmals ausfuehren)')
 Write-Host ((Txt '  Remove:    Windows Settings -> Apps -> "{0}" -> Uninstall' '  Entfernen:     Windows-Einstellungen -> Apps -> "{0}" -> Deinstallieren') -f ($name -replace ' - ', " $([char]0x2013) "))
 if ($StartLauncher -and -not $NoShortcuts) {
     if (-not $gameFound) {
