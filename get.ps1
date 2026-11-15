@@ -78,7 +78,10 @@
         Write-Host (Txt "The game files are unchanged. Help: https://github.com/$repo/issues" "Die Spieldateien sind unveraendert. Hilfe: https://github.com/$repo/issues") -ForegroundColor Yellow
     }
     finally {
-        if (Test-Path -LiteralPath $work) { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue }
+        # A virus scanner may still hold the freshly unpacked files for a moment: try a few times.
+        for ($i = 0; $i -lt 10 -and (Test-Path -LiteralPath $work); $i++) {
+            try { Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction Stop } catch { Start-Sleep -Milliseconds 500 }
+        }
     }
     if ($failed -and $env:ANNO_EXTENSIONS_PAUSE_ON_ERROR -eq '1') {
         try { [void](Read-Host (Txt 'Press Enter to close this window' 'Enter druecken, um dieses Fenster zu schliessen')) } catch { }
