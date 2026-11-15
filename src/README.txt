@@ -10,8 +10,9 @@ Install (also on another PC)
      "install.cmd".)
   3. Start with "Anno 1602 - Extensions" in the Start menu or on the desktop
      (on a German Windows the shortcut is called "Anno 1602 - Erweiterungen").
-  Update: when a new version is out, the launcher shows "Update now". Or run the line above
-  again. Settings, logbook and saves stay.
+  Update: happens by itself. When a new version is out, the launcher installs it at its next
+  start and opens again (check box "Update automatically"; without it the button "Update now"
+  appears). Settings, logbook and saves stay. Running the line above again works too.
   Uninstall: Windows Settings -> Apps -> "Anno 1602 - Extensions" -> Uninstall. The game and
   your saves stay; the scenarios of the extensions (also daily adventures and the scenarios you
   built yourself) and the folder with your settings and the logbook are removed.

@@ -37,7 +37,9 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 3. That's it – the launcher opens. From now on start the game with **"Anno 1602 - Extensions"** in the
    Start menu or on the desktop (on a German Windows: "Anno 1602 - Erweiterungen").
 
-- **Update:** when a new version is out, the launcher shows a button *Update now*. Or run the same line again.
+- **Updates come by themselves:** when a new version is out, the launcher installs it at its next start and opens
+  again (check box *Update automatically*; without it a button *Update now* appears). Settings, logbook and saves
+  stay. Running the same line again works too.
 - **Uninstall:** Windows Settings → **Apps** → "Anno 1602 – Extensions" → *Uninstall*. The game and your saves
   stay as they are.
 - No administrator rights, nothing is written to the game folder. What the line does:
@@ -308,7 +310,9 @@ Older scenarios are stretched to 2000 × 1400 as before.
 - Tested with exactly one game version (SHA-256 of `Anno1602.exe` starts with `7731972f`).
   After a game update, the tool stops without changing anything.
 - The launcher asks GitHub once per start, in the background, for the number of the newest release. Nothing else
-  is sent.
+  is sent. A newer version is installed automatically (at most once a day, never while the game runs); switch it
+  off with the check box *Update automatically*. Versions up to 3.1.0 have no update check yet: install them once
+  more with the line above.
 
 ## Layout
 
@@ -329,7 +333,7 @@ anno1602-extensions/
 ├── tests/
 │   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (655 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
-│   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (40 checks)
+│   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (42 checks)
 ├── dev/                           helpers for development
 │   ├── check-game.ps1             shows the patched values in the running game (read only)
 │   ├── check-islands.ps1          islands, ore and fertility of the running game

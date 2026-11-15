@@ -10,7 +10,8 @@
 # For testing only (environment variables, because "irm | iex" takes no parameters):
 #   ANNO_EXTENSIONS_SOURCE            a local .zip or folder in the layout of the repository instead of the download
 #   ANNO_EXTENSIONS_SANDBOX           passed to src\install.ps1 -SandboxRoot (every user folder below that folder)
-#   ANNO_EXTENSIONS_PAUSE_ON_ERROR=1  wait for Enter after an error (set by the launcher's update button)
+#   ANNO_EXTENSIONS_PAUSE_ON_ERROR=1  wait for Enter after an error (set by the launcher, which downloads this script
+#                                     and runs it as a file for its automatic update)
 #
 # The script runs inside "& { }", so that nothing (variables, functions, preferences) is left behind in the
 # PowerShell window it was pasted into, and it never calls "exit", which would close that window.

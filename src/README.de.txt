@@ -10,8 +10,10 @@ Installieren (auch auf einem anderen PC)
      doppelklicken.)
   3. Starten ueber "Anno 1602 - Erweiterungen" im Startmenue oder auf dem Desktop
      (auf einem Windows in anderer Sprache heisst die Verknuepfung "Anno 1602 - Extensions").
-  Aktualisieren: Gibt es eine neue Version, zeigt der Starter "Jetzt aktualisieren". Oder die
-  Zeile oben nochmals ausfuehren. Einstellungen, Logbuch und Spielstaende bleiben.
+  Aktualisieren: geht von selbst. Gibt es eine neue Version, installiert der Starter sie beim
+  naechsten Start und oeffnet sich wieder (Haekchen "Automatisch aktualisieren"; ohne Haekchen
+  erscheint der Knopf "Jetzt aktualisieren"). Einstellungen, Logbuch und Spielstaende bleiben.
+  Die Zeile oben nochmals ausfuehren geht auch.
   Entfernen: Windows-Einstellungen -> Apps -> "Anno 1602 - Erweiterungen" -> Deinstallieren.
   Spiel und Spielstaende bleiben; die Szenarien der Erweiterungen (auch Tagesabenteuer und
   deine selbst gebauten Szenarien) und der Ordner mit deinen Einstellungen und dem Logbuch

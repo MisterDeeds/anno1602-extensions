@@ -37,8 +37,9 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 3. Das war's – der Starter öffnet sich. Ab jetzt startest du das Spiel über **„Anno 1602 - Erweiterungen“** im
    Startmenü oder auf dem Desktop (auf einem Windows in anderer Sprache: „Anno 1602 - Extensions“).
 
-- **Aktualisieren:** Gibt es eine neue Version, zeigt der Starter den Knopf *Jetzt aktualisieren*. Oder die gleiche
-  Zeile nochmals ausführen.
+- **Updates kommen von selbst:** Gibt es eine neue Version, installiert der Starter sie beim nächsten Start und
+  öffnet sich wieder (Häkchen *Automatisch aktualisieren*; ohne Häkchen erscheint der Knopf *Jetzt aktualisieren*).
+  Einstellungen, Logbuch und Spielstände bleiben. Die gleiche Zeile nochmals ausführen geht auch.
 - **Entfernen:** Windows-Einstellungen → **Apps** → „Anno 1602 – Erweiterungen“ → *Deinstallieren*. Spiel und
   Spielstände bleiben, wie sie sind.
 - Keine Administratorrechte, nichts im Spielordner. Was die Zeile macht: [get.ps1](get.ps1) lädt die
@@ -318,7 +319,9 @@ gilt die klassische Karte. Ältere Szenarien werden wie bisher auf 2000 × 1400 
 - Getestet mit genau einer Spielversion (SHA-256 von `Anno1602.exe` beginnt mit `7731972f`).
   Nach einem Update des Spiels bricht das Werkzeug ab, ohne etwas zu ändern.
 - Der Starter fragt bei jedem Start im Hintergrund bei GitHub nach der Nummer der neusten Version. Sonst wird
-  nichts gesendet.
+  nichts gesendet. Eine neuere Version wird automatisch installiert (höchstens einmal am Tag, nie während das Spiel
+  läuft); abschalten mit dem Häkchen *Automatisch aktualisieren*. Versionen bis 3.1.0 haben noch keine
+  Update-Abfrage: diese einmal mit der Zeile oben neu installieren.
 
 ## Aufbau
 
@@ -339,7 +342,7 @@ anno1602-extensions/
 ├── tests/
 │   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (655 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
-│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (40 Prüfungen)
+│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (42 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung
 │   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
 │   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel

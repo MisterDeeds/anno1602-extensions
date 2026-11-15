@@ -3,6 +3,17 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.3.0 – 2026-11-15
+
+- Automatic updates: when GitHub has a newer release, the launcher installs it by itself and opens again –
+  settings, logbook and saves stay. Check box "Automatisch aktualisieren / Update automatically" (on by default);
+  without it the button "Update now" remains. At most one try per version and day, never while the game runs.
+- After an update the launcher says "Updated to version x.y.z" once, with a button "What is new?" for the release
+  notes.
+- The update now downloads `get.ps1` and runs it as a file (3.2.0 started `irm … | iex` in a new window).
+- Versions up to 3.1.0 have no update check; 3.2.0 shows the button. Install those once with the line from the
+  README, after that the extensions keep themselves up to date.
+
 ## 3.2.0 – 2026-11-15
 
 - Install with one line: `irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex`

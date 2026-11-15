@@ -15,7 +15,9 @@
      chapters up to the first one not won (in both languages), challenges and the player's files untouched.
   4. The installed launcher in the sandbox (-TestClicks): the scenario designer builds "Eigenes - Testinsel" into Own
      Scenarios and the list shows it, the daily adventure is built, chapters on shows locks, off copies every chapter back.
-     The update notice: an older release changes nothing, a newer one shows it, its button starts get.ps1.
+     Updates: after an update (settings LastVersion older) the launcher says so once; an older release changes nothing;
+     a newer one shows the notice and its button downloads get.ps1 and starts it as a file; with "Update automatically"
+     the update starts by itself, but only once per version and day.
   5. Adventures, daily adventures and designer scenarios appear (both languages); then -Remove through the installed
      copy, as the Windows "Apps" list does it: program folders, both shortcut names, both settings folders, the Apps
      entry and all our scenarios are gone, the player's files stay.
@@ -143,8 +145,13 @@ try {
     Test-That "the player's scenarios untouched by the unlocking" (@($playerFiles | Where-Object { Test-Path -LiteralPath (Join-Path $own $_) }).Count -eq $playerFiles.Count)
 
     # --- 4. The installed launcher in the sandbox ----------------------------------------------------------------------
-    'Launcher click test in the sandbox (designer, daily adventure, chapters on/off)'
+    'Launcher click test in the sandbox (designer, daily adventure, chapters on/off, updates)'
     $env:ANNO_EXTENSIONS_LANG = 'de'
+    # As after an automatic update: the launcher last ran as version 1.0.0.
+    $settingsPath = Join-Path $app 'Anno1602-Extensions\settings.json'
+    $s = Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json
+    $s | Add-Member -NotePropertyName LastVersion -NotePropertyValue '1.0.0' -Force
+    $s | ConvertTo-Json | Set-Content -LiteralPath $settingsPath -Encoding UTF8
     $clicks = @(& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $new 'launcher.ps1') -TestClicks -AppDataFolder $app -DocumentsFolder (Join-Path $sandbox 'Documents') -TestOutFolder (Join-Path $sandbox 'launcher-test') 2>&1 | ForEach-Object { "$_" })
     $clickText = $clicks -join "`n"
     Test-That 'designer: "Eigenes - Testinsel" built into Own Scenarios and selected in the list' ((Test-Path -LiteralPath (Join-Path $own 'Eigenes - Testinsel.szs')) -and $clickText -match 'LIST tab 2, selected: Eigenes - Testinsel')
@@ -155,7 +162,11 @@ try {
     # The set in the program folder is English now (the last installation).
     Test-That 'chapters off: every chapter of the set back in Own Scenarios, setting saved' ($offLine -match ', 0 locked' -and $offLine -match 'UnlockChapters=0' -and @($titles.en | Where-Object { $_ -match ' \d+ - ' -and -not (Test-Path -LiteralPath (Join-Path $own "$_.szs")) }).Count -eq 0)
     Test-That 'click test: patcher started, no exception' ($clickText -match 'START powershell .*anno-patcher\.ps1' -and $clickText -notmatch 'Exception|Fehler')
-    Test-That 'update notice: hidden for an older release, shown for a newer one, the button runs get.ps1' ($clickText -match 'UPDATE v1\.0\.0 visible: False' -and $clickText -match 'UPDATE v99\.0\.0 visible: True Version 99\.0\.0 ist da\.' -and $clickText -match 'START powershell .*-Command "irm https://raw\.githubusercontent\.com/MisterDeeds/anno1602-extensions/main/get\.ps1 \| iex"')
+    $v = [regex]::Escape($repoVersion)
+    Test-That "after an update: `"Aktualisiert auf Version $repoVersion.`" with the button for the release notes, version saved" ($clickText -match "UPDATED-NOTE visible: True Aktualisiert auf Version $v\. \| news button True" -and (Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json).LastVersion -eq $repoVersion)
+    Test-That 'update: nothing for an older release; without "automatically" the notice and the button (download + get.ps1 as a file)' ($clickText -match "UPDATE v1\.0\.0: Aktualisiert auf Version $v\." -and $clickText -match 'UPDATE v99\.0\.0 auto off: Version 99\.0\.0 ist da\., starts 0' -and $clickText -match 'UPDATE button: starts 1' -and $clickText -match 'DOWNLOAD https://raw\.githubusercontent\.com/MisterDeeds/anno1602-extensions/main/get\.ps1' -and $clickText -match 'START powershell -NoProfile -ExecutionPolicy Bypass -File ".*anno1602-extensions-update\.ps1"')
+    $today = Get-Date -Format 'yyyy-MM-dd'
+    Test-That 'update automatically: starts by itself, saved, only once per version and day' ($clickText -match "UPDATE auto on: starts 2, Version 99\.0\.0 ist da und wird installiert .*, saved AutoUpdate=1 UpdateTried=99\.0\.0 $today" -and $clickText -match 'UPDATE auto again the same day: starts 2')
 
     # --- 5. Remove ----------------------------------------------------------------------------------------------------
     foreach ($n in 'Abenteuer 4711.szs', 'Adventure 99 Easy.szs', 'Tagesabenteuer 2026-11-14.szs', 'Daily Adventure 2026-11-14.szs', 'Custom - My Island.szs') { Set-Content -LiteralPath (Join-Path $own $n) 'made by the extensions' }

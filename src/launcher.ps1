@@ -11,6 +11,10 @@
     scenario designer (scenario-designer.ps1) and the option to unlock the campaign chapters one by one.
   "Play with extensions" starts anno-patcher.ps1 (in its own window that stays open until the game ends) and the
   game through Ubisoft Connect. "Start original" only starts the game, without changes.
+  Updates (installed copy only, version.txt): at every start a background request asks GitHub for the newest release;
+  if it is newer, "Update automatically" (on by default) downloads get.ps1 and runs it at once - at most once per
+  version and day, never while the game runs - otherwise the button "Update now" does. The installer opens the new
+  launcher, which then says "Updated to version x.y.z" once, with a button for the release notes.
   The settings are stored in %APPDATA%\Anno1602-Extensions\settings.json (option id -> value key,
   independent of the UI language; plus LogbookWithGame and UnlockChapters = 1/0). The settings of older versions
   (%APPDATA%\Anno1602-Erweiterungen\einstellungen.json) are taken over; the old file is left in place.
@@ -368,11 +372,11 @@ $Generator = Join-Path $PSScriptRoot 'random-adventure.ps1'
 $Designer = Join-Path $PSScriptRoot 'scenario-designer.ps1'
 $Logbook = Join-Path $PSScriptRoot 'logbook.ps1'
 # Installed version (written by install.ps1; missing when the launcher runs from the repository). The launcher asks
-# GitHub once per start, in the background, for the newest release and offers the update (get.ps1) if it is newer.
+# GitHub once per start, in the background, for the newest release and installs it (get.ps1) if it is newer - by
+# itself with "Update automatically", otherwise with the button "Update now".
 $InstalledVersion = $null
 try { $v = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'version.txt') -Raw -ErrorAction Stop).Trim(); if ($v -match '^\d+\.\d+\.\d+$') { $InstalledVersion = [version]$v } } catch { }
 $ReleaseApi = 'https://api.github.com/repos/MisterDeeds/anno1602-extensions/releases/latest'
-$UpdateCommand = 'irm https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1 | iex'
 $ChapterIndexFile = Join-Path $ChapterFolder 'chapters.json'
 
 # Missions recorded by the logbook: scenario name -> best result ('won' beats 'lost') and date.
@@ -920,31 +924,88 @@ $checkLogbook.Checked = ($saved['LogbookWithGame'] -eq '1')
 $checkLogbook.Visible = (Test-Path -LiteralPath $Logbook)
 $buttons.Controls.Add($checkLogbook)
 function Start-LogbookIfWanted { if ($checkLogbook.Checked -and $checkLogbook.Visible) { Start-Logbook } }
+# Install new versions by themselves (settings.json AutoUpdate, on unless switched off; only for an installed copy).
+$checkAutoUpdate = New-Object Windows.Forms.CheckBox
+$checkAutoUpdate.Text = Txt 'Update automatically' 'Automatisch aktualisieren'
+$checkAutoUpdate.AutoSize = $true
+$checkAutoUpdate.Margin = New-Object Windows.Forms.Padding(8, 10, 3, 3)
+$checkAutoUpdate.Checked = ($saved['AutoUpdate'] -ne '0')
+$checkAutoUpdate.Visible = [bool]$InstalledVersion
+$buttons.Controls.Add($checkAutoUpdate)
+$buttonTips = New-Object Windows.Forms.ToolTip
+$buttonTips.AutoPopDelay = 20000
+$buttonTips.SetToolTip($checkAutoUpdate, (Txt 'At every start the launcher asks GitHub for the newest version. A newer one is installed at once (settings, logbook and saves stay) and the launcher opens again.' 'Bei jedem Start fragt der Starter GitHub nach der neusten Version. Eine neuere wird gleich installiert (Einstellungen, Logbuch und Spielstände bleiben) und der Starter öffnet sich wieder.'))
 $form.AcceptButton = $buttonStart
 
-# --- Update notice (hidden until GitHub reports a newer release) ----------------------------------------------
+# --- Updates ----------------------------------------------------------------------------------------------------
+# A row below the buttons, hidden until there is something to say: a newer release on GitHub (installed at once with
+# "Update automatically", otherwise with the button) or, after an update, the new version with its release notes.
 $updateRow = New-ButtonRow $outer
 $updateRow.Visible = $false
 $updateLabel = New-Label '' $false 9 3
 $updateLabel.ForeColor = [Drawing.Color]::DarkGreen
 $updateRow.Controls.Add($updateLabel)
 $buttonUpdate = New-Button (Txt 'Update now' 'Jetzt aktualisieren') $updateRow
-# Shows the notice if $tag ("v3.3.0") is newer than the installed version.
+$buttonNews = New-Button (Txt 'What is new?' 'Was ist neu?') $updateRow
+$buttonNews.Visible = $false
+$GetScriptUrl = 'https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1'
+$UpdateFile = Join-Path ([IO.Path]::GetTempPath()) 'anno1602-extensions-update.ps1'
+# Version and day of the last automatic update ("3.3.0 2026-11-15"): at most one try per version and day, so that a
+# failing update cannot run again and again.
+$script:UpdateTried = [string]$saved['UpdateTried']
+
+# Downloads get.ps1 and runs it as a file in a window of its own (it waits for Enter only after an error), then closes
+# the launcher; the installer opens the new one.
+function Start-Update {
+    Save-Choice
+    try {
+        if ($TestClicks) { $script:Started.Add("DOWNLOAD $GetScriptUrl") }
+        else {
+            $ProgressPreference = 'SilentlyContinue'
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+            Invoke-WebRequest -Uri $GetScriptUrl -OutFile $UpdateFile -UseBasicParsing -Headers @{ 'User-Agent' = 'anno1602-extensions-launcher' } -TimeoutSec 30
+        }
+    }
+    catch {
+        $updateLabel.Text = (Txt 'The update could not be downloaded: {0}' 'Das Update konnte nicht geladen werden: {0}') -f $_.Exception.Message
+        $buttonUpdate.Visible = $true
+        return
+    }
+    $env:ANNO_EXTENSIONS_PAUSE_ON_ERROR = '1'
+    Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$UpdateFile`"")
+    $form.Close()
+}
+# Called with the newest release ("v3.3.0"): nothing if it is not newer than the installed version; otherwise the
+# notice, and with "Update automatically" the update itself - not while the game runs, at most once per version and day.
 function Show-UpdateNotice([string]$tag) {
     if (-not $InstalledVersion -or $tag -notmatch '^v?(\d+\.\d+\.\d+)$') { return }
     $newest = [version]$Matches[1]
     if ($newest -le $InstalledVersion) { return }
     $updateLabel.Text = (Txt 'Version {0} is out.' 'Version {0} ist da.') -f $newest
+    $buttonUpdate.Visible = $true
+    $buttonNews.Visible = $false
+    $updateRow.Visible = $true
+    $attempt = '{0} {1}' -f $newest, (Get-Date -Format 'yyyy-MM-dd')
+    if ($checkAutoUpdate.Checked -and $script:UpdateTried -ne $attempt -and -not (Get-Process -Name 'Anno1602' -ErrorAction SilentlyContinue)) {
+        $script:UpdateTried = $attempt
+        $updateLabel.Text = (Txt 'Version {0} is out and is being installed – the launcher opens again in a moment.' 'Version {0} ist da und wird installiert – der Starter öffnet sich gleich wieder.') -f $newest
+        $buttonUpdate.Visible = $false
+        $form.Refresh()
+        Start-Update
+    }
+}
+$buttonUpdate.Add_Click({ Start-Update })
+$checkAutoUpdate.Add_CheckedChanged({ Save-Choice })
+# After an update (the version saved at the last start is older): say so once, with a button for the release notes.
+if ($InstalledVersion -and -not $PreviewImage -and $saved['LastVersion'] -match '^\d+\.\d+\.\d+$' -and [version]$saved['LastVersion'] -lt $InstalledVersion) {
+    $updateLabel.Text = (Txt 'Updated to version {0}.' 'Aktualisiert auf Version {0}.') -f $InstalledVersion
+    $buttonUpdate.Visible = $false
+    $buttonNews.Visible = $true
     $updateRow.Visible = $true
 }
-# The update runs the one-line installer in a window of its own (it waits for Enter only after an error) and opens
-# the launcher again when it is done.
-$buttonUpdate.Add_Click({
-        Save-Choice
-        $env:ANNO_EXTENSIONS_PAUSE_ON_ERROR = '1'
-        Start-Process powershell -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', "`"$UpdateCommand`"")
-        $form.Close()
-    })
+$buttonNews.Add_Click({ Start-Process "https://github.com/MisterDeeds/anno1602-extensions/releases/tag/v$InstalledVersion" })
+# The downloaded copy of get.ps1 of the last update is no longer needed.
+if (-not $TestClicks -and -not $PreviewImage) { try { if (Test-Path -LiteralPath $UpdateFile) { Remove-Item -LiteralPath $UpdateFile -Force } } catch { } }
 
 function Save-Choice {
     try {
@@ -953,6 +1014,9 @@ function Save-Choice {
         $sel['LogbookWithGame'] = if ($checkLogbook.Checked) { '1' } else { '0' }
         # Without a chapter set the check box is disabled: keep the saved value.
         $sel['UnlockChapters'] = if (-not $checkUnlock.Enabled) { if ($saved['UnlockChapters'] -eq '1') { '1' } else { '0' } } elseif ($checkUnlock.Checked) { '1' } else { '0' }
+        $sel['AutoUpdate'] = if ($checkAutoUpdate.Checked) { '1' } else { '0' }
+        if ($InstalledVersion) { $sel['LastVersion'] = [string]$InstalledVersion } elseif ($saved['LastVersion']) { $sel['LastVersion'] = $saved['LastVersion'] }
+        if ($script:UpdateTried) { $sel['UpdateTried'] = $script:UpdateTried }
         $sel | ConvertTo-Json | Set-Content -LiteralPath $SettingsFile -Encoding UTF8
     }
     catch { }
@@ -1024,6 +1088,8 @@ if ($TestClicks) {
     function Write-Step([string]$what) { $script:Started.Add("--- $what") }
     $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(-10000, -10000); $form.ShowInTaskbar = $false
     $form.Add_Shown({
+            Write-Step ('At the start: version saved at the last start {0}' -f $(if ($saved['LastVersion']) { $saved['LastVersion'] } else { 'none' }))
+            $script:Started.Add(('UPDATED-NOTE visible: {0} {1} | news button {2}' -f $updateRow.Visible, $updateLabel.Text, $buttonNews.Visible))
             Write-Step 'preset Relaxed, logbook with the game, Play with extensions'; $checkLogbook.Checked = $true; Invoke-Click $buttonRelaxed; Invoke-Click $buttonStart
             $script:Started.Add('SETTINGS LogbookWithGame=' + (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).LogbookWithGame); $checkLogbook.Checked = $false
             Write-Step 'preset Tough test, Start original'; Invoke-Click $buttonTough; Invoke-Click $buttonOriginal
@@ -1058,11 +1124,18 @@ if ($TestClicks) {
                 $checkUnlock.Checked = $false
                 $script:Started.Add('OFF ' + (& $listState) + '; SETTINGS UnlockChapters=' + (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).UnlockChapters)
             }
-            # Update notice: an older release changes nothing, a newer one shows the notice; the button starts get.ps1.
-            Write-Step ('Update notice, installed version {0}' -f $(if ($InstalledVersion) { $InstalledVersion } else { 'none' }))
-            Show-UpdateNotice 'v1.0.0'; $script:Started.Add('UPDATE v1.0.0 visible: ' + $updateRow.Visible)
-            Show-UpdateNotice 'v99.0.0'; $script:Started.Add('UPDATE v99.0.0 visible: ' + $updateRow.Visible + ' ' + $updateLabel.Text)
-            if ($updateRow.Visible) { Invoke-Click $buttonUpdate }
+            # Updates: an older release changes nothing; a newer one with "Update automatically" off shows the notice and
+            # the button downloads and starts get.ps1; with it on the update starts by itself, but only once a day.
+            Write-Step ('Updates, installed version {0}' -f $(if ($InstalledVersion) { $InstalledVersion } else { 'none' }))
+            $updateStarts = { @($script:Started | Where-Object { $_ -like 'START powershell*-File*anno1602-extensions-update.ps1*' }).Count }
+            $checkAutoUpdate.Checked = $false
+            Show-UpdateNotice 'v1.0.0'; $script:Started.Add('UPDATE v1.0.0: ' + $updateLabel.Text)
+            Show-UpdateNotice 'v99.0.0'; $script:Started.Add(('UPDATE v99.0.0 auto off: {0}, starts {1}' -f $updateLabel.Text, (& $updateStarts)))
+            Invoke-Click $buttonUpdate; $script:Started.Add('UPDATE button: starts ' + (& $updateStarts))
+            $script:UpdateTried = ''; $checkAutoUpdate.Checked = $true
+            Show-UpdateNotice 'v99.0.0'
+            $script:Started.Add(('UPDATE auto on: starts {0}, {1}, saved AutoUpdate={2} UpdateTried={3}' -f (& $updateStarts), $updateLabel.Text, (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).AutoUpdate, (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).UpdateTried))
+            Show-UpdateNotice 'v99.0.0'; $script:Started.Add('UPDATE auto again the same day: starts ' + (& $updateStarts))
             $form.Close()
         })
     [void]$form.ShowDialog()
@@ -1084,6 +1157,8 @@ if ($PreviewImage) {
         })
 }
 elseif ($StartTab -gt 0 -and $StartTab -lt $tabs.TabCount) { $tabs.SelectedIndex = $StartTab }
+# Remember this version, so that the note "Updated to version ..." appears only once.
+if (-not $PreviewImage -and $InstalledVersion -and $saved['LastVersion'] -ne [string]$InstalledVersion) { Save-Choice }
 # Ask GitHub for the newest release in the background (at most 8 s, only the version number is fetched; nothing is
 # sent but the request itself). Off with $env:ANNO_EXTENSIONS_NO_UPDATE_CHECK = '1'.
 if (-not $PreviewImage -and $InstalledVersion -and $env:ANNO_EXTENSIONS_NO_UPDATE_CHECK -ne '1') {
