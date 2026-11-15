@@ -3,8 +3,10 @@
 *[Deutsche Fassung](README.de.md)*
 
 A fan project for **Anno 1602 History Edition** (Ubisoft Connect): a bigger world, more islands,
-tougher rivals, cheaper building and richer towns, up to 16× game speed, 23 new scenarios with a
-story and a mission, random adventures and a logbook window next to the game.
+tougher rivals, cheaper building and richer towns, up to 16× game speed, random events while you play,
+41 new scenarios with a story and a mission (five campaigns and 13 challenges, some against the
+clock), a scenario designer, random and daily adventures, and a logbook window with charts next to
+the game.
 
 The tool **does not change any game file**. It only patches the memory of the running game.
 Quit the game and everything is back to the original. Single player only.
@@ -41,6 +43,7 @@ German Windows.
 | Tax income | ×1.5 to ×3 |
 | Influence radius | ×1.5 or ×2 for warehouse, market and public buildings (chapel, church, tavern, doctor, school …) |
 | Ore and gold mines | inexhaustible |
+| Events | random events while you play, rarely or often (see [Events](#events)) |
 | Turbo (F7) | 8×, 12× or 16× game speed |
 
 ## The launcher
@@ -52,8 +55,8 @@ The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiters
   <img src="docs/images/launcher-tab2-en.png" alt="Launcher: campaign progress and random adventures" width="45%">
 </p>
 
-- **New game**: every option as a click, in four groups (World, Economy, Rivals and dangers,
-  Ships and speed), plus five presets:
+- **New game**: every option as a click, in four groups (World, Economy, Rivals and dangers – with
+  the events –, Ships and speed), plus five presets:
 
   | Preset | Settings |
   |---|---|
@@ -68,21 +71,71 @@ The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiters
   right size. (Recorded for every save written with this version of the extensions; for older
   autosaves of a big world the size is taken from the file name.)
 - **Adventures**: all your campaigns and challenges with your progress (won, lost, next chapter),
-  and the **random adventure** generator: pick a difficulty, optionally a number, click
-  *Roll an adventure*. Every number gives its own island world with its own mission (one of
-  three map kinds, and towns, a realm, trade, a monopoly or conquest as the main goal); the same
-  number always gives the same adventure.
+  and
+  - the **random adventure** generator: pick a difficulty, optionally a number, click *Roll an
+    adventure*. Every number gives its own island world with its own mission (one of three map
+    kinds, and towns, a realm, trade, a monopoly or conquest as the main goal); the same number
+    always gives the same adventure.
+  - the **daily adventure**: one new adventure every day, the same for everyone on that date
+    ("Daily Adventure 2026-11-15").
+  - **Build your own scenario**: the scenario designer (below).
+  - **Unlock chapters one by one** (off by default): the game's list then shows each campaign only
+    up to the first chapter you have not won yet; the next one appears after a win. Locked
+    chapters carry a lock in the launcher.
 
 Below the tabs: **Play with extensions**, **Start original** and **Open logbook**.
 
+## Scenario designer
+
+<p align="center">
+  <img src="docs/images/designer-en.png" alt="Scenario designer" width="70%">
+</p>
+
+Click a scenario together: name, map (classic, archipelago or continents, each map number its own
+world), difficulty, your gold and the rivals' gold and strength, pirates, natives, resources, start
+cargo and up to three extra ships, and the mission – towns with a class, every settlement at least,
+number of settlements, residents in total, balance, trade balance, goods in stock, monopolies,
+defeating chosen rivals, and an optional time limit. The mission text is written for you (a story
+you can change) and shown exactly as the game will show it. *Create scenario* saves it as
+"Custom - &lt;name&gt;" in your own scenarios. The maps follow the same rules as the campaigns, so the
+rivals always find room.
+
+## Events
+
+With **Events** set to *Rare* (about every three game hours) or *Often* (about every game hour),
+something happens now and then once you have a town:
+
+| Event | Effect |
+|---|---|
+| A patron | gold for your colony (2,000 to 10,000, more the further your towns have come) |
+| Fire in the warehouse | the repairs cost 5 % of your gold |
+| A trader's gift | 10 to 30 t of tools, wood, bricks or food in your biggest town |
+| Tax windfall / tax slump | taxes +50 % / −25 % for one game hour (for the rivals too) |
+| Bumper harvest / marsh fever | every farm and workshop 50 % faster / 25 % slower for one game hour (for the rivals too) |
+
+The tool's window has to stay open while you play; it restores taxes and production after the
+hour, when you load or start another game and when the game ends. Savegames never contain the
+temporary values. Every event also appears in the logbook.
+
 ## Logbook
 
-A small window next to the game. It only *reads* the game's memory and shows your mission goals
-with live progress bars, gold, balance and trade balance, your towns and residents per class,
-ships, the rivals' best towns (and their progress in a race), and 24 achievements – from
-"Land Ho!" (first town) to "Millionaire". Achievements and finished missions are kept in
-`%APPDATA%\Anno1602-Extensions\logbook.json`; the Adventures tab shows from it which chapters you
-have won. Use the game in window mode or a second monitor to see both.
+<p align="center">
+  <img src="docs/images/logbook-en.png" alt="Logbook: the running game" width="30%">
+  <img src="docs/images/logbook-history-en.png" alt="Logbook: history and played games" width="30%">
+</p>
+
+A window next to the game. It only *reads* the game's memory.
+- **Game**: your mission goals with live progress bars (and the time left if the mission has a
+  time limit), gold, balance and trade balance, your towns and residents per class, ships, the
+  rivals' best towns (and their progress in a race), the events of this game and 53 achievements –
+  from "Land Ho!" (first town) to "Saga Complete" (a whole campaign) and "Regular" (ten games).
+- **History**: charts of gold, residents per class, balance, towns and ships over the game (one
+  point per game minute), and the list of your played games with time, result and most residents.
+  At the end of every game a summary card shows what you reached.
+
+Achievements, finished missions and played games are kept in
+`%APPDATA%\Anno1602-Extensions\logbook.json`, the charts in `history\`; the Adventures tab shows
+from it which chapters you have won. Use the game in window mode or a second monitor to see both.
 
 Checked in the running game on 12 November 2026: all seven new options are set exactly as planned
 (every one of 50 islands carries all six crops; at 16× over 1.5 game hours the ore deposits stayed
@@ -93,11 +146,18 @@ values, a won mission is recorded). Later the same day: the build menu shows the
 road tile really cost 3 instead of 5 gold; the market preview shows the doubled radius; with the same
 savegame over 2.9 game hours "Disasters" gave 0 / 34 / 89 new fires and plagues for off / normal /
 more; an English scenario appears with its English text; all launcher buttons were clicked in code.
-Not played through yet: the balance of the ten new scenarios.
+
+Checked in the running game on 15 November 2026 (version 3.0.0): "Against the Clock" starts with its
+3-hour limit, the game shows its own clock, the limit is back after loading the saved game, and when
+the time runs out the mission ends as lost; events (patron, fire, trader's gift, bumper harvest, marsh
+fever) change gold, goods and production exactly as announced and restore them at the end or with the
+game; in "The New World 3" all three rivals settle among the 14 native villages; a designer scenario
+loads with its time limit, extra ships and the named rival. Not played through yet: the balance of
+the scenarios marked †.
 
 ## Campaigns and challenges
 
-23 new scenarios, in game under *Single Player → New Game → Own Scenarios* (*Einzelspieler →
+41 new scenarios, in game under *Single Player → New Game → Own Scenarios* (*Einzelspieler →
 Neues Spiel → Eigene Szenarien*). Each one has a classic map (500 × 350) and a big version
 (1000 × 700, up to 50 islands).
 
@@ -119,6 +179,18 @@ Neues Spiel → Eigene Szenarien*). Each one has a classic map (500 × 350) and 
 | 4 Die Rote Flagge † | 4 The Red Flag † | at least 3 settlements, every one with 300 residents (100 citizens), pirates |
 | 5 Verrat † | 5 Betrayal † | defeat House Valcourt (only this rival), 1000 residents (400 merchants) |
 | 6 Das Goldene Zeitalter † | 6 The Golden Age † | 2000 residents (800 aristocrats) and 1200 (500 merchants), 4000 in total, 40 t jewellery, balance +800, pirates |
+| **Die Neue Welt** 1 Die Überfahrt † | **The New World** 1 The Crossing † | a town of 300 residents (150 settlers), 3 settlements, positive balance |
+| 2 Zucker und Rum † | 2 Sugar and Rum † | sugar monopoly, 40 t liquor in store, 500 residents (200 citizens) |
+| 3 Land der vielen Völker † | 3 Land of Many Peoples † | 800 residents (300 merchants), 4 settlements, every one with 200 residents (80 settlers) – on large islands full of native villages |
+| 4 Die Schatzflotte † | 4 The Treasure Fleet † | 60 t spices and 40 t gold in store, trade balance +300, pirates |
+| 5 Der Konquistador † | 5 The Conquistador † | defeat House Valdoro (only this rival), 4 settlements, 2500 residents in total |
+| 6 Der Vizekönig † | 6 The Viceroy † | 2000 residents (800 aristocrats), 1200 (500 merchants) and 600 (250 citizens), 6 settlements, balance +800, pirates |
+| **Die Handelsliga** 1 Das erste Kontor † | **The Trade League** 1 The First Warehouse † | 250 residents (120 settlers), 30 t cloth in store, trade balance +100 – no war in this campaign |
+| 2 Markttag † | 2 Market Day † | 500 residents (200 citizens), 40 t tobacco goods and 40 t spices in store |
+| 3 Das Kontornetz † | 3 The Warehouse Network † | 6 settlements, every one with 150 residents (60 settlers), trade balance +200 |
+| 4 Das Baumwollkartell † | 4 The Cotton Cartel † | cotton monopoly, 50 t clothes in store, trade balance +300, pirates |
+| 5 Die Bank der Liga † | 5 The League Bank † | 1200 residents (600 merchants), balance +500, trade balance +400 |
+| 6 Der Fürst der Kaufleute † | 6 The Merchant Prince † | 2000 residents (700 aristocrats), 50 t jewellery in store, trade balance +500, balance +800, pirates |
 | **Herausforderung** Inselreich | **Challenge** Island Realm | 8 own settlements with 3000 residents in total |
 | Handelsimperium | Trade Empire | 50 t jewellery and 80 t clothes in store, trade balance +300 |
 | Goldrausch | Gold Rush | 60 t gold and 40 t jewellery in store, pirates |
@@ -126,9 +198,20 @@ Neues Spiel → Eigene Szenarien*). Each one has a classic map (500 × 350) and 
 | Kontinente † | Continents † | 1500 residents (400 aristocrats), 3000 in total, balance +300 – on a few huge islands |
 | Handelsflotte † | Merchant Fleet † | 4 settlements, 60 t spices and 60 t cocoa in store – four ships, little gold |
 | Seemacht † | Sea Power † | defeat all three rivals – they are poor, you start with three warships |
+| Kolonialherr † | Colonial Lord † | wine monopoly (north) and cocoa monopoly (south), 4 settlements, every one with 250 residents (80 citizens) |
+| Monopolist † | Monopolist † | spice and tobacco monopoly, trade balance +400 – against three rich, ruthless rivals |
+| Ruhige See † | Calm Seas † | 1200 residents (500 merchants), 2500 in total, balance +300 – no pirates, but poor islands and rich rivals |
+| Habenichts † | Shoestring † | 600 residents (250 citizens), balance +200 – starting with 8000 gold and an almost empty ship |
+| Gegen die Uhr † ⏱ | Against the Clock † ⏱ | 500 residents (250 settlers) within 3 hours |
+| Die Frist des Königs † ⏱ | The Royal Deadline † ⏱ | 1000 residents (400 citizens) and balance +300 within 6 hours, pirates |
 
 † New in November 2026 and not yet balance-tested in play: the difficulty is designed by analogy
 with the measured chapters.
+
+⏱ With a time limit: it counts in the hours of the game's own clock, which the game shows bottom
+left as soon as a limit is set (at 180:00 three hours are up); pausing stops it, the turbo speeds it
+up. The limit only applies when the game runs with the extensions (they set it at every start and
+every load); played without them, the scenario has no limit.
 
 In the race, whoever fulfils the mission first wins. Measured without any player action, the rivals
 finish chapter 1 after about 5, chapter 2 after about 7½, chapter 3 after about 8 and chapter 4 after
@@ -158,7 +241,8 @@ Uninstall: double-click `uninstall.cmd` in the same folder. The game and your sa
 - Before every start, the tool backs up `Documents\Anno 1602 History Edition\Savegame` (only when something
   changed). It keeps the very first backup and the newest five; older ones go to the recycle bin.
 - Started from the launcher, the tool's window closes by itself after the game; it stays open only if
-  something went wrong, so that you can read the message.
+  something went wrong, so that you can read the message. Leave it open while you play: it runs the
+  events and keeps the autosave of a big world safe.
 - Tested with exactly one game version (SHA-256 of `Anno1602.exe` starts with `7731972f`).
   After a game update, the tool stops without changing anything.
 
@@ -171,15 +255,16 @@ anno1602-extensions/
 │   ├── anno-patcher.ps1           the tool: checks the game version and patches memory
 │   ├── launcher.ps1               the launcher window (German or English, following Windows)
 │   ├── logbook.ps1                the logbook window (only reads the game's memory)
-│   ├── build-scenarios.ps1        builds the 23 scenarios in German or English
+│   ├── build-scenarios.ps1        builds the 41 scenarios in German or English
 │   ├── scenario-lib.ps1           .szs file format and AUFTRAG4 missions (decoded)
-│   ├── random-adventure.ps1       random adventure generator (number + difficulty)
+│   ├── random-adventure.ps1       random and daily adventure generator (number + difficulty)
+│   ├── scenario-designer.ps1      the scenario designer window
 │   ├── install.ps1                installer behind install.cmd / uninstall.cmd
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
-│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site (556 checks)
-│   ├── check-scenarios.ps1        checks built scenarios and random adventures (-Reproduce)
-│   └── test-install.ps1           installs and removes for real, in a sandbox (17 checks)
+│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (640 checks)
+│   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
+│   └── test-install.ps1           installs and removes for real, in a sandbox (27 checks)
 ├── dev/                           helpers for development
 │   ├── check-game.ps1             shows the patched values in the running game (read only)
 │   ├── check-islands.ps1          islands, ore and fertility of the running game
@@ -193,8 +278,8 @@ anno1602-extensions/
 ```
 
 Run the offline test: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (needs the installed
-game; the game is not started), installer test: `tests\test-install.ps1`. Changes per version:
-[CHANGELOG.md](CHANGELOG.md).
+game; the game is not started), installer test: `tests\test-install.ps1`, logbook test:
+`src\logbook.ps1 -SelfTest`. Changes per version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Legal
 

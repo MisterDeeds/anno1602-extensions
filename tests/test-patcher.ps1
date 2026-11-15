@@ -29,7 +29,7 @@
        island list planned by the tool, originals stretched at the front, no overlap, all
        within the world; unknown template only stretched; island count > 50 no change.
     J  -Pirates Active / Off / Strong: code cave, jump in the TIMERS loader and (Strong) cannon
-       site set; without -Pirates all untouched. Function test: the code cave runs in the
+       site set (since 3.0.0 the TIMERS hook is always set, see AP). Function test: the code cave runs in the
        helper process (way back RVA 0xC3239 replaced by "ret" there) and sets or clears
        bit 0 of the game variable 0x1405ec188, the other bits stay. The option value is
        shown in English with "en" and in German with "de".
@@ -48,6 +48,9 @@
     Q  -Turbo: F7 site "mov ecx,8", F6 untouched.
     R  -RivalGold: the code cave sets the gold of slots 1-3 in a new game (trader in
        slot 4 stays), nothing with savegames.
+    AP Mission time limit: without options the TIMERS hook is set; the code cave copies the deadline
+       (mission table +0x20 of the local player's slot) to 0x1405ec1a8 only if that slot has goal bits,
+       local player 0-3 only; flags and gold stay; only ecx/edx are used; everything fits the cave.
     S  -IslandSize Huge -Resources Lots: function test with the real templates.
     T  Large/Huge: geometry of all plans, at most 10 "lar".
     U  -Rivals Hard: the four AI sites read 3, natural events and pirate cannons do not.
@@ -74,6 +77,20 @@
     AG -Disasters Off/More: 5 calls NOPs or 10 limits changed; other mode in the same process -> abort.
     AH Everything together: all options, code caves and markers do not overlap, production x2 shortens
        exactly the 125 intervals counted in the game (2026-11-10).
+  The event cases run the tool's event engine (functions and C# class loaded via the syntax tree) in this test
+  process against the helper process; the test writes the game clock and the game state and polls once at a time:
+    AI -Events: each of the 7 events applies as specified (gold +4,000 / -1,200, goods up to the storage limit,
+       taxes x1.5 / x0.75, work intervals x1/1.5 / x1/0.75) and is restored byte for byte at its end clock.
+    AJ Overlapping events: taxes and production at once, a busy kind is skipped, separate ends.
+    AK Together with -Taxes 2 -Production 2 (on top of them, restored to them); a second tool run meanwhile.
+    AL events.json: format, umlauts, number formats, at most 200 (newest last), broken file, new folder; saves.json
+       arguments keep -Events but not its test switches.
+    AM Clock condition: clock standing still, no own town, game over (lock, human out), clock 0, a savegame
+       loaded (clock back), implausible jumps; the interval 0.5-1.5 x the mean; the same seed gives the same events.
+    AN Without -Events and with -Events Off nothing happens; the real event loop of the tool (-Events Often with
+       the test switches) against the helper process: scripted events first, everything restored at the end.
+    AO Values left behind by a killed tool window are restored by the next run (a value changed meanwhile stays);
+       Stop() (window closed) restores and blocks every later write; dev\check-game.ps1 shows the active events.
   Expected bytes and plans come from the same functions in anno-patcher.ps1 (loaded via
   the syntax tree); the expected scaled values are computed separately in this test.
 #>
@@ -143,22 +160,21 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$nu
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
     if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode)\b') -or
-        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites)\b') { . ([scriptblock]::Create($txt)) }
+        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites)\b') { . ([scriptblock]::Create($txt)) }
+    # Event engine (cases AI-AO): its constants, functions and the two C# types run here in the test process, against
+    # the helper process ($script:h / $script:base as in the tool).
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs)\b') -or
+        $txt -cmatch '^\$Event[A-Z]\w*\s*=' -or ($txt -match '^Add-Type -TypeDefinition' -and $txt -match 'public static class (AnnoMem|AnnoEvents) ')) { . ([scriptblock]::Create($txt)) }
 }
 $PirateHookOrig = '0F 29 05 B7 B3 4F 00'
 $PirateHookTarget = Hex ([byte[]](@(0xE9) + (Rel32 $PirateCaveRva ($TimersHookRva + 5)) + @(0x66, 0x90)))
 function Test-Pirates($a, [string]$mode, [string]$when, [int]$gold = 0) {
+    # Since 3.0.0 the TIMERS hook is always set (mission time limit).
     $code = Build-PirateCode $mode $gold
-    $c = Hex (Read-Image $a $PirateCaveRva 41); $k = Hex (Read-Image $a $TimersHookRva 7); $can = Hex (Read-Image $a $CannonRva 7)
-    if ($mode -eq 'Default' -and $gold -eq 0) {
-        Assert-Check "$when TIMERS code cave empty" ($c -eq ((@('00') * 41) -join ' '))
-        Assert-Check "$when TIMERS jump original ($k)" ($k -eq $PirateHookOrig)
-    }
-    else {
-        $target = Hex ([byte[]]($code + (New-Object byte[] (41 - $code.Length))))
-        Assert-Check "$when TIMERS code cave $mode/gold $gold set ($($code.Length) bytes)" ($c -eq $target)
-        Assert-Check "$when TIMERS jump set ($k)" ($k -eq $PirateHookTarget)
-    }
+    $c = Hex (Read-Image $a $PirateCaveRva $code.Length); $k = Hex (Read-Image $a $TimersHookRva 7); $can = Hex (Read-Image $a $CannonRva 7)
+    $target = Hex $code
+    Assert-Check "$when TIMERS code cave $mode/gold $gold set ($($code.Length) bytes)" ($c -eq $target)
+    Assert-Check "$when TIMERS jump set ($k)" ($k -eq $PirateHookTarget)
     if ($mode -eq 'Strong') { Assert-Check "$when cannon site set ($can)" ($can -eq $CannonTarget) }
     else { Assert-Check "$when cannon site original ($can)" ($can -eq $CannonOrig) }
 }
@@ -466,6 +482,425 @@ function Invoke-CandidateIslands($a, [int]$ware, [int]$min, [int]$max, [int]$lim
     [void][TestMem]::VirtualFreeEx($a.H, $buf, [IntPtr]::Zero, 0x8000)
     [void][TestMem]::VirtualFreeEx($a.H, $stub, [IntPtr]::Zero, 0x8000)
     (@(for ($k = 0; $k -lt [int]$ec; $k++) { $r[$k] }) -join ',')
+}
+
+# --- Helpers for the event cases AI-AO -------------------------------------------------------------------
+# The tool's event engine runs in this test process against the helper process, exactly as in the tool (same
+# functions, same C# class); only the timing is driven by the test (clock written, one poll at a time).
+function Connect-EventEngine($a) { $script:h = [IntPtr]$a.H; $script:base = [IntPtr]$a.Base }
+# Settlement table (75 x 600 bytes from RVA 0x622DC0): all slots free (+0x18 = 0xFF), then the given towns:
+# @{ Slot; Name; Island; Owner; Limit (+0x20); Markets (+0x1FA); Workers (+0x218); Stages (+0x220, 5 ints); Stock = @{ good = amount x 32 } }
+function Set-EventTowns($a, $towns) {
+    $sb = New-Object byte[] (75 * 600)
+    for ($i = 0; $i -lt 75; $i++) { $sb[$i * 600 + 0x18] = 0xFF }
+    foreach ($t in $towns) {
+        $o = $t.Slot * 600
+        $nb = [Text.Encoding]::ASCII.GetBytes($t.Name); [Array]::Copy($nb, 0, $sb, $o, $nb.Length)
+        $sb[$o + 0x18] = [byte]$t.Island; $sb[$o + 0x1A] = [byte]$t.Owner
+        [Array]::Copy((I32 $t.Limit), 0, $sb, $o + 0x20, 4)
+        [Array]::Copy([BitConverter]::GetBytes([uint16]$t.Markets), 0, $sb, $o + 0x1FA, 2)
+        [Array]::Copy((I32 $t.Workers), 0, $sb, $o + 0x218, 4)
+        for ($k = 0; $k -lt 5; $k++) { [Array]::Copy((I32 $t.Stages[$k]), 0, $sb, $o + 0x220 + 4 * $k, 4) }
+        foreach ($gd in $t.Stock.Keys) { [Array]::Copy([BitConverter]::GetBytes([uint16]$t.Stock[$gd]), 0, $sb, $o + 0x2A + $gd * 12, 2) }
+    }
+    Write-Image $a $EventSettlementRva $sb
+}
+# The human's town: 100 pioneers + 50 settlers (stage 1), storage 30 t per good (960 - 320 + 1 x 320), tools 10 t,
+# wood 30 t (full), bricks 28.1 t (less than 5 t room), food 25 t (5 t room).
+$TestTown = @{ Slot = 3; Name = 'Testhafen'; Island = 2; Owner = 0; Limit = 960; Markets = 1; Workers = 20; Stages = @(100, 50, 0, 0, 0); Stock = @{ 22 = 320; 23 = 960; 24 = 900; 14 = 800 } }
+$TestRivalTown = @{ Slot = 5; Name = 'Rivalia'; Island = 4; Owner = 1; Limit = 960; Markets = 1; Workers = 10; Stages = @(80, 0, 0, 0, 0); Stock = @{ 22 = 320 } }
+$TestVillage = @{ Slot = 6; Name = 'Waldvolk'; Island = 7; Owner = 6; Limit = 960; Markets = 0; Workers = 0; Stages = @(60, 0, 0, 0, 0); Stock = @{} }
+# Game clock, lock, local player 0 and player 0 (kind, gold).
+function Set-EventGame($a, [int]$clock, [int]$gold = 20000, [int]$kind = 0, [int]$lock = 0) {
+    Write-Image $a $ClockRva (I32 $clock); Write-Image $a $EventLockRva (I32 $lock); Write-Image $a $EventLocalPlayerRva (I32 0)
+    Write-Image $a $EventPlayersRva (I32 $kind); Write-Image $a ($EventPlayersRva + 4) (I32 $gold)
+}
+function Get-EventGold($a) { [BitConverter]::ToInt32((Read-Image $a ($EventPlayersRva + 4) 4), 0) }
+function Get-EventTaxText($a) { (0..4 | ForEach-Object { [BitConverter]::ToInt32((Read-Image $a ($TaxRva + $_ * $ResidentSize) 4), 0) }) -join '/' }
+# Without the parser (plain image): taxes and a few intervals by hand, the storage of trading post I as the "loaded" signal.
+function Set-EventTables($a) {
+    for ($g = 0; $g -lt 5; $g++) { Write-Image $a ($TaxRva + $g * $ResidentSize) (I32 $TaxOrig[$g]) }
+    Write-Image $a ($BuildingRva + 270 * $BuildingSize + $StorageOffset) ([BitConverter]::GetBytes([uint16]960))
+    foreach ($e in @(@(10, 15), @(11, 30), @(12, 1), @(13, 330), @(14, 2))) { Write-Image $a ($BuildingRva + $e[0] * $BuildingSize + $IntervalOffset) ([BitConverter]::GetBytes([uint16]$e[1])) }
+}
+# A fresh engine for the helper process: page (allocated or reused), state, owner = this test process.
+function New-EventEngine($a, [string]$first = '', [int]$seed = 1, [int]$duration = 1000, [string]$file = '', [int]$mean = 1000) {
+    Connect-EventEngine $a
+    $page = Get-EventPage $true
+    Initialize-EventState $a.Proc.Id $mean $duration $seed $first $file
+    [void][AnnoEvents]::SetOwner($PID, 0)
+    $script:Ev.Next = [int]::MaxValue
+    $page
+}
+# One poll at game clock $clock; $ms = real time since the previous poll (10 s: clock steps up to 2,200 are continuous).
+function Step-Events($a, [int]$clock, [double]$ms = 10000) { Write-Image $a $ClockRva (I32 $clock); Invoke-EventTick $ms }
+# A poll that triggers the next event (white box: the random interval is set to 1, afterwards to "never").
+function Step-ForcedEvent($a, [int]$clock) { $script:Ev.Next = 1; $script:Ev.Progress = 0; Step-Events $a $clock; $script:Ev.Next = [int]::MaxValue }
+function Get-EventPageInt([int]$off) { [BitConverter]::ToInt32([AnnoEvents]::ReadPage(), $off) }
+function Get-EventIds { ($script:Ev.History | ForEach-Object { $_.id }) -join ',' }
+# Work intervals of a building table snapshot; expected interval for a speed factor (round half up, 0 stays 0, at least 1).
+function Get-TestIntervals([byte[]]$tab) { , [int[]]@(for ($i = 0; $i -lt 500; $i++) { [BitConverter]::ToUInt16($tab, $i * 0x90 + 0x3A) }) }
+function Get-TestIntervalTarget([int]$v, [double]$f) { if ($v -eq 0) { 0 } else { [math]::Min(32767, [math]::Max(1, [int][math]::Floor($v / $f + 0.5))) } }
+# Compares a table after an event with the snapshot: every interval as expected for $f, every other byte unchanged.
+function Compare-EventTable([byte[]]$before, [byte[]]$after, [double]$f) {
+    $wrong = 0; $changed = 0; $other = 0
+    for ($j = 0; $j -lt $before.Length; $j++) {
+        $k = $j % 0x90
+        if ($k -eq 0x3A) {
+            $v = [BitConverter]::ToUInt16($before, $j); $t = [BitConverter]::ToUInt16($after, $j)
+            if ($t -ne (Get-TestIntervalTarget $v $f)) { $wrong++ }
+            if ($t -ne $v) { $changed++ }
+        }
+        elseif ($k -ne 0x3B -and $before[$j] -ne $after[$j]) { $other++ }
+    }
+    @{ Wrong = $wrong; Changed = $changed; Other = $other }
+}
+function Read-EventJson([string]$file) { Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json }
+
+function Test-EventCases {
+    $tabLen = 500 * 0x90; $grpLen = 5 * 0x50; $setLen = 75 * 600
+    $evDir = Join-Path $tmp 'events'
+    $b = $null
+    try {
+        Write-Host 'AI Events: every event applies and restores exactly (real haeuser.cod)'
+        $b = Start-ImageProcess -Crt
+        Invoke-SimulatedStart $b
+        [void](Invoke-HaeuserParser $b)
+        Assert-Check 'AI event marker at RVA 0xE5BD0: 16 bytes 0 in a fresh image' ((Hex (Read-Image $b $EventMarkerRva 16)) -eq ((@('00') * 16) -join ' '))
+        Set-EventTowns $b @($TestTown, $TestRivalTown, $TestVillage)
+        Set-EventGame $b 1000 20000
+        $g0 = Read-Image $b 0x6BA020 $grpLen; $t0 = Read-Image $b $BuildingRva $tabLen; $s0 = Read-Image $b $EventSettlementRva $setLen
+        $file = Join-Path $evDir 'ai\events.json'
+        $page = New-EventEngine $b 'patron,warehouse_fire,trader_gift,tax_windfall,tax_slump,harvest_boom,marsh_fever' 1 1000 $file
+        $mk = Read-Image $b $EventMarkerRva 16; $pg = [AnnoEvents]::ReadPage()
+        Assert-Check ("AI marker 'EVNT' version 1 -> page 0x{0:X} (allocated in the helper process), page header 'EVST', owner this test" -f $page) ([Text.Encoding]::ASCII.GetString($mk, 0, 4) -eq 'EVNT' -and [BitConverter]::ToInt32($mk, 4) -eq 1 -and [BitConverter]::ToInt64($mk, 8) -eq $page -and $page -ne 0 -and
+            [Text.Encoding]::ASCII.GetString($pg, 0, 4) -eq 'EVST' -and [BitConverter]::ToInt32($pg, 8) -eq $PID)
+        $gs = Get-EventGameState
+        Assert-Check "AI game state: 1 own town (rival town and native village not counted), stage 1, 150 residents, gold 20,000" ($gs.Towns.Count -eq 1 -and $gs.Towns[0].Name -eq 'Testhafen' -and $gs.Stage -eq 1 -and $gs.Residents -eq 150 -and $gs.Gold -eq 20000 -and $gs.Towns[0].Limit -eq 960)
+        Step-Events $b 1000
+        Step-ForcedEvent $b 1100
+        Assert-Check "AI patron: gold 20,000 -> $(Get-EventGold $b) (+4,000 at stage 1)" ((Get-EventGold $b) -eq 24000 -and (Get-EventIds) -eq 'patron')
+        Step-ForcedEvent $b 1200
+        Assert-Check "AI fire in the warehouse: gold 24,000 -> $(Get-EventGold $b) (-5 % = 1,200, at most 2,000 at stage 1)" ((Get-EventGold $b) -eq 22800 -and (Get-EventIds) -eq 'patron,warehouse_fire')
+        Step-ForcedEvent $b 1300
+        $s1 = Read-Image $b $EventSettlementRva $setLen
+        $diff = @(for ($j = 0; $j -lt $setLen; $j++) { if ($s0[$j] -ne $s1[$j]) { $j } })
+        $tools = [BitConverter]::ToUInt16($s1, 3 * 600 + 0x2A + 22 * 12); $food = [BitConverter]::ToUInt16($s1, 3 * 600 + 0x2A + 14 * 12)
+        $okGift = ($tools -eq 800 -and $food -eq 800 -and @($diff | Where-Object { $_ -lt 3 * 600 + 0x2A + 22 * 12 -or $_ -gt 3 * 600 + 0x2A + 22 * 12 + 1 }).Count -eq 0) -or
+            ($tools -eq 320 -and $food -eq 960 -and @($diff | Where-Object { $_ -lt 3 * 600 + 0x2A + 14 * 12 -or $_ -gt 3 * 600 + 0x2A + 14 * 12 + 1 }).Count -eq 0)
+        Assert-Check "AI trader's gift: tools 10 t -> $($tools / 32) t (+15 t) or food 25 t -> $($food / 32) t (+5 t, up to the 30 t limit); wood (full) and bricks (< 5 t room) untouched, nothing else in the settlement table changed ($($diff.Count) bytes)" ($okGift -and (Get-EventGold $b) -eq 22800)
+        $c = 1400
+        foreach ($case in @(@('tax_windfall', '11/12/17/18/20', 1500), @('tax_slump', '5/6/8/9/10', 750))) {
+            Step-ForcedEvent $b $c
+            $g1 = Read-Image $b 0x6BA020 $grpLen
+            $otherG = 0; for ($j = 0; $j -lt $grpLen; $j++) { if ((($j % 0x50) -lt 0x10 -or ($j % 0x50) -ge 0x14) -and $g0[$j] -ne $g1[$j]) { $otherG++ } }
+            $pg = [AnnoEvents]::ReadPage()
+            $pageBase = (0..4 | ForEach-Object { [BitConverter]::ToInt32($pg, [AnnoEvents]::OffTaxBase + 4 * $_) }) -join '/'
+            $pageNow = (0..4 | ForEach-Object { [BitConverter]::ToInt32($pg, [AnnoEvents]::OffTaxApplied + 4 * $_) }) -join '/'
+            Assert-Check "AI $($case[0]): taxes $(Get-EventTaxText $b) (expected $($case[1])), $otherG other group bytes changed; page: active, factor $([BitConverter]::ToInt32($pg, [AnnoEvents]::OffTax + 8)), ends $([BitConverter]::ToInt32($pg, [AnnoEvents]::OffTax + 12)), originals $pageBase, written $pageNow" (
+                (Get-EventTaxText $b) -eq $case[1] -and $otherG -eq 0 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffTax) -eq 1 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffTax + 8) -eq $case[2] -and
+                [BitConverter]::ToInt32($pg, [AnnoEvents]::OffTax + 12) -eq $c + 1000 -and $pageBase -eq '7/8/11/12/13' -and $pageNow -eq $case[1])
+            Step-Events $b ($c + 999)
+            Assert-Check "AI $($case[0]) still active one clock step before the end" ((Get-EventTaxText $b) -eq $case[1] -and $script:Ev.Tax)
+            Step-Events $b ($c + 1000)
+            Assert-Check "AI $($case[0]) over at its end clock: the 5 group records byte for byte as before, page inactive" ([BitConverter]::ToString((Read-Image $b 0x6BA020 $grpLen)) -eq [BitConverter]::ToString($g0) -and (Get-EventPageInt ([AnnoEvents]::OffTax)) -eq 0 -and -not $script:Ev.Tax)
+            $c += 1100
+        }
+        foreach ($case in @(@('harvest_boom', 1.5, 1500), @('marsh_fever', 0.75, 750))) {
+            Step-ForcedEvent $b $c
+            $t1 = Read-Image $b $BuildingRva $tabLen
+            $cmp = Compare-EventTable $t0 $t1 $case[1]
+            $pg = [AnnoEvents]::ReadPage()
+            Assert-Check "AI $($case[0]): $($cmp.Changed) work intervals x1/$($case[1]) ($($cmp.Wrong) wrong, $($cmp.Other) other bytes of the building table changed); page: active, factor $([BitConverter]::ToInt32($pg, [AnnoEvents]::OffProd + 8)), $([BitConverter]::ToInt32($pg, [AnnoEvents]::OffProdCount)) changed" (
+                $cmp.Wrong -eq 0 -and $cmp.Other -eq 0 -and $cmp.Changed -gt 100 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffProd) -eq 1 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffProd + 8) -eq $case[2] -and
+                [BitConverter]::ToInt32($pg, [AnnoEvents]::OffProdCount) -eq $cmp.Changed -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffProd + 12) -eq $c + 1000)
+            Step-Events $b ($c + 1000)
+            Assert-Check "AI $($case[0]) over: the building table byte for byte as before, page inactive" ([BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t0) -and (Get-EventPageInt ([AnnoEvents]::OffProd)) -eq 0 -and -not $script:Ev.Production)
+            $c += 1100
+        }
+        Assert-Check "AI all 7 events in order: $(Get-EventIds)" ((Get-EventIds) -eq 'patron,warehouse_fire,trader_gift,tax_windfall,tax_slump,harvest_boom,marsh_fever')
+        $j = Read-EventJson $file
+        Assert-Check "AI events.json: $(@($j.events).Count) events, the same ids" (@($j.events).Count -eq 7 -and (@($j.events | ForEach-Object { $_.id }) -join ',') -eq (Get-EventIds))
+        Stop-ImageProcess $b; $b = $null
+
+        Write-Host 'AJ Events: overlapping events (taxes and production at once; a busy kind is skipped)'
+        $b = Start-ImageProcess -Crt
+        Invoke-SimulatedStart $b
+        [void](Invoke-HaeuserParser $b)
+        Set-EventTowns $b @($TestTown)
+        Set-EventGame $b 5000 20000
+        $g0 = Read-Image $b 0x6BA020 $grpLen; $t0 = Read-Image $b $BuildingRva $tabLen
+        [void](New-EventEngine $b 'tax_windfall,harvest_boom,tax_slump,marsh_fever,patron' 2 1000 (Join-Path $evDir 'aj\events.json'))
+        Step-Events $b 5000
+        Step-ForcedEvent $b 5100
+        Step-ForcedEvent $b 5500
+        $gs = Get-EventGameState
+        $busy = @('tax_windfall', 'tax_slump', 'harvest_boom', 'marsh_fever' | Where-Object { Test-EventEligible $_ $gs })
+        Assert-Check "AJ tax windfall (until 6100) and bumper harvest (until 6500) at once: taxes $(Get-EventTaxText $b), intervals x1/1.5; no further tax or production event possible ($($busy -join ','))" (
+            (Get-EventTaxText $b) -eq '11/12/17/18/20' -and (Compare-EventTable $t0 (Read-Image $b $BuildingRva $tabLen) 1.5).Wrong -eq 0 -and $busy.Count -eq 0)
+        Step-ForcedEvent $b 5700
+        Assert-Check "AJ next event: tax slump and marsh fever skipped (busy), the patron instead: $(Get-EventIds), gold $(Get-EventGold $b)" ((Get-EventIds) -eq 'tax_windfall,harvest_boom,patron' -and (Get-EventGold $b) -eq 24000)
+        Step-Events $b 6100
+        Assert-Check "AJ 6100: windfall over (groups as before), harvest still on" ([BitConverter]::ToString((Read-Image $b 0x6BA020 $grpLen)) -eq [BitConverter]::ToString($g0) -and (Compare-EventTable $t0 (Read-Image $b $BuildingRva $tabLen) 1.5).Wrong -eq 0 -and $script:Ev.Production -and -not $script:Ev.Tax)
+        Step-Events $b 6499
+        Assert-Check 'AJ 6499: harvest still on' ((Compare-EventTable $t0 (Read-Image $b $BuildingRva $tabLen) 1.5).Wrong -eq 0)
+        Step-Events $b 6500
+        Assert-Check 'AJ 6500: harvest over, building table and groups byte for byte as before, page inactive' ([BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t0) -and [BitConverter]::ToString((Read-Image $b 0x6BA020 $grpLen)) -eq [BitConverter]::ToString($g0) -and
+            (Get-EventPageInt ([AnnoEvents]::OffTax)) -eq 0 -and (Get-EventPageInt ([AnnoEvents]::OffProd)) -eq 0)
+        # Since 3.0: a temporary event that ends before its time is marked "endedEarly" in events.json (the logbook then
+        # stops showing it as running); events that ran their hour are not.
+        $ajFile = Join-Path $evDir 'aj\events.json'
+        $aj = Get-Content -LiteralPath $ajFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        Assert-Check "AJ events that ran their hour are not marked as ended early ($(@($aj.events | Where-Object { $_.endedEarly }).Count) of $(@($aj.events).Count))" (@($aj.events | Where-Object { $_.endedEarly }).Count -eq 0 -and @($aj.events).Count -eq 3)
+        $script:Ev.Script.Enqueue('marsh_fever')
+        Step-ForcedEvent $b 6600
+        Write-Image $b $EventLockRva (I32 1)
+        Step-Events $b 6700
+        Write-Image $b $EventLockRva (I32 0)
+        $aj = Get-Content -LiteralPath $ajFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        $ajLast = @($aj.events)[-1]
+        Assert-Check "AJ marsh fever ended with the game: '$($ajLast.id)' endedEarly $($ajLast.endedEarly) in events.json, the others not, intervals byte for byte as before" ($ajLast.id -eq 'marsh_fever' -and $ajLast.endedEarly -eq $true -and @($aj.events | Where-Object { $_.endedEarly }).Count -eq 1 -and
+            [BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t0) -and -not (Get-ChildItem -LiteralPath (Split-Path $ajFile) -Filter '*.tmp-*'))
+        Stop-ImageProcess $b; $b = $null
+
+        Write-Host 'AK Events with -Taxes 2 -Production 2'
+        $b = Start-ImageProcess -Crt
+        Invoke-SimulatedStart $b
+        [void](Invoke-HaeuserParser $b)
+        $t0 = Read-Image $b $BuildingRva $tabLen
+        $r = Invoke-Tool $b @('-Taxes', '2', '-Production', '2')
+        $g2 = Read-Image $b 0x6BA020 $grpLen; $t2 = Read-Image $b $BuildingRva $tabLen
+        $halved = @(for ($i = 0; $i -lt 500; $i++) { $v = [BitConverter]::ToUInt16($t0, $i * 0x90 + 0x3A); if ([BitConverter]::ToUInt16($t2, $i * 0x90 + 0x3A) -ne $(if ($v) { [math]::Max(1, [math]::Round($v / 2)) } else { 0 })) { $i } })
+        Assert-Check "AK tool with -Taxes 2 -Production 2: exit code $($r.Code), taxes $(Get-EventTaxText $b), intervals halved ($($halved.Count) wrong)" ($r.Code -eq 0 -and (Get-EventTaxText $b) -eq '14/16/22/24/26' -and $halved.Count -eq 0)
+        Set-EventTowns $b @($TestTown)
+        Set-EventGame $b 1000 20000
+        [void](New-EventEngine $b 'tax_windfall,harvest_boom' 3 1000 '')
+        Step-Events $b 1000
+        Step-ForcedEvent $b 1100
+        Step-ForcedEvent $b 1200
+        $cmp = Compare-EventTable $t2 (Read-Image $b $BuildingRva $tabLen) 1.5
+        Assert-Check "AK windfall on top of x2: taxes $(Get-EventTaxText $b) (14/16/22/24/26 x1.5); harvest on top of the halved intervals: $($cmp.Changed) changed, $($cmp.Wrong) wrong, $($cmp.Other) other bytes" ((Get-EventTaxText $b) -eq '21/24/33/36/39' -and $cmp.Wrong -eq 0 -and $cmp.Other -eq 0 -and $cmp.Changed -gt 50)
+        $r = Invoke-Tool $b @('-Taxes', '2', '-Production', '2')
+        Assert-Check "AK second tool run while the events run (owner alive): exit code $($r.Code), taxes and production not touched, no restore by that run" ($r.Code -eq 0 -and $r.Text -match 'Taxes: unexpected value 21 instead of 7' -and $r.Text -match 'Production x2: already set' -and $r.Text -notmatch 'earlier tool window' -and
+            (Get-EventTaxText $b) -eq '21/24/33/36/39' -and (Compare-EventTable $t2 (Read-Image $b $BuildingRva $tabLen) 1.5).Wrong -eq 0)
+        Step-Events $b 2100
+        Assert-Check "AK windfall over: taxes back to the x2 values $(Get-EventTaxText $b), groups byte for byte" ([BitConverter]::ToString((Read-Image $b 0x6BA020 $grpLen)) -eq [BitConverter]::ToString($g2))
+        Step-Events $b 2200
+        Assert-Check 'AK harvest over: the halved intervals byte for byte (building table as after the tool)' ([BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t2))
+        $r = Invoke-Tool $b @('-Taxes', '2', '-Production', '2')
+        Assert-Check "AK third tool run: exit code $($r.Code), taxes x2 confirmed, production already set, nothing changed" ($r.Code -eq 0 -and $r.Text -match 'Taxes x2: 14/16/22/24/26 per resident group' -and $r.Text -match 'Production x2: already set' -and
+            [BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t2) -and [BitConverter]::ToString((Read-Image $b 0x6BA020 $grpLen)) -eq [BitConverter]::ToString($g2))
+        Stop-ImageProcess $b; $b = $null
+
+        Write-Host 'AL events.json: format, newest last, at most 200, broken file, new folder'
+        $b = Start-ImageProcess
+        Invoke-SimulatedStart $b
+        Set-EventTables $b
+        Set-EventTowns $b @($TestTown)
+        Set-EventGame $b 1000 20000
+        $file = Join-Path $evDir 'al\new folder\events.json'
+        [void](New-EventEngine $b 'patron,tax_windfall,trader_gift' 4 1000 $file)
+        Step-Events $b 1000
+        Step-ForcedEvent $b 1100; Step-ForcedEvent $b 1200; Step-ForcedEvent $b 1300
+        $raw = [IO.File]::ReadAllBytes($file)
+        $j = Read-EventJson $file
+        $ev = @($j.events)
+        Assert-Check "AL file in a new folder, UTF-8 without BOM, version $($j.version), $($ev.Count) events, newest last" ($raw[0] -eq [byte][char]'{' -and $j.version -eq 1 -and $ev.Count -eq 3 -and (@($ev | ForEach-Object { $_.id }) -join ',') -eq 'patron,tax_windfall,trader_gift')
+        $okFields = $true
+        foreach ($e in $ev) {
+            foreach ($k in 'title', 'text', 'effect') { foreach ($l in 'de', 'en') { if (-not ($e.$k.$l -is [string]) -or -not $e.$k.$l) { $okFields = $false } } }
+            if ($e.time -notmatch '^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d$' -or $e.pid -ne $b.Proc.Id -or -not ($e.clock -is [int])) { $okFields = $false }
+        }
+        Assert-Check 'AL every event: time (local ISO), pid of the game, clock, id, title/text/effect in de and en' $okFields
+        Assert-Check "AL clocks $($ev[0].clock)/$($ev[1].clock)/$($ev[2].clock), endsClock $($ev[0].endsClock)/$($ev[1].endsClock)/$($ev[2].endsClock) (0 for instant events)" ($ev[0].clock -eq 1100 -and $ev[1].clock -eq 1200 -and $ev[2].clock -eq 1300 -and $ev[0].endsClock -eq 0 -and $ev[1].endsClock -eq 2200 -and $ev[2].endsClock -eq 0)
+        Assert-Check "AL patron: '$($ev[0].title.de)' / '$($ev[0].title.en)', effect '$($ev[0].effect.de)' / '$($ev[0].effect.en)'" ($ev[0].title.de -ceq "Ein G$([char]0xF6)nner" -and $ev[0].title.en -ceq 'A patron' -and $ev[0].effect.de -ceq "+4'000 Gold" -and $ev[0].effect.en -ceq '+4,000 gold')
+        Assert-Check "AL windfall effect '$($ev[1].effect.de)' / '$($ev[1].effect.en)'" ($ev[1].effect.de -ceq "Steuern +50 % f$([char]0xFC)r 1 Spielstunde" -and $ev[1].effect.en -ceq 'Taxes +50% for 1 game hour' -and $ev[1].text.de -match 'Konkurrenten')
+        Assert-Check "AL gift names the town and the goods: '$($ev[2].effect.de)' / '$($ev[2].effect.en)'" ($ev[2].text.de -match 'Testhafen' -and $ev[2].text.en -match 'Testhafen' -and (($ev[2].effect.de -ceq '+15 t Werkzeug' -and $ev[2].effect.en -ceq '+15 t tools') -or ($ev[2].effect.de -ceq '+5 t Nahrung' -and $ev[2].effect.en -ceq '+5 t food')))
+        Assert-Check 'AL no temp file left' (@(Get-ChildItem -LiteralPath (Split-Path $file) -Filter '*.tmp-*').Count -eq 0)
+        $old = [ordered]@{ version = 1; events = @(1..199 | ForEach-Object { [ordered]@{ time = '2026-11-01T10:00:00'; pid = 1; clock = $_; id = "old-$_"; title = @{ de = 'a'; en = 'a' }; text = @{ de = 'b'; en = 'b' }; effect = @{ de = 'c'; en = 'c' }; endsClock = 0 } }) }
+        [IO.File]::WriteAllText($file, (ConvertTo-Json -InputObject $old -Depth 5), (New-Object Text.UTF8Encoding $false))
+        $n0 = $script:Ev.History.Count
+        Step-ForcedEvent $b 1400; Step-ForcedEvent $b 1500; Step-ForcedEvent $b 1600
+        $ev = @((Read-EventJson $file).events)
+        $newIds = (@($script:Ev.History | Select-Object -Skip $n0 | ForEach-Object { $_.id }) -join ',')
+        Assert-Check "AL 199 old + 3 new: $($ev.Count) kept, first '$($ev[0].id)', last three '$((@($ev | Select-Object -Last 3 | ForEach-Object { $_.id })) -join ',')'" ($ev.Count -eq 200 -and $ev[0].id -eq 'old-3' -and (@($ev | Select-Object -Last 3 | ForEach-Object { $_.id }) -join ',') -eq $newIds)
+        Set-Content -LiteralPath $file -Value 'this is { not json'
+        Step-ForcedEvent $b 1700
+        $ev = @((Read-EventJson $file).events)
+        Assert-Check "AL broken file: replaced by a valid one with $($ev.Count) event" ($ev.Count -eq 1 -and $ev[0].id -eq $script:Ev.History[-1].id)
+        Set-Content -LiteralPath $file -Value '{"version":1}'
+        Step-ForcedEvent $b 1800
+        Assert-Check 'AL file without events: 1 event' (@((Read-EventJson $file).events).Count -eq 1)
+        Assert-Check "AL number formats: $(Format-EventNumber 1234567 'de') / $(Format-EventNumber 1234567 'en') / $(Format-EventNumber -10000 'de')" ((Format-EventNumber 1234567 'de') -ceq "1'234'567" -and (Format-EventNumber 1234567 'en') -ceq '1,234,567' -and (Format-EventNumber -10000 'de') -ceq "10'000")
+        $Width = 1000; $Height = 700
+        $sa = (Get-SessionArgs ([ordered]@{ Events = 'Rare'; EventSeed = 3; EventScript = 'patron'; EventFile = 'x.json'; EventPollMs = 100; EventIntervalClock = 300; EventDurationClock = 500; EventTestUntilClock = 4000; Taxes = 2.5 })) -join ' '
+        Assert-Check "AL saves.json arguments: '$sa' (-Events kept, its test switches not)" ($sa -eq '-Width 1000 -Height 700 -Events Rare -Taxes 2.5')
+        Stop-TemporaryEvents 'Exit'
+        Stop-ImageProcess $b; $b = $null
+
+        Write-Host 'AM Events: clock condition (clock stands still, no town, game over, load, jumps), interval, seed'
+        $b = Start-ImageProcess
+        Invoke-SimulatedStart $b
+        Set-EventTables $b
+        Set-EventTowns $b @($TestTown)
+        Set-EventGame $b 1000 20000
+        [void](New-EventEngine $b 'patron,patron,tax_windfall,tax_windfall,tax_windfall,tax_windfall' 5 1000 '')
+        Step-Events $b 1000
+        $script:Ev.Next = 1
+        Step-Events $b 1000; Step-Events $b 1000
+        Assert-Check "AM clock stands still (1000, 1000, 1000): no event, progress $($script:Ev.Progress)" ($script:Ev.History.Count -eq 0 -and $script:Ev.Progress -eq 0 -and (Get-EventGold $b) -eq 20000)
+        Set-EventTowns $b @($TestRivalTown, $TestVillage)
+        Step-Events $b 1100; Step-Events $b 1200
+        Assert-Check "AM no own town (only a rival town and a native village): no event, progress $($script:Ev.Progress)" ($script:Ev.History.Count -eq 0 -and $script:Ev.Progress -eq 0)
+        Set-EventTowns $b @($TestTown, $TestRivalTown, $TestVillage)
+        Step-Events $b 1300
+        $script:Ev.Next = [int]::MaxValue
+        Assert-Check "AM first own town: the event comes ($(Get-EventIds), gold $(Get-EventGold $b))" ((Get-EventIds) -eq 'patron' -and (Get-EventGold $b) -eq 24000)
+        Step-ForcedEvent $b 1400
+        Step-ForcedEvent $b 1500
+        Assert-Check "AM tax windfall running: $(Get-EventTaxText $b)" ((Get-EventTaxText $b) -eq '11/12/17/18/20')
+        Write-Image $b $EventLockRva (I32 1)
+        $script:Ev.Next = 1
+        Step-Events $b 1600
+        Assert-Check "AM game over (lock 1): windfall ended at once (taxes $(Get-EventTaxText $b)), no event ($(Get-EventIds))" ((Get-EventTaxText $b) -eq '7/8/11/12/13' -and -not $script:Ev.Tax -and (Get-EventIds) -eq 'patron,patron,tax_windfall' -and (Get-EventPageInt ([AnnoEvents]::OffTax)) -eq 0)
+        Step-Events $b 1700
+        Write-Image $b $EventLockRva (I32 0); Write-Image $b $EventPlayersRva (I32 9)
+        Step-Events $b 1800; Step-Events $b 1900
+        Assert-Check "AM lock 1 and then the human out (kind 9): no event ($($script:Ev.History.Count) in total)" ($script:Ev.History.Count -eq 3)
+        Write-Image $b $EventPlayersRva (I32 0)
+        Step-Events $b 0; Step-Events $b 0
+        Assert-Check 'AM clock 0 (main menu): no event' ($script:Ev.History.Count -eq 3)
+        $script:Ev.Next = [int]::MaxValue
+        Step-Events $b 100
+        Step-ForcedEvent $b 200
+        Assert-Check "AM windfall again: $(Get-EventTaxText $b)" ((Get-EventTaxText $b) -eq '11/12/17/18/20')
+        Step-Events $b 50
+        Assert-Check "AM clock jumps back (a savegame is loaded): windfall ended at once ($(Get-EventTaxText $b)), progress $($script:Ev.Progress)" ((Get-EventTaxText $b) -eq '7/8/11/12/13' -and -not $script:Ev.Tax -and $script:Ev.Progress -eq 0)
+        Step-Events $b 100
+        Step-ForcedEvent $b 150
+        Step-Events $b 5150 1000
+        Assert-Check "AM clock +5,000 within 1 s (more than 16x can run): treated as another game, windfall ended ($(Get-EventTaxText $b))" ((Get-EventTaxText $b) -eq '7/8/11/12/13' -and -not $script:Ev.Tax -and $script:Ev.Progress -eq 0)
+        Step-Events $b 5200
+        Step-ForcedEvent $b 5300
+        $script:Ev.Progress = 0
+        Step-Events $b 8300 20000
+        Assert-Check "AM clock +3,000 within 20 s (16x): the same game; the windfall ran its hour and ended normally ($(Get-EventTaxText $b)), progress $($script:Ev.Progress)" ((Get-EventTaxText $b) -eq '7/8/11/12/13' -and -not $script:Ev.Tax -and $script:Ev.Progress -eq 3000)
+        $script:Ev.Progress = 0; $script:Ev.Next = 1000; $n0 = $script:Ev.History.Count
+        Step-Events $b 8600; Step-Events $b 8900; Step-Events $b 9200
+        $p900 = $script:Ev.Progress; $n900 = $script:Ev.History.Count
+        Step-Events $b 9400
+        Assert-Check "AM interval 1000: after +900 no event (progress $p900), after +1100 one event (progress $($script:Ev.Progress), next in $($script:Ev.Next))" ($p900 -eq 900 -and $n900 -eq $n0 -and $script:Ev.History.Count -eq $n0 + 1 -and $script:Ev.Progress -eq 0 -and $script:Ev.Next -ge 500 -and $script:Ev.Next -le 1500)
+        Stop-TemporaryEvents 'Exit'
+        Initialize-EventState 1 1000 1000 9 '' ''
+        $iv = @(1..2000 | ForEach-Object { New-EventInterval })
+        $avg = ($iv | Measure-Object -Average).Average
+        Assert-Check ("AM 2,000 intervals for mean 1,000: {0}..{1}, average {2:0}; Rare {3}, Often {4}, duration {5} clock units" -f ($iv | Measure-Object -Minimum).Minimum, ($iv | Measure-Object -Maximum).Maximum, $avg, $EventMean.Rare, $EventMean.Often, $EventDuration) (
+            ($iv | Measure-Object -Minimum).Minimum -ge 500 -and ($iv | Measure-Object -Maximum).Maximum -le 1500 -and [math]::Abs($avg - 1000) -lt 25 -and $EventMean.Rare -eq 98100 -and $EventMean.Often -eq 32700 -and $EventDuration -eq 32700)
+        $seq = foreach ($seed in 21, 21, 22) {
+            Set-EventTables $b; Set-EventTowns $b @($TestTown); Set-EventGame $b 1000 20000
+            [void](New-EventEngine $b '' $seed 600 '' 1000)
+            $script:Ev.Next = New-EventInterval
+            Step-Events $b 1000
+            for ($k = 1; $k -le 60; $k++) { Step-Events $b (1000 + 300 * $k) }
+            Stop-TemporaryEvents 'Exit'
+            Get-EventIds
+        }
+        $kinds = @($seq[0] -split ',' | Sort-Object -Unique)
+        Assert-Check "AM seed 21 twice: the same $(@($seq[0] -split ',').Count) events ($($kinds -join ', ')); seed 22 another sequence" ($seq[0] -eq $seq[1] -and $seq[0] -ne $seq[2] -and @($seq[0] -split ',').Count -ge 10 -and $kinds.Count -ge 4)
+        Stop-ImageProcess $b; $b = $null
+
+        Write-Host 'AN -Events Off; the real event loop of the tool (German messages)'
+        $b = Start-ImageProcess -Crt
+        Invoke-SimulatedStart $b
+        [void](Invoke-HaeuserParser $b)
+        Set-EventTowns $b @($TestTown)
+        Set-EventGame $b 100 20000
+        $g0 = Read-Image $b 0x6BA020 $grpLen; $t0 = Read-Image $b $BuildingRva $tabLen
+        $file = Join-Path $evDir 'an\events.json'
+        foreach ($ex in @(@(), @('-Events', 'Off', '-EventScript', 'patron'))) {
+            $r = Invoke-Tool $b (@($ex) + @('-EventFile', $file))
+            Assert-Check "AN $(if ($ex.Count) { '-Events Off' } else { 'without -Events' }): exit code $($r.Code), no event marker, no events.json, taxes, intervals and gold unchanged, no event message" ($r.Code -eq 0 -and (Hex (Read-Image $b $EventMarkerRva 16)) -eq ((@('00') * 16) -join ' ') -and -not (Test-Path -LiteralPath $file) -and
+                [BitConverter]::ToString((Read-Image $b 0x6BA020 $grpLen)) -eq [BitConverter]::ToString($g0) -and [BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t0) -and (Get-EventGold $b) -eq 20000 -and $r.Text -notmatch 'Event')
+        }
+        $log = Join-Path $tmp 'an.txt'
+        $env:ANNO_EXTENSIONS_LANG = 'de'
+        $p = Start-Process powershell -ArgumentList '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$tool`"", '-TestProcessId', $b.Proc.Id, '-TestBase', $b.Base, '-WaitMinutes', 2, '-Events', 'Often', '-EventSeed', 4,
+            '-EventScript', 'tax_windfall,patron,harvest_boom', '-EventIntervalClock', 300, '-EventDurationClock', 500, '-EventPollMs', 100, '-EventTestUntilClock', 4000, '-EventFile', "`"$file`"" -RedirectStandardOutput $log -RedirectStandardError "$log.err" -WindowStyle Hidden -PassThru
+        $env:ANNO_EXTENSIONS_LANG = 'en'
+        [void]$p.Handle
+        # The clock only starts once the tool's event loop runs (marker written), so a slow start costs no events.
+        $sw = [Diagnostics.Stopwatch]::StartNew()
+        while (-not $p.HasExited -and $sw.Elapsed.TotalSeconds -lt 60 -and [Text.Encoding]::ASCII.GetString((Read-Image $b $EventMarkerRva 4)) -ne 'EVNT') { Start-Sleep -Milliseconds 100 }
+        $clock = 100; $sawTax = $false; $sawProd = $false; $sw = [Diagnostics.Stopwatch]::StartNew()
+        while (-not $p.HasExited -and $sw.Elapsed.TotalSeconds -lt 100) {
+            Start-Sleep -Milliseconds 100
+            if ($clock -lt 4100) { $clock += 15; Write-Image $b $ClockRva (I32 $clock) }
+            if ((Get-EventTaxText $b) -eq '11/12/17/18/20') { $sawTax = $true }
+            if (-not $sawProd -and [BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -ne [BitConverter]::ToString($t0)) { $sawProd = $true }
+        }
+        $p.WaitForExit(30000) | Out-Null
+        $out = (Get-Content $log -Raw) + (Get-Content "$log.err" -Raw)
+        $ev = @((Read-EventJson $file).events)
+        Assert-Check "AN -Events Often in the tool (clock +15 per 0.1 s up to 4,000): exit code $($p.ExitCode) after $([int]$sw.Elapsed.TotalSeconds) s, $($ev.Count) events: $((@($ev | ForEach-Object { $_.id })) -join ',')" (
+            $p.ExitCode -eq 0 -and $ev.Count -ge 5 -and (@($ev | Select-Object -First 3 | ForEach-Object { $_.id }) -join ',') -eq 'tax_windfall,patron,harvest_boom' -and @($ev | Where-Object { $_.pid -ne $b.Proc.Id }).Count -eq 0)
+        Assert-Check "AN during the run: taxes x1.5 seen $sawTax, intervals changed seen $sawProd" ($sawTax -and $sawProd)
+        $pgOk = $false
+        try { Connect-EventEngine $b; [void](Get-EventPage $false); $pg = [AnnoEvents]::ReadPage(); $pgOk = [BitConverter]::ToInt32($pg, [AnnoEvents]::OffOwner) -eq 0 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffTax) -eq 0 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffProd) -eq 0 }
+        finally { [AnnoEvents]::Configure([IntPtr]::Zero, 0, 0, 0, 0, 0, 0) }
+        Assert-Check 'AN after the tool stopped: taxes and building table byte for byte as before, page without owner and without active events' (
+            [BitConverter]::ToString((Read-Image $b 0x6BA020 $grpLen)) -eq [BitConverter]::ToString($g0) -and [BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t0) -and $pgOk)
+        Assert-Check 'AN German messages: events on, "*** Ereignis: Steuersegen - Steuern +50 % fuer 1 Spielstunde", "Ereignis vorbei", no English' (
+            $out -match 'Ereignisse sind an \(Haeufig\)' -and $out -match '\*\*\* Ereignis: Steuersegen - Steuern \+50 % fuer 1 Spielstunde' -and $out -match 'Ein gutes Jahr auf allen Inseln' -and $out -match 'Ereignis vorbei: ' -and $out -notmatch '\*\*\* Event:' -and $out -notmatch 'Exception')
+        if ($p.ExitCode -ne 0) { Write-Host $out }
+        Stop-ImageProcess $b; $b = $null
+
+        Write-Host 'AO Events left behind by a killed tool window; Stop() as on closing the window; check-game.ps1'
+        $b = Start-ImageProcess -Crt
+        Invoke-SimulatedStart $b
+        [void](Invoke-HaeuserParser $b)
+        $r = Invoke-Tool $b @()
+        Set-EventTowns $b @($TestTown)
+        Set-EventGame $b 1000 20000
+        $g0 = Read-Image $b 0x6BA020 $grpLen; $t0 = Read-Image $b $BuildingRva $tabLen
+        [void](New-EventEngine $b 'tax_windfall,harvest_boom' 6 5000 '')
+        Step-Events $b 1000; Step-ForcedEvent $b 1100; Step-ForcedEvent $b 1200
+        $r = Invoke-Tool $b @()
+        Assert-Check "AO tool run while the owner (this test) still runs: exit code $($r.Code), nothing restored" ($r.Code -eq 0 -and $r.Text -notmatch 'earlier tool window' -and (Get-EventTaxText $b) -eq '11/12/17/18/20')
+        Connect-EventEngine $b; [void](Get-EventPage $false)
+        [void][AnnoEvents]::SetOwner(4, 1200)   # the owner is gone (PID 4 is no tool window)
+        Write-Image $b ($TaxRva + 2 * $ResidentSize) (I32 99)   # meanwhile changed by someone else
+        $r = Invoke-Tool $b @('-Events', 'Off')
+        $pg = $null; try { Connect-EventEngine $b; [void](Get-EventPage $false); $pg = [AnnoEvents]::ReadPage() } finally { [AnnoEvents]::Configure([IntPtr]::Zero, 0, 0, 0, 0, 0, 0) }
+        Assert-Check "AO next tool run (-Events Off) after the owner is gone: exit code $($r.Code), taxes $(Get-EventTaxText $b) (group 2 left alone), building table as before, page cleared" ($r.Code -eq 0 -and
+            $r.Text -match 'an earlier tool window left event values in the game; restored \(4 taxes, \d+ work intervals; 1 left alone' -and (Get-EventTaxText $b) -eq '7/8/99/12/13' -and
+            [BitConverter]::ToString((Read-Image $b $BuildingRva $tabLen)) -eq [BitConverter]::ToString($t0) -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffTax) -eq 0 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffProd) -eq 0 -and [BitConverter]::ToInt32($pg, [AnnoEvents]::OffOwner) -eq 0)
+        Write-Image $b ($TaxRva + 2 * $ResidentSize) (I32 11)
+        [void](New-EventEngine $b 'tax_slump,patron' 7 5000 '')
+        Step-Events $b 1300; Step-ForcedEvent $b 1400
+        $slump = Get-EventTaxText $b
+        $rs = [AnnoEvents]::Stop()
+        $apply = [AnnoEvents]::ApplyTax([int[]](7, 8, 11, 12, 13), [int[]](70, 80, 110, 120, 130), 3, 1500, 9999)
+        $gold = [AnnoEvents]::AddGold($script:base.ToInt64() + $EventPlayersRva + 4, 5000, 0)
+        Step-ForcedEvent $b 1500
+        Assert-Check "AO Stop() (closing the window): slump $slump -> $(Get-EventTaxText $b) ($($rs[0]) restored), owner $(Get-EventPageInt ([AnnoEvents]::OffOwner)); afterwards nothing is written (ApplyTax $apply, AddGold blocked, patron not paid: gold $(Get-EventGold $b))" (
+            $slump -eq '5/6/8/9/10' -and (Get-EventTaxText $b) -eq '7/8/11/12/13' -and $rs[0] -eq 5 -and (Get-EventPageInt ([AnnoEvents]::OffOwner)) -eq 0 -and $apply -eq 1 -and $gold -eq [long]::MinValue -and (Get-EventGold $b) -eq 20000 -and (Get-EventIds) -eq 'tax_slump')
+        [void](New-EventEngine $b 'tax_windfall,marsh_fever' 8 5000 '')
+        Step-Events $b 1600; Step-ForcedEvent $b 1700; Step-ForcedEvent $b 1800
+        $check = Join-Path $root 'dev\check-game.ps1'
+        $o = & powershell -NoProfile -ExecutionPolicy Bypass -File $check -Short -TestProcessId $b.Proc.Id -TestBase $b.Base 2>&1 | Out-String
+        Assert-Check "AO dev\check-game.ps1 shows the active events: $((($o -split "`n") | Where-Object { $_ -match '^Event' }) -join ' | ')" (
+            $o -match 'Event taxes: Tax windfall x1\.5 until clock 6700: now 11/12/17/18/20, originals 7/8/11/12/13' -and $o -match 'Event production: Marsh fever x0\.75 until clock 6800: \d+ work intervals changed, as written' -and $o -match "Events \(marker 0xE5BD0\): page 0x[0-9A-F]+ \(EVST\), tool PID $PID \(running\)")
+        Stop-TemporaryEvents 'Exit'
+        $o = & powershell -NoProfile -ExecutionPolicy Bypass -File $check -Short -TestProcessId $b.Proc.Id -TestBase $b.Base 2>&1 | Out-String
+        Assert-Check 'AO check-game.ps1 after the end: no active event' ($o -match 'Event taxes: none' -and $o -match 'Event production: none')
+        [AnnoEvents]::Configure([IntPtr]::Zero, 0, 0, 0, 0, 0, 0)
+        Assert-Check 'AO helper process still alive' (-not $b.Proc.HasExited)
+        Stop-ImageProcess $b; $b = $null
+    }
+    finally {
+        [AnnoEvents]::Configure([IntPtr]::Zero, 0, 0, 0, 0, 0, 0)
+        if ($b) { Stop-ImageProcess $b }
+    }
 }
 
 $orig = Get-ExpectedValues 500 350
@@ -820,6 +1255,43 @@ try {
     [void](Invoke-PirateCode $a 0x9 30000 777)
     $g = foreach ($p in 1..3) { [BitConverter]::ToInt32((Read-Image $a (Get-GoldAddress $p) 4), 0) }
     Assert-Check "R savegame: player $($script:GoldAfter), rivals $($g -join '/') unchanged" ($script:GoldAfter -eq 777 -and ($g | Where-Object { $_ -ne 4321 }).Count -eq 0)
+    Stop-ImageProcess $a
+
+    Write-Host 'AP Mission time limit (TIMERS hook without options, function test)'
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    $r = Invoke-Tool $a @()
+    Assert-Check "AP exit code $($r.Code)" ($r.Code -eq 0)
+    Test-Pirates $a 'Default' 'AP'
+    # local player, goal bits and deadline per mission slot, time limit before -> expected time limit afterwards
+    $tlCases = @(
+        @{ Name = 'scenario with a limit (slot 0)'; Local = 0; Bits = @(0x80, 0, 0, 0); Deadline = @(216000, 0, 0, 0); Before = 0; Expect = 216000 }
+        @{ Name = 'endless game (no goal bits), stale deadline'; Local = 0; Bits = @(0, 0, 0, 0); Deadline = @(999, 0, 0, 0); Before = 0; Expect = 0 }
+        @{ Name = 'original scenario (deadline 0)'; Local = 0; Bits = @(0x121, 0x121, 0, 0); Deadline = @(0, 0, 0, 0); Before = 5; Expect = 0 }
+        @{ Name = 'local player 2 uses slot 2'; Local = 2; Bits = @(0x80, 0, 0x100, 0); Deadline = @(36000, 0, 72000, 0); Before = 0; Expect = 72000 }
+        @{ Name = 'local player 3 (last slot)'; Local = 3; Bits = @(0, 0, 0, 0x20); Deadline = @(0, 0, 0, 108000); Before = 0; Expect = 108000 }
+        @{ Name = 'local player out of range (7)'; Local = 7; Bits = @(0x80, 0x80, 0x80, 0x80); Deadline = @(1, 2, 3, 4); Before = 0; Expect = 0 }
+        @{ Name = 'local player negative (-1)'; Local = -1; Bits = @(0x80, 0x80, 0x80, 0x80); Deadline = @(1, 2, 3, 4); Before = 0; Expect = 0 }
+    )
+    foreach ($tc in $tlCases) {
+        Write-Image $a $LocalPlayerRva (I32 $tc.Local)
+        foreach ($slot in 0..3) {
+            Write-Image $a ($MissionRva + $slot * $MissionSize) (I32 $tc.Bits[$slot])
+            Write-Image $a ($MissionRva + $slot * $MissionSize + 0x20) (I32 $tc.Deadline[$slot])
+        }
+        Write-Image $a $TimeLimitRva (I32 $tc.Before)
+        $flags = Invoke-PirateCode $a 0x9 30000 4242
+        $tl = [BitConverter]::ToInt32((Read-Image $a $TimeLimitRva 4), 0)
+        Assert-Check ("AP {0}: time limit {1} (expected {2}), flags 0x{3:X} and gold {4} unchanged" -f $tc.Name, $tl, $tc.Expect, $flags, $script:GoldAfter) ($tl -eq $tc.Expect -and $flags -eq 0x9 -and $script:GoldAfter -eq 4242)
+    }
+    # The hook leaves rax (the loader's result) alone: only ecx/edx and RIP-relative stores in the time-limit part.
+    $tlOnly = Build-PirateCode 'Default' 0 0 $true; $noTl = Build-PirateCode 'Default' 0 0 $false
+    Assert-Check "AP time-limit part is $($tlOnly.Length - $noTl.Length) bytes, without it the cave is the old one ($($noTl.Length) bytes)" ($tlOnly.Length - $noTl.Length -eq 41 -and $noTl.Length -eq 12)
+    $tlPart = Hex ($tlOnly[7..47])
+    Assert-Check "AP time-limit part uses no rax/eax ($tlPart)" ($tlPart -match '^8B 0D .. .. .. .. 83 F9 03 77 1E 69 C9 8C 10 00 00 48 8D 15 .. .. .. .. 48 01 CA 83 3A 00 74 09 8B 52 20 89 15 .. .. .. ..$')
+    $all = Build-PirateCode 'Strong' 1000000 60000
+    Assert-Check "AP everything in the TIMERS cave fits ($($all.Length) bytes up to 0x$('{0:X}' -f ($PirateCaveRva + $all.Length)))" ($PirateCaveRva + $all.Length -le 0xE6000)
+    Assert-Check 'AP helper process still alive' (-not $a.Proc.HasExited)
     Stop-ImageProcess $a
 
     Write-Host 'S  -IslandSize Huge -Resources Lots (function test with the real templates)'
@@ -1281,7 +1753,7 @@ try {
     Assert-Check "AH build cost x0.25, upkeep x0.5, taxes x3, radius x2 all set" ((Compare-ScaledTable $t0 $t1 $TestCostFields 0.25).Wrong -eq 0 -and (Compare-ScaledTable $t0 $t1 $TestUpkeepFields 0.5).Wrong -eq 0 -and (Get-Taxes $a) -eq '21/24/33/36/39' -and $t1[270 * 0x90 + 0x20] -eq 32 -and $t1[461 * 0x90 + 0x20] -eq 48)
     $tabH = Build-IslandTable 1000 700 $false 'Huge'
     $rc = Build-ResourceCode 200 7 $true; $fc = Build-FertilityCode
-    $ranges = @(@('IslandTable', $TableRva, $tabH), @('Fertility', $FertCaveRva, $fc), @('BuildCostMarker', $CostMarkerRva, (New-Object byte[] 8)), @('UpkeepMarker', $UpkeepMarkerRva, (New-Object byte[] 8)), @('Resources', $ResourceCaveRva, $rc),
+    $ranges = @(@('IslandTable', $TableRva, $tabH), @('Fertility', $FertCaveRva, $fc), @('BuildCostMarker', $CostMarkerRva, (New-Object byte[] 8)), @('UpkeepMarker', $UpkeepMarkerRva, (New-Object byte[] 8)), @('EventMarker', $EventMarkerRva, (New-Object byte[] 16)), @('Resources', $ResourceCaveRva, $rc),
         @('PirateFleet', $FleetCaveRva, (Build-FleetCode 3)), @('Traders', $TraderCaveRva, (Build-TraderCode 3)), @('BigMap', $BigMapCaveRva, (Build-BigMapCode)), @('ProductionMarker', $ProdMarkerRva, (New-Object byte[] 8)), @('TIMERS', $PirateCaveRva, (Build-PirateCode 'Strong' 50000 60000)))
     $ok = $true
     for ($i = 0; $i -lt $ranges.Count - 1; $i++) { if ($ranges[$i][1] + $ranges[$i][2].Length -gt $ranges[$i + 1][1]) { $ok = $false } }
@@ -1293,6 +1765,9 @@ try {
     Assert-Check "AH second run with all options: exit code $($r.Code), building table unchanged" ($r.Code -eq 0 -and [BitConverter]::ToString($t2) -eq [BitConverter]::ToString($t1))
     Assert-Check 'AH helper process still alive' (-not $a.Proc.HasExited)
     Stop-ImageProcess $a
+    $a = $null
+
+    Test-EventCases
 
     Write-Host 'F  Process exits while the tool waits for the start'
     $a = Start-ImageProcess

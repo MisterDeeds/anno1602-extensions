@@ -26,6 +26,9 @@
                taxes + sales - purchases - operating and military costs, FUN_1400ad5d0)
     +0x054 int trade balance (sales - purchases, goal bit 0x10000)
     +0x050 int voice message/film on success (original 84-106)
+    +0x058 int time limit (game clock, 36,000 per hour of the game's mm:ss display; 0 in every original scenario).
+               The loader copies it to mission +0x20 and savegames keep it, but the game itself never uses it:
+               anno-patcher.ps1 copies it to the game's time limit 0x1405ec1a8 at every load (see there).
     +0x068 text (0x800 bytes, Windows-1252)
     +0x868/+0x86C goods: byte 0 good, bytes 2-3 amount (x 32 = tons)
     +0x870/+0x87C/+0x888 town 1-3: total residents, stage (0 pioneers ... 4 aristocrats), of which at least
@@ -116,7 +119,8 @@ function Set-TownGoal([byte[]]$r, [int]$o, $z) {
 #   Slot, Text, Success, Towns (list of town goals, max. 3), AllTowns (town goal),
 #   TownCount, TotalResidents, Balance, TradeBalance, Defeat (list of player numbers), DefeatedCount,
 #   Goods1/Goods2 = @{ Good = no.; Tons = t }, Monopoly1/Monopoly2 = @{ Resource = no.; Islands = n },
-#   Support = @{ Player = no. (7 = any); Town = town goal }, AlsoAI
+#   Support = @{ Player = no. (7 = any); Town = town goal }, AlsoAI,
+#   TimeLimitHours (1 to 50, whole or half hours; only works with the patcher)
 function New-Mission($a) {
     $r = New-Object byte[] 0x8C4
     $bits = 0
@@ -139,6 +143,11 @@ function New-Mission($a) {
     }
     Set-I32 $r 4 $bits
     Set-I32 $r 0x50 $(if ($a.Success) { $a.Success } else { 85 })
+    if ($a.TimeLimitHours) {
+        $h = [double]$a.TimeLimitHours
+        if ($h -lt 1 -or $h -gt 50 -or ($h * 2) -ne [math]::Floor($h * 2)) { throw "Time limit $h h: 1 to 50 whole or half hours." }
+        Set-I32 $r 0x58 ([int]($h * 36000))
+    }
     if ($a.Text) {
         $t = $Cp1252.GetBytes(($a.Text -replace "`r", ''))
         if ($t.Length -gt 0x7FF) { throw "Mission text too long ($($t.Length) bytes, at most 2047)." }

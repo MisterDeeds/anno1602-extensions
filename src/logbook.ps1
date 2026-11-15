@@ -8,17 +8,23 @@
   PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, never a write). It refreshes every 2.5 seconds and
   survives the game not running yet, being closed or being restarted.
 
-  Shown:
+  Tab "Game" (Spiel):
     - the human's mission goals with live progress (the check mirrors the game's own mission
       check FUN_1400ae010, so "met" here means met for the game),
     - gold, towns, residents per population stage, ships, balance,
     - one line per computer rival (best town, total residents, gold; race progress in races),
     - game time (game clock converted to hours at normal speed) and the current speed,
-    - 24 achievements, stored in %APPDATA%\Anno1602-Extensions\logbook.json with date and game.
-  Finished missions (scenario, won/lost, date, game hours) are also stored in logbook.json.
+    - the random events of the running game (written by anno-patcher.ps1 -Events into events.json),
+    - 53 achievements, stored in %APPDATA%\Anno1602-Extensions\logbook.json with date and game,
+    - a summary card when a game ends (won, lost, or left when the game closes or another game starts).
+  Tab "History" (Verlauf): charts of gold, residents per stage, balance, towns and ships (one point
+  about every game minute, by the game clock), the summary of the game shown and the list of played games.
+  Each game's history is kept in %APPDATA%\Anno1602-Extensions\history\<start>.json (newest 30 files).
+  Finished missions (scenario, won/lost, date, game hours) and the game summaries are stored in logbook.json.
+  Section headers can be clicked to fold a section away.
 
   Memory layout: see docs\FINDINGS.md (sections "Big campaign maps, race, challenges",
-  "Own scenarios", "Rivals and pirates", "Players and parties") and the notes of the logbook.
+  "Own scenarios", "Rivals and pirates", "Players and parties", "Logbook companion window").
   The text is German on a German Windows and English otherwise ($env:ANNO_EXTENSIONS_LANG = 'de'/'en').
 
 .PARAMETER SelfTest
@@ -41,6 +47,8 @@ param(
     [Parameter(DontShow)][long]$TestBase = 0,
     # For testing only: folder used instead of %APPDATA%.
     [Parameter(DontShow)][string]$AppDataFolder = $env:APPDATA,
+    # For testing only: folder used instead of the Documents folder (own scenarios: chapters per campaign).
+    [Parameter(DontShow)][string]$DocumentsFolder = [Environment]::GetFolderPath('MyDocuments'),
     # For testing only: run the window off-screen for this many refreshes (1 per second) and log each one.
     [Parameter(DontShow)][int]$TestTicks = 0,
     [Parameter(DontShow)][string]$TestLog
@@ -80,6 +88,14 @@ $RvaUnitCosts = 0x6D7E60        # 0x6D7E60 and 0x6D80A4/A8/AC/B0: upkeep per uni
 $UnitCostsLength = 0x254
 $ClockPerHour = 32700           # game clock units per hour at normal speed (FINDINGS: 523,094 in 60 min at 16x)
 
+# History and game summaries.
+$SampleClocks = [long]($ClockPerHour / 60)   # 545 = one game minute between two history points (game clock, not wall time)
+$HistoryMaxSamples = 720        # cap per game: above it every second point is dropped and the interval doubles
+$HistoryKeepFiles = 30          # history files kept (the newest ones)
+$GamesKeep = 100                # game summaries kept in logbook.json
+$QuitMinClocks = 5 * $SampleClocks   # a game left without a result is recorded only after 5 game minutes of play
+$HistoryFields = @('clock', 'gold', 'residents', 'pioneers', 'settlers', 'citizens', 'merchants', 'aristocrats', 'workers', 'balance', 'towns', 'ships')
+
 # ---------------------------------------------------------------------------------------------
 # Native access, memory sources and the drawing canvas (C#).
 # ---------------------------------------------------------------------------------------------
@@ -89,7 +105,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Forms;
 
 namespace AnnoLogbook
@@ -155,7 +173,27 @@ namespace AnnoLogbook
         }
     }
 
-    public enum Kind { Title, Header, Row, Stack, Badge, Note, Space }
+    // Small helpers for the history (fast loops that would be slow in PowerShell).
+    public static class Util
+    {
+        // One column of the history samples as doubles (chart data).
+        public static double[] Column(List<long[]> rows, int col)
+        {
+            double[] r = new double[rows == null ? 0 : rows.Count];
+            for (int i = 0; i < r.Length; i++) { long[] a = rows[i]; r[i] = (a != null && col < a.Length) ? a[col] : 0; }
+            return r;
+        }
+
+        // One sample as a JSON array with invariant numbers.
+        public static string JoinRow(long[] a)
+        {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < a.Length; i++) { if (i > 0) sb.Append(','); sb.Append(a[i].ToString(CultureInfo.InvariantCulture)); }
+            return sb.Append(']').ToString();
+        }
+    }
+
+    public enum Kind { Title, Header, Row, Stack, Badge, Note, Space, Tabs, Chart, Card }
 
     public sealed class Item
     {
@@ -169,6 +207,29 @@ namespace AnnoLogbook
         public Color[] Colors;
         public string[] Legend;
         public Rectangle Bounds;
+        // Clickable item: a click raises Canvas.ItemClicked with this key (tabs: key + ":" + tab index).
+        public string Key;
+        // Header that folds its section away (chevron on the right).
+        public bool Collapsible, Collapsed;
+        // Card: label/value pairs (label, value, label, value ...) and a wrapped text below them.
+        public string[] Cells;
+        public string Body;
+        // Chart: game clock per point, one value array per series; stacked areas or lines (green above zero, red below).
+        public double[] X;
+        public double[][] Series;
+        public string[] SeriesNames;
+        public string TotalName, EmptyText;
+        public bool Stacked, ZeroSplit;
+        public string Culture = "en-US";
+        public double ClockPerHour = 32700;
+        // Set by the layout: the tabs (Tabs) or the plot area (Chart).
+        public Rectangle[] Parts;
+    }
+
+    public sealed class ClickArgs : EventArgs
+    {
+        public readonly string Key;
+        public ClickArgs(string key) { Key = key; }
     }
 
     // Draws the whole content from a list of items (owner drawn: same look on every Windows).
@@ -190,6 +251,12 @@ namespace AnnoLogbook
         private readonly ToolTip tip = new ToolTip();
         private string tipText;
         private bool inLayout;
+        private Item hoverItem;
+        private int hoverIndex = -1;
+        private const int CardColumns = 3;
+
+        // A clickable item (Item.Key) was clicked.
+        public event EventHandler<ClickArgs> ItemClicked;
         private readonly Font fBase, fBold, fTitle, fSmall, fHeader;
         private readonly float dpiScale;
 
@@ -213,8 +280,37 @@ namespace AnnoLogbook
         public void SetItems(List<Item> list)
         {
             items = list ?? new List<Item>();
+            hoverItem = null; hoverIndex = -1;
             Relayout();
             Invalidate();
+        }
+
+        // Key of the clickable item at this point (tabs: "key:index"), or null.
+        public string KeyAt(Point p)
+        {
+            foreach (Item it in items)
+            {
+                if (string.IsNullOrEmpty(it.Key) || !it.Bounds.Contains(p)) continue;
+                if (it.Kind == Kind.Tabs)
+                {
+                    if (it.Parts != null) for (int i = 0; i < it.Parts.Length; i++) if (it.Parts[i].Contains(p)) return it.Key + ":" + i;
+                    return null;
+                }
+                return it.Key;
+            }
+            return null;
+        }
+
+        public void RaiseItemClick(string key)
+        {
+            EventHandler<ClickArgs> h = ItemClicked;
+            if (h != null && !string.IsNullOrEmpty(key)) h(this, new ClickArgs(key));
+        }
+
+        protected override void OnMouseClick(MouseEventArgs e)
+        {
+            base.OnMouseClick(e);
+            if (e.Button == MouseButtons.Left) RaiseItemClick(KeyAt(e.Location));
         }
 
         protected override void OnResize(EventArgs e)
@@ -273,6 +369,21 @@ namespace AnnoLogbook
                             Font nf = it.Dim ? fSmall : fBase;
                             h = TextRenderer.MeasureText(it.Text ?? "", nf, new Size(w, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Height + S(8);
                             it.Bounds = new Rectangle(x0, y, w, h); y += h; break;
+                        case Kind.Tabs:
+                            h = fBold.Height + S(12);
+                            it.Bounds = new Rectangle(x0, y, w, h);
+                            int nTabs = it.Legend == null ? 0 : it.Legend.Length, tx = x0;
+                            it.Parts = new Rectangle[nTabs];
+                            for (int i = 0; i < nTabs; i++) { int tw = TextWidth(it.Legend[i], fBold) + S(24); it.Parts[i] = new Rectangle(tx, y, tw, h); tx += tw; }
+                            y += h + S(2); break;
+                        case Kind.Chart:
+                            h = ChartHeight(it, w);
+                            it.Bounds = new Rectangle(x0, y, w, h);
+                            it.Parts = new Rectangle[] { PlotRect(it.Bounds) };
+                            y += h; break;
+                        case Kind.Card:
+                            h = CardHeight(it, w);
+                            it.Bounds = new Rectangle(x0, y, w, h); y += h + S(6); break;
                         default:
                             it.Bounds = new Rectangle(x0, y, w, S(8)); y += S(8); break;
                     }
@@ -355,6 +466,9 @@ namespace AnnoLogbook
                     case Kind.Row: PaintRow(g, it, r); break;
                     case Kind.Stack: PaintStack(g, it, r); break;
                     case Kind.Badge: PaintBadge(g, it, r); break;
+                    case Kind.Tabs: PaintTabs(g, it, r); break;
+                    case Kind.Chart: PaintChart(g, it, r); break;
+                    case Kind.Card: PaintCard(g, it, r); break;
                     case Kind.Note:
                         TextRenderer.DrawText(g, it.Text, it.Dim ? fSmall : fBase, new Rectangle(r.X, r.Y + S(3), r.Width, r.Height), Pick(it.TextColor, it.Dim ? DimColor : Fore), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
                         break;
@@ -372,14 +486,283 @@ namespace AnnoLogbook
 
         private void PaintHeader(Graphics g, Item it, Rectangle r)
         {
-            int ty = r.Y + S(14), rw = TextWidth(it.Right, fSmall);
-            DrawLine(g, it.Text, fHeader, new Rectangle(r.X, ty, r.Width - rw - (rw > 0 ? S(10) : 0), fHeader.Height), Pick(it.TextColor, Accent), TextFormatFlags.Left);
-            if (rw > 0) DrawLine(g, it.Right, fSmall, new Rectangle(r.Right - rw, ty, rw, fHeader.Height), Pick(it.RightColor, DimColor), TextFormatFlags.Right);
+            int ty = r.Y + S(14), rw = TextWidth(it.Right, fSmall), cw = it.Collapsible ? S(16) : 0;
+            DrawLine(g, it.Text, fHeader, new Rectangle(r.X, ty, r.Width - rw - cw - (rw > 0 ? S(10) : 0), fHeader.Height), Pick(it.TextColor, Accent), TextFormatFlags.Left);
+            if (rw > 0) DrawLine(g, it.Right, fSmall, new Rectangle(r.Right - cw - rw, ty, rw, fHeader.Height), Pick(it.RightColor, DimColor), TextFormatFlags.Right);
+            if (it.Collapsible) Chevron(g, new Rectangle(r.Right - S(10), ty, S(10), fHeader.Height), it.Collapsed);
             using (Pen p = new Pen(Rule)) g.DrawLine(p, r.X, r.Bottom - 1, r.Right, r.Bottom - 1);
+        }
+
+        // Small triangle: pointing down (section open) or right (folded away).
+        private void Chevron(Graphics g, Rectangle r, bool collapsed)
+        {
+            float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f, s = S(4);
+            PointF[] pts = collapsed
+                ? new PointF[] { new PointF(cx - s / 2, cy - s), new PointF(cx + s / 2 + 1, cy), new PointF(cx - s / 2, cy + s) }
+                : new PointF[] { new PointF(cx - s, cy - s / 2), new PointF(cx + s, cy - s / 2), new PointF(cx, cy + s / 2 + 1) };
+            using (SolidBrush b = new SolidBrush(DimColor)) g.FillPolygon(b, pts);
+        }
+
+        private void PaintTabs(Graphics g, Item it, Rectangle r)
+        {
+            using (Pen p = new Pen(Rule)) g.DrawLine(p, r.X, r.Bottom - 1, r.Right, r.Bottom - 1);
+            if (it.Parts == null || it.Legend == null) return;
+            int sel = (int)it.Value1;
+            for (int i = 0; i < it.Parts.Length && i < it.Legend.Length; i++)
+            {
+                Rectangle t = it.Parts[i];
+                bool on = i == sel;
+                DrawLine(g, it.Legend[i], fBold, new Rectangle(t.X, t.Y, t.Width, t.Height - S(3)), on ? Accent : DimColor, TextFormatFlags.HorizontalCenter);
+                if (on) using (SolidBrush b = new SolidBrush(Accent)) g.FillRectangle(b, t.X + S(6), t.Bottom - S(3), t.Width - S(12), S(3));
+            }
+        }
+
+        private int CardRowHeight { get { return S(8) + fSmall.Height + S(1) + fBold.Height; } }
+
+        private int CardHeight(Item it, int w)
+        {
+            int pad = S(10), inner = Math.Max(S(60), w - 2 * pad);
+            int h = pad + fBold.Height;
+            if (!string.IsNullOrEmpty(it.Sub)) h += S(2) + fSmall.Height;
+            int n = it.Cells == null ? 0 : it.Cells.Length / 2;
+            h += (n + CardColumns - 1) / CardColumns * CardRowHeight;
+            if (!string.IsNullOrEmpty(it.Body)) h += S(8) + TextRenderer.MeasureText(it.Body, fSmall, new Size(inner, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding).Height;
+            return h + pad;
+        }
+
+        private void PaintCard(Graphics g, Item it, Rectangle r)
+        {
+            Rectangle rr = new Rectangle(r.X, r.Y, r.Width - 1, r.Height - 1);
+            using (GraphicsPath p = Round(rr, S(8)))
+            {
+                using (SolidBrush b = new SolidBrush(BadgeOff)) g.FillPath(b, p);
+                using (Pen pen = new Pen(Pick(it.BarColor, Accent))) g.DrawPath(pen, p);
+            }
+            int pad = S(10), x = r.X + pad, w = r.Width - 2 * pad, y = r.Y + pad;
+            int rw = TextWidth(it.Right, fBold);
+            if (rw > 0) DrawLine(g, it.Right, fBold, new Rectangle(x + w - rw, y, rw, fBold.Height), Pick(it.RightColor, Accent), TextFormatFlags.Right);
+            DrawLine(g, it.Text, fBold, new Rectangle(x, y, w - rw - (rw > 0 ? S(10) : 0), fBold.Height), Pick(it.TextColor, Fore), TextFormatFlags.Left);
+            y += fBold.Height;
+            if (!string.IsNullOrEmpty(it.Sub)) { y += S(2); DrawLine(g, it.Sub, fSmall, new Rectangle(x, y, w, fSmall.Height), Pick(it.SubColor, DimColor), TextFormatFlags.Left); y += fSmall.Height; }
+            int n = it.Cells == null ? 0 : it.Cells.Length / 2, cw = w / CardColumns;
+            for (int i = 0; i < n; i++)
+            {
+                int cx = x + (i % CardColumns) * cw, cy = y + (i / CardColumns) * CardRowHeight + S(8);
+                DrawLine(g, it.Cells[2 * i], fSmall, new Rectangle(cx, cy, cw - S(6), fSmall.Height), DimColor, TextFormatFlags.Left);
+                DrawLine(g, it.Cells[2 * i + 1], fBold, new Rectangle(cx, cy + fSmall.Height + S(1), cw - S(6), fBold.Height), Fore, TextFormatFlags.Left);
+            }
+            y += (n + CardColumns - 1) / CardColumns * CardRowHeight;
+            if (!string.IsNullOrEmpty(it.Body))
+            {
+                y += S(8);
+                TextRenderer.DrawText(g, it.Body, fSmall, new Rectangle(x, y, w, Math.Max(1, r.Bottom - y)), DimColor, TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix | TextFormatFlags.NoPadding);
+            }
+        }
+
+        // ---- charts ----
+        private int PlotHeight { get { return S(52); } }
+
+        private int ChartHeight(Item it, int w)
+        {
+            int h = S(2) + fBase.Height + S(3) + PlotHeight + S(2) + fSmall.Height + S(8);
+            if (it.Legend != null && it.Legend.Length > 0) h += S(3) + Legend(null, it, 0, 0, w) * (fSmall.Height + S(3));
+            return h;
+        }
+
+        private Rectangle PlotRect(Rectangle r)
+        {
+            int gutter = S(44);
+            return new Rectangle(r.X + gutter, r.Y + S(2) + fBase.Height + S(3), Math.Max(S(40), r.Width - gutter), PlotHeight);
+        }
+
+        private static CultureInfo CultureOf(Item it)
+        {
+            try { return CultureInfo.GetCultureInfo(string.IsNullOrEmpty(it.Culture) ? "en-US" : it.Culture); }
+            catch (Exception) { return CultureInfo.InvariantCulture; }
+        }
+
+        // Short axis label: 850, 1.5k, 45k, 1.2M (German: 1,2 Mio.).
+        private static string Short(double v, Item it)
+        {
+            CultureInfo ci = CultureOf(it);
+            double a = Math.Abs(v);
+            if (a >= 1000000) return (v / 1000000).ToString(a >= 10000000 ? "0" : "0.#", ci) + (ci.TwoLetterISOLanguageName == "de" ? " Mio." : "M");
+            if (a >= 10000) return (v / 1000).ToString("0", ci) + "k";
+            if (a >= 1000) return (v / 1000).ToString("0.#", ci) + "k";
+            return v.ToString("0", ci);
+        }
+
+        private static double NiceUp(double v)
+        {
+            if (v <= 0) return 0;
+            double e = Math.Pow(10, Math.Floor(Math.Log10(v)));
+            double[] steps = { 1, 1.2, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10 };
+            foreach (double m in steps) if (m * e >= v - 1e-9) return m * e;
+            return 10 * e;
+        }
+
+        private static string TimeText(Item it, double clock)
+        {
+            double cph = it.ClockPerHour > 0 ? it.ClockPerHour : 32700;
+            long min = (long)Math.Floor(Math.Max(0, clock) * 60.0 / cph);
+            return string.Format("{0} h {1:00} min", min / 60, min % 60);
+        }
+
+        private static Color SeriesColor(Item it, int k) { return (it.Colors != null && k < it.Colors.Length) ? it.Colors[k] : Accent; }
+
+        private static double ValueAt(Item it, int k, int i) { double[] s = it.Series[k]; return (s != null && i < s.Length) ? s[i] : 0; }
+
+        // Top edge of every series per point (stacked: running sum).
+        private static double[][] Tops(Item it, int n)
+        {
+            double[][] tops = new double[it.Series.Length][];
+            for (int k = 0; k < it.Series.Length; k++)
+            {
+                tops[k] = new double[n];
+                for (int i = 0; i < n; i++) tops[k][i] = (it.Stacked && k > 0 ? tops[k - 1][i] : 0) + ValueAt(it, k, i);
+            }
+            return tops;
+        }
+
+        private int NearestIndex(Item it, Rectangle plot, int mx)
+        {
+            int n = it.X.Length;
+            double x0 = it.X[0], x1 = it.X[n - 1];
+            if (x1 <= x0) return n - 1;
+            double v = x0 + (double)(mx - plot.X) / Math.Max(1, plot.Width - 1) * (x1 - x0);
+            int best = 0; double bd = double.MaxValue;
+            for (int i = 0; i < n; i++) { double d = Math.Abs(it.X[i] - v); if (d < bd) { bd = d; best = i; } }
+            return best;
+        }
+
+        private static string ChartTip(Item it, int i)
+        {
+            CultureInfo ci = CultureOf(it);
+            StringBuilder sb = new StringBuilder(TimeText(it, it.X[i]));
+            double sum = 0;
+            for (int k = 0; k < it.Series.Length; k++)
+            {
+                double v = ValueAt(it, k, i); sum += v;
+                string name = (it.SeriesNames != null && k < it.SeriesNames.Length) ? it.SeriesNames[k] : "";
+                sb.Append('\n').Append(name).Append(name.Length > 0 ? ": " : "").Append(v.ToString("N0", ci));
+            }
+            if (it.Stacked && it.Series.Length > 1 && !string.IsNullOrEmpty(it.TotalName)) sb.Append('\n').Append(it.TotalName).Append(": ").Append(sum.ToString("N0", ci));
+            return sb.ToString();
+        }
+
+        private void PaintChart(Graphics g, Item it, Rectangle r)
+        {
+            int ty = r.Y + S(2), rw = TextWidth(it.Right, fBold);
+            if (rw > 0) DrawLine(g, it.Right, fBold, new Rectangle(r.Right - rw, ty, rw, fBase.Height), Pick(it.RightColor, Fore), TextFormatFlags.Right);
+            DrawLine(g, it.Text, fBase, new Rectangle(r.X, ty, r.Width - rw - (rw > 0 ? S(10) : 0), fBase.Height), Pick(it.TextColor, Fore), TextFormatFlags.Left);
+            Rectangle plot = PlotRect(r);
+            using (GraphicsPath p = Round(plot, S(4))) using (SolidBrush b = new SolidBrush(BadgeOff)) g.FillPath(b, p);
+            int n = it.X == null ? 0 : it.X.Length;
+            int ly = plot.Bottom + S(2);
+            if (n < 2 || it.Series == null || it.Series.Length == 0)
+            {
+                TextRenderer.DrawText(g, it.EmptyText ?? "", fSmall, plot, DimColor, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix);
+                if (it.Legend != null && it.Legend.Length > 0) Legend(g, it, r.X, ly + fSmall.Height + S(3), r.Width);
+                return;
+            }
+            double[][] tops = Tops(it, n);
+            double lo = 0, hi = 0;
+            foreach (double[] t in tops) foreach (double v in t) { if (v < lo) lo = v; if (v > hi) hi = v; }
+            hi = NiceUp(hi);
+            lo = lo < 0 ? -NiceUp(-lo) : 0;
+            if (hi <= lo) hi = lo + 1;
+            double x0 = it.X[0], x1 = it.X[n - 1];
+            if (x1 <= x0) x1 = x0 + 1;
+            float pw = plot.Width - 1, ph = plot.Height - 1;
+            Func<double, float> px = v => plot.X + (float)((v - x0) / (x1 - x0) * pw);
+            Func<double, float> py = v => plot.Bottom - 1 - (float)((v - lo) / (hi - lo) * ph);
+
+            // Grid: middle line, zero line; labels in the gutter on the left.
+            using (Pen grid = new Pen(Rule)) g.DrawLine(grid, plot.X + S(3), (plot.Y + plot.Bottom) / 2f, plot.Right - S(3), (plot.Y + plot.Bottom) / 2f);
+            int gw = plot.X - r.X - S(6);
+            DrawLine(g, Short(hi, it), fSmall, new Rectangle(r.X, plot.Y - S(1), gw, fSmall.Height), DimColor, TextFormatFlags.Right);
+            DrawLine(g, Short(lo, it), fSmall, new Rectangle(r.X, plot.Bottom - fSmall.Height + S(1), gw, fSmall.Height), DimColor, TextFormatFlags.Right);
+            float zy = py(0);
+            if (lo < 0)
+            {
+                using (Pen z = new Pen(DimColor)) { z.DashStyle = DashStyle.Dash; g.DrawLine(z, plot.X, zy, plot.Right, zy); }
+                if (zy - plot.Y > fSmall.Height && plot.Bottom - zy > fSmall.Height)
+                    DrawLine(g, "0", fSmall, new Rectangle(r.X, (int)zy - fSmall.Height / 2, gw, fSmall.Height), DimColor, TextFormatFlags.Right);
+            }
+
+            Region oldClip = g.Clip;
+            g.SetClip(plot, CombineMode.Intersect);
+            if (it.Stacked)
+            {
+                for (int k = 0; k < tops.Length; k++)
+                {
+                    PointF[] poly = new PointF[2 * n];
+                    for (int i = 0; i < n; i++)
+                    {
+                        poly[i] = new PointF(px(it.X[i]), py(tops[k][i]));
+                        poly[2 * n - 1 - i] = new PointF(px(it.X[i]), py(k > 0 ? tops[k - 1][i] : 0));
+                    }
+                    using (SolidBrush b = new SolidBrush(Color.FromArgb(225, SeriesColor(it, k)))) g.FillPolygon(b, poly);
+                }
+                PointF[] top = new PointF[n];
+                for (int i = 0; i < n; i++) top[i] = new PointF(px(it.X[i]), py(tops[tops.Length - 1][i]));
+                using (Pen pen = new Pen(Fore, Math.Max(1f, S(1.5)))) { pen.LineJoin = LineJoin.Round; g.DrawLines(pen, top); }
+            }
+            else
+            {
+                for (int k = 0; k < tops.Length; k++)
+                {
+                    PointF[] pts = new PointF[n];
+                    for (int i = 0; i < n; i++) pts[i] = new PointF(px(it.X[i]), py(tops[k][i]));
+                    float baseY = it.ZeroSplit ? zy : py(lo);
+                    PointF[] area = new PointF[n + 2];
+                    Array.Copy(pts, area, n);
+                    area[n] = new PointF(pts[n - 1].X, baseY); area[n + 1] = new PointF(pts[0].X, baseY);
+                    if (it.ZeroSplit)
+                    {
+                        RectangleF above = new RectangleF(plot.X, plot.Y, plot.Width, Math.Max(0, zy - plot.Y));
+                        RectangleF below = new RectangleF(plot.X, zy, plot.Width, Math.Max(0, plot.Bottom - zy));
+                        foreach (bool up in new bool[] { true, false })
+                        {
+                            g.SetClip(plot); g.SetClip(up ? above : below, CombineMode.Intersect);
+                            Color c = up ? Good : Bad;
+                            using (SolidBrush b = new SolidBrush(Color.FromArgb(60, c))) g.FillPolygon(b, area);
+                            using (Pen pen = new Pen(c, Math.Max(1f, S(2)))) { pen.LineJoin = LineJoin.Round; g.DrawLines(pen, pts); }
+                        }
+                        g.SetClip(plot);
+                    }
+                    else
+                    {
+                        Color c = SeriesColor(it, k);
+                        if (tops.Length == 1) using (SolidBrush b = new SolidBrush(Color.FromArgb(55, c))) g.FillPolygon(b, area);
+                        using (Pen pen = new Pen(c, Math.Max(1f, S(2)))) { pen.LineJoin = LineJoin.Round; g.DrawLines(pen, pts); }
+                    }
+                }
+            }
+            if (hoverItem == it && hoverIndex >= 0 && hoverIndex < n)
+            {
+                float hx = px(it.X[hoverIndex]);
+                using (Pen hp = new Pen(Fore)) g.DrawLine(hp, hx, plot.Y, hx, plot.Bottom);
+                for (int k = 0; k < tops.Length; k++)
+                {
+                    float hy = py(tops[k][hoverIndex]), d = S(5);
+                    Color c = it.ZeroSplit ? (tops[k][hoverIndex] < 0 ? Bad : Good) : (it.Stacked ? Fore : SeriesColor(it, k));
+                    using (SolidBrush b = new SolidBrush(c)) g.FillEllipse(b, hx - d / 2, hy - d / 2, d, d);
+                }
+            }
+            g.Clip = oldClip;
+            DrawLine(g, TimeText(it, it.X[0]), fSmall, new Rectangle(plot.X, ly, plot.Width / 2, fSmall.Height), DimColor, TextFormatFlags.Left);
+            DrawLine(g, TimeText(it, it.X[n - 1]), fSmall, new Rectangle(plot.X + plot.Width / 2, ly, plot.Width - plot.Width / 2, fSmall.Height), DimColor, TextFormatFlags.Right);
+            if (it.Legend != null && it.Legend.Length > 0) Legend(g, it, r.X, ly + fSmall.Height + S(3), r.Width);
         }
 
         private void PaintRow(Graphics g, Item it, Rectangle r)
         {
+            if (it.Highlight)
+            {
+                using (GraphicsPath p = Round(new Rectangle(r.X - S(6), r.Y, r.Width + S(12), r.Height), S(6)))
+                using (SolidBrush b = new SolidBrush(BadgeOn)) g.FillPath(b, p);
+            }
             int y = r.Y + S(4), lh = fBold.Height;
             int indent = string.IsNullOrEmpty(it.Icon) ? 0 : S(20);
             if (indent > 0) DrawLine(g, it.Icon, fBold, new Rectangle(r.X, y, indent, lh), Pick(it.IconColor, it.Done ? Good : DimColor), TextFormatFlags.Left);
@@ -455,8 +838,24 @@ namespace AnnoLogbook
         {
             base.OnMouseMove(e);
             string t = null;
-            foreach (Item it in items) if (!string.IsNullOrEmpty(it.Tip) && it.Bounds.Contains(e.Location)) { t = it.Tip; break; }
+            Item hc = null; int hi = -1;
+            foreach (Item it in items)
+            {
+                if (!it.Bounds.Contains(e.Location)) continue;
+                if (it.Kind == Kind.Chart && it.X != null && it.X.Length >= 2 && it.Series != null && it.Series.Length > 0 && it.Parts != null && it.Parts.Length > 0 && it.Parts[0].Contains(e.Location))
+                {
+                    hc = it; hi = NearestIndex(it, it.Parts[0], e.X); t = ChartTip(it, hi); break;
+                }
+                if (!string.IsNullOrEmpty(it.Tip)) { t = it.Tip; break; }
+            }
+            if (hc != hoverItem || hi != hoverIndex)
+            {
+                if (hoverItem != null) Invalidate(hoverItem.Bounds);
+                hoverItem = hc; hoverIndex = hi;
+                if (hc != null) Invalidate(hc.Bounds);
+            }
             if (t != tipText) { tipText = t; tip.SetToolTip(this, t ?? ""); }
+            Cursor = KeyAt(e.Location) != null ? Cursors.Hand : Cursors.Default;
         }
 
         protected override void OnMouseLeave(EventArgs e)
@@ -464,6 +863,7 @@ namespace AnnoLogbook
             base.OnMouseLeave(e);
             tipText = null;
             tip.SetToolTip(this, "");
+            if (hoverItem != null) { Invalidate(hoverItem.Bounds); hoverItem = null; hoverIndex = -1; }
         }
 
         protected override void OnMouseWheel(MouseEventArgs e)
@@ -690,6 +1090,14 @@ function Format-GameTime([long]$clock) {
     $min = [long][Math]::Floor([Math]::Max(0, $clock) * 60.0 / $ClockPerHour)
     '{0} h {1:00} min' -f [long][Math]::Floor($min / 60), ($min % 60)
 }
+# Mission time limit (0x5EC1A8, set by the patcher's TIMERS hook from the scenario) in the units of the game's own clock,
+# which it draws while a limit is set: clock / 600 minutes, (clock % 600) / 10 seconds ("%02d:%02d"). The mission texts
+# use the same units ("3 Stunden ... bei 180:00").
+function Format-TimeLimit([long]$limit, [long]$clock) {
+    $leftMin = [long][Math]::Floor([Math]::Max(0, $limit - $clock) / 600.0)
+    $now = '{0:00}:{1:00}' -f [long][Math]::Floor([Math]::Max(0, $clock) / 600.0), [long][Math]::Floor(([Math]::Max(0, $clock) % 600) / 10.0)
+    (Txt 'Time limit: {0} h {1:00} min left (clock {2} of {3}:00)' 'Zeitlimit: noch {0} h {1:00} min (Uhr {2} von {3}:00)') -f [long][Math]::Floor($leftMin / 60), ($leftMin % 60), $now, [long][Math]::Floor($limit / 600.0)
+}
 function Get-SpeedText([int]$speed) {
     $name = switch ($speed) {
         1 { Txt 'normal' 'normal' }; 2 { Txt 'fast' 'schnell' }; 4 { Txt 'very fast' 'sehr schnell' }
@@ -887,36 +1295,75 @@ function Get-PlayerStats($snap, [int]$slot) {
 # ---------------------------------------------------------------------------------------------
 # Achievements (ids are stored in logbook.json and must stay stable).
 # ---------------------------------------------------------------------------------------------
+# Kinds: in-game conditions (two consecutive readings), set at the end of a game (mission_won, race_won),
+# and long-term ones computed from logbook.json (missions and game summaries, also for earlier games).
 $Achievements = @(
+    # Rise of the population
     @{ Id = 'first_town'; De = 'Land in Sicht'; En = 'Land Ho!'; DescDe = 'Gründe deine erste Stadt.'; DescEn = 'Found your first town.' }
     @{ Id = 'settlers'; De = 'Erste Siedler'; En = 'First Settlers'; DescDe = 'Die ersten Siedler ziehen ein.'; DescEn = 'Your first settlers move in.' }
     @{ Id = 'citizens'; De = 'Bürgerstolz'; En = 'Civic Pride'; DescDe = 'Die ersten Bürger in deinem Reich.'; DescEn = 'The first citizens in your realm.' }
     @{ Id = 'merchants'; De = 'Pfeffersäcke'; En = 'Merchant Princes'; DescDe = 'Die ersten Kaufleute.'; DescEn = 'Your first merchants.' }
     @{ Id = 'aristocrats'; De = 'Blaues Blut'; En = 'Blue Blood'; DescDe = 'Die ersten Aristokraten.'; DescEn = 'Your first aristocrats.' }
+    @{ Id = 'full_society'; De = 'Ständegesellschaft'; En = 'All Walks of Life'; DescDe = 'Je 100 Einwohner in allen fünf Bevölkerungsstufen.'; DescEn = '100 residents in each of the five population stages.' }
     @{ Id = 'res_1000'; De = 'Tausend Seelen'; En = 'A Thousand Souls'; DescDe = '1.000 Einwohner insgesamt.'; DescEn = '1,000 residents in total.' }
     @{ Id = 'res_5000'; De = 'Blühendes Inselreich'; En = 'Thriving Realm'; DescDe = '5.000 Einwohner insgesamt.'; DescEn = '5,000 residents in total.' }
     @{ Id = 'res_10000'; De = 'Zehntausend Untertanen'; En = 'Ten Thousand Subjects'; DescDe = '10.000 Einwohner insgesamt.'; DescEn = '10,000 residents in total.' }
+    @{ Id = 'res_25000'; De = 'Volk der Inseln'; En = 'A Nation of Islanders'; DescDe = '25.000 Einwohner insgesamt.'; DescEn = '25,000 residents in total.' }
     @{ Id = 'city_2500'; De = 'Metropole'; En = 'Metropolis'; DescDe = 'Eine Stadt mit 2.500 Einwohnern.'; DescEn = 'One town with 2,500 residents.' }
+    @{ Id = 'city_5000'; De = 'Weltstadt'; En = 'Cosmopolis'; DescDe = 'Eine Stadt mit 5.000 Einwohnern.'; DescEn = 'One town with 5,000 residents.' }
     @{ Id = 'aristo_1000'; De = 'Hofstaat'; En = 'Royal Court'; DescDe = '1.000 Aristokraten.'; DescEn = '1,000 aristocrats.' }
+    @{ Id = 'noble_town'; De = 'Adelssitz'; En = 'Seat of Nobility'; DescDe = 'Eine Stadt mit 500 Aristokraten.'; DescEn = 'One town with 500 aristocrats.' }
+    @{ Id = 'fast_1000'; De = 'Goldgräberstimmung'; En = 'Boomtown'; DescDe = '1.000 Einwohner in den ersten 2 Spielstunden.'; DescEn = '1,000 residents within the first 2 game hours.' }
+    @{ Id = 'top_dog'; De = 'Platzhirsch'; En = 'Top Dog'; DescDe = 'Mehr Einwohner als alle Gegner zusammen (mindestens 2.000).'; DescEn = 'More residents than all rivals together (at least 2,000).' }
+    # Towns, money, ships
     @{ Id = 'towns_3'; De = 'Inselhüpfer'; En = 'Island Hopper'; DescDe = '3 eigene Städte.'; DescEn = '3 towns of your own.' }
     @{ Id = 'towns_5'; De = 'Kolonialmacht'; En = 'Colonial Power'; DescDe = '5 eigene Städte.'; DescEn = '5 towns of your own.' }
     @{ Id = 'towns_10'; De = 'Herr der Inseln'; En = 'Lord of the Isles'; DescDe = '10 eigene Städte.'; DescEn = '10 towns of your own.' }
     @{ Id = 'gold_250k'; De = 'Volle Truhen'; En = 'Full Coffers'; DescDe = '250.000 Gold in der Kasse.'; DescEn = '250,000 gold in the treasury.' }
     @{ Id = 'gold_1m'; De = 'Millionär'; En = 'Millionaire'; DescDe = '1.000.000 Gold in der Kasse.'; DescEn = '1,000,000 gold in the treasury.' }
+    @{ Id = 'comeback'; De = 'Aus den roten Zahlen'; En = 'Out of the Red'; DescDe = 'Die Kasse war im Minus – und hat wieder 25.000 Gold.'; DescEn = 'Your treasury was in the red – and is back at 25,000 gold.' }
+    @{ Id = 'balance_500'; De = 'Schwarze Zahlen'; En = 'In the Black'; DescDe = 'Eine Bilanz von mindestens +500.'; DescEn = 'A balance of at least +500.' }
+    @{ Id = 'balance_2000'; De = 'Goldene Bilanz'; En = 'Golden Ledger'; DescDe = 'Eine Bilanz von mindestens +2.000.'; DescEn = 'A balance of at least +2,000.' }
+    @{ Id = 'trade_500'; De = 'Hanseat'; En = 'Master Trader'; DescDe = 'Eine Handelsbilanz von mindestens +500.'; DescEn = 'A trade balance of at least +500.' }
     @{ Id = 'ships_5'; De = 'Kleine Flotte'; En = 'Small Fleet'; DescDe = '5 eigene Schiffe.'; DescEn = '5 ships of your own.' }
     @{ Id = 'ships_10'; De = 'Armada'; En = 'Armada'; DescDe = '10 eigene Schiffe.'; DescEn = '10 ships of your own.' }
-    @{ Id = 'balance_500'; De = 'Schwarze Zahlen'; En = 'In the Black'; DescDe = 'Eine Bilanz von mindestens +500.'; DescEn = 'A balance of at least +500.' }
+    @{ Id = 'ships_20'; De = 'Flottenadmiral'; En = 'Fleet Admiral'; DescDe = '20 eigene Schiffe.'; DescEn = '20 ships of your own.' }
+    # Time and pace
     @{ Id = 'hours_10'; De = 'Sitzleder'; En = 'Staying Power'; DescDe = '10 Spielstunden in einer Partie.'; DescEn = '10 game hours in one game.' }
     @{ Id = 'hours_50'; De = 'Ewiger Regent'; En = 'Eternal Ruler'; DescDe = '50 Spielstunden in einer Partie.'; DescEn = '50 game hours in one game.' }
+    @{ Id = 'hours_100'; De = 'Zeitlos'; En = 'Timeless'; DescDe = '100 Spielstunden in einer Partie.'; DescEn = '100 game hours in one game.' }
     @{ Id = 'turbo'; De = 'Volle Fahrt voraus'; En = 'Full Speed Ahead'; DescDe = 'Spiele im Turbo (8-fach oder schneller).'; DescEn = 'Play in turbo (8x or faster).' }
+    @{ Id = 'night_owl'; De = 'Nachteule'; En = 'Night Owl'; DescDe = 'Spiele zwischen Mitternacht und vier Uhr früh.'; DescEn = 'Play between midnight and four in the morning.' }
+    # Rivals
     @{ Id = 'rival_defeated'; De = 'Bezwinger'; En = 'Conqueror'; DescDe = 'Besiege einen Gegner.'; DescEn = 'Defeat a rival.' }
+    @{ Id = 'rivals_3'; De = 'Dreifacher Triumph'; En = 'Triple Triumph'; DescDe = 'Besiege drei Gegner in einer Partie.'; DescEn = 'Defeat three rivals in one game.' }
+    # Missions, campaigns, adventures
     @{ Id = 'mission_won'; De = 'Auftrag erfüllt'; En = 'Mission Accomplished'; DescDe = 'Gewinne ein Szenario.'; DescEn = 'Win a scenario.' }
     @{ Id = 'race_won'; De = 'Erster im Ziel'; En = 'First Past the Post'; DescDe = 'Gewinne einen Wettlauf gegen die Computergegner.'; DescEn = 'Win a race against the computer rivals.' }
+    @{ Id = 'fast_win'; De = 'Blitzsieg'; En = 'Lightning Victory'; DescDe = 'Gewinne ein Szenario in weniger als 3 Spielstunden.'; DescEn = 'Win a scenario in less than 3 game hours.' }
+    @{ Id = 'chapter_won'; De = 'Kapitel für Kapitel'; En = 'Chapter by Chapter'; DescDe = 'Gewinne ein Kampagnenkapitel.'; DescEn = 'Win a campaign chapter.' }
+    @{ Id = 'campaign_done'; De = 'Saga vollendet'; En = 'Saga Complete'; DescDe = 'Gewinne alle Kapitel einer Kampagne.'; DescEn = 'Win every chapter of a campaign.' }
+    @{ Id = 'campaigns_3'; De = 'Chronist der Inseln'; En = 'Chronicler of the Isles'; DescDe = 'Schliesse drei Kampagnen ab.'; DescEn = 'Complete three campaigns.' }
+    @{ Id = 'challenge_won'; De = 'Herausforderung angenommen'; En = 'Challenge Accepted'; DescDe = 'Gewinne eine Herausforderung.'; DescEn = 'Win a challenge.' }
+    @{ Id = 'adventure'; De = 'Abenteuerlust'; En = 'Call of Adventure'; DescDe = 'Spiele ein Zufallsabenteuer.'; DescEn = 'Play a random adventure.' }
+    @{ Id = 'adventure_won'; De = 'Glücksritter'; En = 'Soldier of Fortune'; DescDe = 'Gewinne ein Zufallsabenteuer.'; DescEn = 'Win a random adventure.' }
+    @{ Id = 'daily'; De = 'Tagwerk'; En = 'Daily Duty'; DescDe = 'Spiele ein Tagesabenteuer.'; DescEn = 'Play a daily adventure.' }
+    @{ Id = 'daily_won'; De = 'Held des Tages'; En = 'Hero of the Day'; DescDe = 'Gewinne ein Tagesabenteuer.'; DescEn = 'Win a daily adventure.' }
+    @{ Id = 'custom'; De = 'Eigene Welt'; En = 'A World of Your Own'; DescDe = 'Spiele ein selbst entworfenes Szenario.'; DescEn = 'Play a scenario you designed yourself.' }
+    @{ Id = 'hattrick'; De = 'Hattrick'; En = 'Hat Trick'; DescDe = 'Gewinne drei Szenarien hintereinander.'; DescEn = 'Win three scenarios in a row.' }
+    @{ Id = 'revenge'; De = 'Revanche'; En = 'Sweet Revenge'; DescDe = 'Gewinne ein Szenario, das du vorher verloren hast.'; DescEn = 'Win a scenario you lost before.' }
+    @{ Id = 'games_10'; De = 'Stammgast'; En = 'Regular'; DescDe = 'Spiele zehn Partien (mit dem Logbuch).'; DescEn = 'Play ten games (with the logbook).' }
+    # Events (anno-patcher.ps1 -Events)
+    @{ Id = 'event_first'; De = 'Unverhofft kommt oft'; En = 'Expect the Unexpected'; DescDe = 'Erlebe dein erstes Ereignis.'; DescEn = 'Experience your first event.' }
+    @{ Id = 'events_5'; De = 'Bewegte Zeiten'; En = 'Eventful Times'; DescDe = 'Fünf Ereignisse in einer Partie.'; DescEn = 'Five events in one game.' }
+    @{ Id = 'event_survived'; De = 'Sturmerprobt'; En = 'Weathered the Storm'; DescDe = 'Überstehe ein schlechtes Ereignis bis zu seinem Ende.'; DescEn = 'Weather a bad event until it is over.' }
 )
 function Get-AchievementName($a) { if ($script:UiGerman) { $a.De } else { $a.En } }
 
-# Achievements whose condition holds now (mission_won and race_won are set at the end of a game).
-function Get-AchievementConditions($snap, $me, $money) {
+# Achievements whose condition holds now (mission_won and race_won are set at the end of a game, the
+# long-term ones by Get-LongTermConditions). $ctx (optional): the game session, its events, the time
+# of the reading and the kind of game.
+function Get-AchievementConditions($snap, $me, $money, $ctx = $null) {
     $c = @{}
     $p = $snap.Players[$me.Slot]
     if ($me.TownCount -ge 1) { $c.first_town = 1 }
@@ -941,6 +1388,122 @@ function Get-AchievementConditions($snap, $me, $money) {
     if ($snap.Clock -ge 50 * $ClockPerHour) { $c.hours_50 = 1 }
     if ($snap.Speed -ge 8 -and $snap.Speed -le 64) { $c.turbo = 1 }
     if ($p.Defeated -ge 1) { $c.rival_defeated = 1 }
+    # Logbook 2.0
+    if ($me.Stages[0] -ge 100 -and $me.Stages[1] -ge 100 -and $me.Stages[2] -ge 100 -and $me.Stages[3] -ge 100 -and $me.Stages[4] -ge 100) { $c.full_society = 1 }
+    if ($me.Total -ge 25000) { $c.res_25000 = 1 }
+    if ($me.Best -and $me.Best.Total -ge 5000) { $c.city_5000 = 1 }
+    $rivalTotal = 0L; $rivalTowns = 0
+    foreach ($s in $snap.Settlements) {
+        if ($s.Owner -eq $p.No) { if ($s.Stages[4] -ge 500) { $c.noble_town = 1 }; continue }
+        $k = Get-PlayerKind $snap $s.Owner
+        if ($s.Owner -le 3 -and ($k -eq 0xC -or $k -eq 0)) { $rivalTotal += $s.Total; $rivalTowns++ }   # computer rivals (not natives)
+    }
+    if ($me.Total -ge 1000 -and $snap.Clock -le 2 * $ClockPerHour) { $c.fast_1000 = 1 }
+    if ($rivalTowns -gt 0 -and $me.Total -ge 2000 -and $me.Total -gt $rivalTotal) { $c.top_dog = 1 }
+    if ($me.TownCount -ge 1 -and $money.Balance -ge 2000) { $c.balance_2000 = 1 }
+    if ($me.TownCount -ge 1 -and $money.Trade -ge 500) { $c.trade_500 = 1 }
+    if ($me.Ships -ge 20) { $c.ships_20 = 1 }
+    if ($snap.Clock -ge 100 * $ClockPerHour) { $c.hours_100 = 1 }
+    if ($p.Defeated -ge 3) { $c.rivals_3 = 1 }
+    if ($ctx) {
+        if ($ctx.Session -and $ctx.Session.NegGold -and $p.Gold -ge 25000) { $c.comeback = 1 }
+        if ($ctx.Now -and ([datetime]$ctx.Now).Hour -lt 4) { $c.night_owl = 1 }
+        switch ([string]$ctx.Kind) { 'adventure' { $c.adventure = 1 }; 'daily' { $c.daily = 1 }; 'custom' { $c.custom = 1 } }
+        $evs = @($ctx.Events)
+        if ($evs.Count -ge 1) { $c.event_first = 1 }
+        if ($evs.Count -ge 5) { $c.events_5 = 1 }
+        foreach ($e in $evs) { if ($e.EndsClock -gt 0 -and -not $e.EndedEarly -and $snap.Clock -ge $e.EndsClock -and (Get-EffectSign $e.Effect) -lt 0) { $c.event_survived = 1; break } }
+    }
+    $c
+}
+
+# ---------------------------------------------------------------------------------------------
+# Kind of game from the scenario name (file names: see the shared conventions of the extensions).
+# Only own scenarios (flag "CUSTOM" of the parameter block) are matched by name; without a mission it
+# is an endless game (the name in memory may still be the one of an earlier scenario).
+# ---------------------------------------------------------------------------------------------
+function Get-GameKind([string]$name, [bool]$hasMission, [bool]$ownScenario = $true) {
+    if ($ownScenario -and $name) {
+        if ($name -match '^(Tagesabenteuer|Daily Adventure) ') { return @{ Kind = 'daily' } }
+        if ($name -match '^(Abenteuer|Adventure) \d+') { return @{ Kind = 'adventure' } }
+        if ($name -match '^(Eigenes|Custom) - ') { return @{ Kind = 'custom' } }
+        if ($name -match '^(Herausforderung|Challenge) - ') { return @{ Kind = 'challenge' } }
+        if ($hasMission -and $name -match '^(.+?) (\d+) - .') { return @{ Kind = 'campaign'; Campaign = $Matches[1]; Chapter = [int]$Matches[2] } }
+    }
+    if ($hasMission) { return @{ Kind = 'scenario' } }
+    @{ Kind = 'endless' }
+}
+
+function Get-GameKindName([string]$kind) {
+    switch ($kind) {
+        'endless' { Txt 'Endless game' 'Endlosspiel' }; 'campaign' { Txt 'Campaign' 'Kampagne' }; 'challenge' { Txt 'Challenge' 'Herausforderung' }
+        'adventure' { Txt 'Random adventure' 'Zufallsabenteuer' }; 'daily' { Txt 'Daily adventure' 'Tagesabenteuer' }
+        'custom' { Txt 'Own scenario' 'Eigenes Szenario' }; default { Txt 'Scenario' 'Szenario' }
+    }
+}
+
+# Chapters of a campaign: the highest chapter number among the scenario files in "Own Scenarios",
+# at least the number of chapters known for the campaigns of the extensions.
+$KnownCampaigns = @{ 'Smaragdinseln' = 6; 'Emerald Isles' = 6; 'Wettlauf' = 4; 'Race' = 4; 'Sturmsee' = 6; 'Storm Sea' = 6 }
+function Get-OwnScenariosFolder { Join-Path $script:DocumentsFolder 'Anno 1602 History Edition\Own Scenarios' }
+function Get-CampaignChapterCount([string]$campaign) {
+    $n = 0
+    try {
+        $dir = Get-OwnScenariosFolder
+        if ($dir -and (Test-Path -LiteralPath $dir)) {
+            $re = '^' + [regex]::Escape($campaign) + ' (\d+) - '
+            foreach ($f in @(Get-ChildItem -LiteralPath $dir -Filter '*.szs' -File)) { if ($f.BaseName -match $re) { $n = [Math]::Max($n, [int]$Matches[1]) } }
+        }
+    }
+    catch { }
+    if ($KnownCampaigns.ContainsKey($campaign)) { $n = [Math]::Max($n, [int]$KnownCampaigns[$campaign]) }
+    $n
+}
+
+# Campaigns with every chapter won (names, from the missions in logbook.json).
+function Get-FinishedCampaigns($missions) {
+    $won = @{}
+    foreach ($m in @($missions)) {
+        if (-not $m -or $m.result -ne 'won') { continue }
+        $k = Get-GameKind ([string]$m.scenario) $true
+        if ($k.Kind -ne 'campaign') { continue }
+        if (-not $won.ContainsKey($k.Campaign)) { $won[$k.Campaign] = @{} }
+        $won[$k.Campaign][$k.Chapter] = 1
+    }
+    foreach ($c in @($won.Keys | Sort-Object)) {
+        $n = Get-CampaignChapterCount $c
+        if ($n -le 0) { continue }
+        $all = $true
+        for ($i = 1; $i -le $n; $i++) { if (-not $won[$c].ContainsKey($i)) { $all = $false; break } }
+        if ($all) { $c }
+    }
+}
+
+# Long-term achievements from logbook.json ($data: missions and games as read by Read-LogbookData).
+function Get-LongTermConditions($data) {
+    $c = @{}
+    $missions = @($data.missions | Where-Object { $_ })
+    $run = 0; $lost = @{}
+    foreach ($m in $missions) {
+        $scen = [string]$m.scenario
+        if ($m.result -eq 'won') {
+            switch ((Get-GameKind $scen $true).Kind) {
+                'campaign' { $c.chapter_won = 1 }; 'challenge' { $c.challenge_won = 1 }; 'adventure' { $c.adventure_won = 1 }; 'daily' { $c.daily_won = 1 }
+            }
+            $h = 0.0; try { $h = [double]$m.gameHours } catch { }
+            if ($h -gt 0 -and $h -lt 3) { $c.fast_win = 1 }
+            $run++; if ($run -ge 3) { $c.hattrick = 1 }
+            if ($scen -and $lost.ContainsKey($scen)) { $c.revenge = 1 }
+        }
+        else {
+            $run = 0
+            if ($m.result -eq 'lost' -and $scen) { $lost[$scen] = 1 }
+        }
+    }
+    $done = @(Get-FinishedCampaigns $missions)
+    if ($done.Count -ge 1) { $c.campaign_done = 1 }
+    if ($done.Count -ge 3) { $c.campaigns_3 = 1 }
+    if (@($data.games | Where-Object { $_ }).Count -ge 10) { $c.games_10 = 1 }
     $c
 }
 
@@ -949,15 +1512,25 @@ function Get-AchievementConditions($snap, $me, $money) {
 # ---------------------------------------------------------------------------------------------
 function Get-LogbookFile { Join-Path $script:AppDataFolder 'Anno1602-Extensions\logbook.json' }
 
+function ConvertTo-OrderedTable($o) {
+    $h = [ordered]@{}
+    if ($o -is [Collections.IDictionary]) { foreach ($k in $o.Keys) { $h[[string]$k] = $o[$k] } }
+    elseif ($o) { foreach ($pp in $o.PSObject.Properties) { $h[$pp.Name] = $pp.Value } }
+    $h
+}
+
 function Read-LogbookData {
-    $d = @{ achievements = (New-Object Collections.ArrayList); missions = (New-Object Collections.ArrayList); settings = @{} }
+    $d = @{ achievements = (New-Object Collections.ArrayList); missions = (New-Object Collections.ArrayList); games = (New-Object Collections.ArrayList); settings = @{}; extra = [ordered]@{} }
     $file = Get-LogbookFile
     if (-not (Test-Path -LiteralPath $file)) { return $d }
     try {
         $j = [IO.File]::ReadAllText($file, [Text.Encoding]::UTF8) | ConvertFrom-Json
         foreach ($a in @($j.achievements)) { if ($a -and $a.id) { [void]$d.achievements.Add([ordered]@{ id = [string]$a.id; date = [string]$a.date; game = [string]$a.game }) } }
         foreach ($x in @($j.missions)) { if ($x) { $h = [ordered]@{}; foreach ($pp in $x.PSObject.Properties) { $h[$pp.Name] = $pp.Value }; [void]$d.missions.Add($h) } }
+        foreach ($x in @($j.games)) { if ($x) { [void]$d.games.Add((ConvertTo-OrderedTable $x)) } }
         if ($j.settings) { foreach ($pp in $j.settings.PSObject.Properties) { $d.settings[$pp.Name] = $pp.Value } }
+        # Keys of other tools or later versions are kept as they are.
+        foreach ($pp in $j.PSObject.Properties) { if (@('version', 'achievements', 'missions', 'games', 'settings') -notcontains $pp.Name) { $d.extra[$pp.Name] = $pp.Value } }
     }
     catch {
         # A broken file is kept aside (never deleted) and the logbook starts a new one.
@@ -966,26 +1539,33 @@ function Read-LogbookData {
     $d
 }
 
-function Save-LogbookData($d) {
-    $file = Get-LogbookFile
+# Writes a text file (UTF-8 without BOM) through a temp file, so that a reader never sees half a file.
+function Write-TextFileAtomic([string]$file, [string]$text) {
     New-Item -ItemType Directory -Force -Path (Split-Path $file) | Out-Null
-    $settings = [ordered]@{}; foreach ($k in ($d.settings.Keys | Sort-Object)) { $settings[$k] = $d.settings[$k] }
-    $obj = [ordered]@{ version = 1; achievements = @($d.achievements); missions = @($d.missions); settings = $settings }
-    $json = ConvertTo-Json $obj -Depth 5
     $tmp = "$file.tmp"
-    [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($tmp, $text, (New-Object Text.UTF8Encoding($false)))
     if (Test-Path -LiteralPath $file) {
         try { [IO.File]::Replace($tmp, $file, $null) } catch { Copy-Item -LiteralPath $tmp -Destination $file -Force; Remove-Item -LiteralPath $tmp -Force }
     }
     else { Move-Item -LiteralPath $tmp -Destination $file }
 }
 
+function Save-LogbookData($d) {
+    $file = Get-LogbookFile
+    $settings = [ordered]@{}; foreach ($k in ($d.settings.Keys | Sort-Object)) { $settings[$k] = $d.settings[$k] }
+    $obj = [ordered]@{ version = 1; achievements = @($d.achievements); missions = @($d.missions); games = @($d.games | Where-Object { $_ }); settings = $settings }
+    if ($d.extra) { foreach ($k in $d.extra.Keys) { $obj[$k] = $d.extra[$k] } }
+    Write-TextFileAtomic $file (ConvertTo-Json $obj -Depth 8)
+}
+
 # Re-reads the file before every change, so that changes by others (launcher) are kept.
-function Add-LogbookEntries([object[]]$achievements, [object[]]$missions) {
+function Add-LogbookEntries([object[]]$achievements, [object[]]$missions, [object[]]$games = @()) {
     $d = Read-LogbookData
     $have = @{}; foreach ($a in $d.achievements) { $have[$a.id] = 1 }
     foreach ($a in $achievements) { if ($a -and -not $have.ContainsKey($a.id)) { [void]$d.achievements.Add($a); $have[$a.id] = 1 } }
     foreach ($x in $missions) { if ($x) { [void]$d.missions.Add($x) } }
+    foreach ($x in $games) { if ($x) { [void]$d.games.Add($x) } }
+    while ($d.games.Count -gt $GamesKeep) { $d.games.RemoveAt(0) }
     Save-LogbookData $d
     $d
 }
@@ -1002,12 +1582,20 @@ function Save-LogbookSettings($settings) {
 function New-LogbookState {
     $d = Read-LogbookData
     $u = @{}; foreach ($a in $d.achievements) { $u[$a.id] = $a }
+    $collapsed = @{}; foreach ($c in @($d.settings['collapsed'])) { if ($c) { $collapsed[[string]$c] = 1 } }
     @{
         Conn = @{ Status = 'waiting'; Handle = [IntPtr]::Zero; Pid = 0; Source = $null; HashByPid = @{}; StartFails = @{}; Detail = '' }
         Unlocked = $u; Pending = @{}; Fresh = @{}
         Track = @{ SawRunning = $false; Scenario = ''; Title = ''; HasMission = $false; Race = $false }
         LastClock = [long]-1; SameClockTicks = 0
         Settings = $d.settings
+        # Logbook 2.0: game session with its history, game summaries, events, view state.
+        Session = $null; PendingEnd = $null; LastSummary = $null; ShowSummary = $false; SummaryFrom = ''
+        Games = $d.games
+        Events = @{ Pid = 0; List = @(); Seen = @{}; Stamp = ''; First = $true; New = @() }
+        Tab = $(if ($d.settings['tab'] -eq 'history') { 'history' } else { 'game' }); Collapsed = $collapsed
+        SelectedGame = $null; ShowAllGames = $false; HistoryCache = @{}; LastHistory = $null; LastHistoryLoaded = $false
+        NoSave = $false; Errors = (New-Object Collections.ArrayList)
     }
 }
 
@@ -1017,13 +1605,24 @@ function Close-Attachment($lb) {
     $lb.Track.SawRunning = $false; $lb.LastClock = -1; $lb.SameClockTicks = 0
 }
 
+# The game process has ended (or was closed): the running game ends as "left" (summary when it was long
+# enough), then the attachment is closed. Returns the result of Complete-Session or $null.
+function Close-GameProcess($lb, [datetime]$now) {
+    $r = $null
+    if ($lb.Session -and -not $lb.Session.Done) {
+        try { $r = Complete-Session $lb 'quit' $now } catch { [void]$lb.Errors.Add("end: $($_.Exception.Message)") }
+    }
+    Close-Attachment $lb
+    $r
+}
+
 # Finds the game and opens it read-only; detects the end of the process (also the quick restart
 # of Ubisoft Connect, where the first process exits right away).
 function Update-Attachment($lb) {
     $c = $lb.Conn
     if ($c.Handle -ne [IntPtr]::Zero) {
         if ([AnnoLogbook.Native]::IsRunning($c.Handle)) { return }
-        Close-Attachment $lb
+        $lb.PendingEnd = Close-GameProcess $lb (Get-Date)
     }
     $p = $null
     if ($TestProcessId) { $p = Get-Process -Id $TestProcessId -ErrorAction SilentlyContinue }
@@ -1063,12 +1662,403 @@ function Get-MissionTitle($m) {
     if ($line) { $line.Trim() } else { '' }
 }
 
+function Convert-IsoDate($v) {
+    if ($v -is [datetime]) { return $v }
+    try { [datetime]::ParseExact([string]$v, 's', [Globalization.CultureInfo]::InvariantCulture) } catch { [datetime]::MinValue }
+}
+
+# ---------------------------------------------------------------------------------------------
+# Game session and its history. A session is one game as the logbook sees it: it starts with the first
+# reading of a running game and continues while the same game process shows the same scenario and the
+# game clock moves on. Loading an earlier savegame of the same game (clock back, not before the start of
+# the session) rewinds the history; another scenario, a clock before the start or a jump of more than
+# one game hour start a new session (the old one ends as "left"). One history point about every game
+# minute (by the game clock: a paused game adds nothing), at most 720 points per game.
+# History file: %APPDATA%\Anno1602-Extensions\history\<start yyyyMMdd-HHmmss>.json, the newest 30 are kept.
+# ---------------------------------------------------------------------------------------------
+function Get-HistoryFolder { Join-Path $script:AppDataFolder 'Anno1602-Extensions\history' }
+
+# One history point: clock, gold, residents, the five stages, workers, balance, towns, ships ($HistoryFields).
+function New-SampleValues($snap, $st) {
+    $me = $st.Me
+    [long[]]@($snap.Clock, $snap.Players[$st.HumanSlot].Gold, $me.Total, $me.Stages[0], $me.Stages[1], $me.Stages[2], $me.Stages[3], $me.Stages[4], $me.Workers, $st.Money.Balance, $me.TownCount, $me.Ships)
+}
+
+function New-Session($lb, $snap, $st, [datetime]$now) {
+    $hasMission = $null -ne $st.Mission -and $snap.Players[$st.HumanSlot].MissionSlot -le 3
+    @{
+        Id = $now.ToString('yyyyMMdd-HHmmss'); File = ''; Start = $now; Pid = [int]$lb.Conn.Pid
+        Scenario = [string]$snap.ScenarioName; Game = [string]$st.GameName; Kind = (Get-GameKind $snap.ScenarioName $hasMission $snap.ScenarioCustom).Kind; HasMission = $hasMission
+        FirstClock = [long]$snap.Clock; LastClock = [long]$snap.Clock; Interval = $SampleClocks
+        Samples = (New-Object 'System.Collections.Generic.List[long[]]'); Unsaved = 0; Prev = $null; Readings = 0
+        PeakResidents = 0L; PeakGold = [long]::MinValue; PeakTowns = 0L; TopStage = -1; NegGold = $false; Reloads = 0; EventCount = 0; FirstTown = ''
+        Achievements = (New-Object Collections.ArrayList); Done = $false; Result = ''; End = $null
+    }
+}
+
+# Adds a point if a game minute (the current interval) has passed since the last one. Above the cap every
+# second point is dropped (the first and the newest stay) and the interval doubles.
+function Add-SessionSample($s, [long[]]$vals) {
+    $n = $s.Samples.Count
+    if ($n -gt 0 -and $vals[0] - $s.Samples[$n - 1][0] -lt $s.Interval) { return $false }
+    $s.Samples.Add($vals); $s.Unsaved++
+    if ($s.Samples.Count -gt $HistoryMaxSamples) {
+        $keep = New-Object 'System.Collections.Generic.List[long[]]'
+        $count = $s.Samples.Count
+        for ($i = 0; $i -lt $count - 1; $i += 2) { $keep.Add($s.Samples[$i]) }
+        $keep.Add($s.Samples[$count - 1])
+        $s.Samples = $keep; $s.Interval = 2 * $s.Interval
+    }
+    $true
+}
+
+function Save-HistoryFile($lb, $s) {
+    if ($lb.NoSave -or -not $s -or -not $s.File) { return }
+    $state = [ordered]@{
+        firstClock = $s.FirstClock; lastClock = $s.LastClock; interval = $s.Interval; readings = $s.Readings
+        peakResidents = $s.PeakResidents; peakGold = $(if ($s.PeakGold -eq [long]::MinValue) { $null } else { $s.PeakGold }); peakTowns = $s.PeakTowns; topStage = $s.TopStage
+        negGold = [bool]$s.NegGold; reloads = $s.Reloads; events = $s.EventCount; hasMission = [bool]$s.HasMission; firstTown = [string]$s.FirstTown; achievements = @($s.Achievements)
+    }
+    $head = [ordered]@{ version = 1; start = $s.Start.ToString('s'); pid = $s.Pid; scenario = $s.Scenario; game = $s.Game; kind = $s.Kind; state = $state; fields = $HistoryFields; samples = '@@SAMPLES@@'; end = $s.End }
+    $json = ConvertTo-Json $head -Depth 6
+    $sb = New-Object Text.StringBuilder
+    [void]$sb.Append('[')
+    for ($i = 0; $i -lt $s.Samples.Count; $i++) { if ($i) { [void]$sb.Append(',') }; [void]$sb.Append("`n    ").Append([AnnoLogbook.Util]::JoinRow($s.Samples[$i])) }
+    [void]$sb.Append("`n  ]")
+    Write-TextFileAtomic $s.File ($json.Replace('"@@SAMPLES@@"', $sb.ToString()))
+    $s.Unsaved = 0
+}
+
+# Reads a history file back into a session (or $null if it is missing or broken).
+function Read-HistoryFile([string]$path) {
+    try {
+        if (-not (Test-Path -LiteralPath $path)) { return $null }
+        $j = [IO.File]::ReadAllText($path, [Text.Encoding]::UTF8) | ConvertFrom-Json
+        $samples = New-Object 'System.Collections.Generic.List[long[]]'
+        foreach ($row in @($j.samples)) { if ($row) { $samples.Add([long[]]@($row)) } }
+        $t = $j.state
+        $s = @{
+            Id = [IO.Path]::GetFileNameWithoutExtension($path); File = $path; Start = (Convert-IsoDate $j.start); Pid = [int]$j.pid
+            Scenario = [string]$j.scenario; Game = [string]$j.game; Kind = [string]$j.kind; HasMission = [bool]$t.hasMission
+            FirstClock = [long]$t.firstClock; LastClock = [long]$t.lastClock; Interval = [long]$t.interval
+            Samples = $samples; Unsaved = 0; Prev = $null; Readings = [int]$t.readings
+            PeakResidents = [long]$t.peakResidents; PeakGold = $(if ($null -eq $t.peakGold) { [long]::MinValue } else { [long]$t.peakGold }); PeakTowns = [long]$t.peakTowns
+            TopStage = $(if ($null -eq $t.topStage) { -1 } else { [int]$t.topStage }); NegGold = [bool]$t.negGold; Reloads = [int]$t.reloads; EventCount = [int]$t.events; FirstTown = [string]$t.firstTown
+            Achievements = (New-Object Collections.ArrayList); Done = $false; Result = ''; End = $null
+        }
+        foreach ($a in @($t.achievements)) { if ($a) { [void]$s.Achievements.Add([string]$a) } }
+        if ($j.end) { $s.End = ConvertTo-OrderedTable $j.end; $s.Done = $true; $s.Result = [string]$j.end.result }
+        if ($s.Interval -le 0) { $s.Interval = $SampleClocks }
+        $s
+    }
+    catch { $null }
+}
+
+# Keeps the newest $keep history files.
+function Limit-HistoryFiles([string]$dir, [int]$keep) {
+    $files = @(Get-ChildItem -LiteralPath $dir -Filter '*.json' -File -ErrorAction SilentlyContinue | Sort-Object Name -Descending)
+    foreach ($f in @($files | Select-Object -Skip ([Math]::Max(0, $keep)))) { try { Remove-Item -LiteralPath $f.FullName -Force } catch { } }
+}
+
+# The logbook was restarted while the game kept running: the newest history file of this game process
+# and scenario (not finished, clock not before its end, at most 2 game hours later) is continued.
+function Find-ResumableHistory($lb, $s) {
+    if ($lb.NoSave) { return $null }
+    $dir = Get-HistoryFolder
+    if (-not (Test-Path -LiteralPath $dir)) { return $null }
+    $f = Get-ChildItem -LiteralPath $dir -Filter '*.json' -File | Sort-Object Name -Descending | Select-Object -First 1
+    if (-not $f) { return $null }
+    $h = Read-HistoryFile $f.FullName
+    if (-not $h -or $h.Done -or $h.Pid -ne $s.Pid -or $h.Scenario -ne $s.Scenario) { return $null }
+    if ($s.FirstClock -lt $h.LastClock -or $s.FirstClock -gt $h.LastClock + 2 * $ClockPerHour) { return $null }
+    $h.Game = $s.Game; $h.HasMission = $s.HasMission; $h.Kind = $s.Kind
+    $h
+}
+
+function Start-Session($lb, $snap, $st, [datetime]$now) {
+    $s = New-Session $lb $snap $st $now
+    $resumed = Find-ResumableHistory $lb $s
+    if ($resumed) { $s = $resumed }
+    elseif (-not $lb.NoSave) {
+        $dir = Get-HistoryFolder
+        New-Item -ItemType Directory -Force -Path $dir | Out-Null
+        $name = $s.Id; $n = 1
+        while (Test-Path -LiteralPath (Join-Path $dir "$name.json")) { $n++; $name = '{0}-{1}' -f $s.Id, $n }
+        $s.Id = $name; $s.File = Join-Path $dir "$name.json"
+        Limit-HistoryFiles $dir ($HistoryKeepFiles - 1)
+    }
+    $lb.Session = $s
+    $s
+}
+
+# A savegame of the same game was loaded: the points after its clock are dropped.
+function Undo-SessionSamples($s, [long]$clock) {
+    while ($s.Samples.Count -gt 0 -and $s.Samples[$s.Samples.Count - 1][0] -gt $clock) { $s.Samples.RemoveAt($s.Samples.Count - 1) }
+    $s.LastClock = $clock; $s.Prev = $null; $s.Reloads++; $s.Unsaved++
+}
+
+# "<island>:<name>" of the human's first own settlement (table order), '' without a town.
+function Get-FirstTownKey($snap, $st) {
+    $no = $snap.Players[$st.HumanSlot].No
+    foreach ($t in $snap.Settlements) { if ($t.Owner -eq $no) { return '{0}:{1}' -f $t.Island, $t.Name } }
+    ''
+}
+
+# After a jump of the game clock: is this still the same game (a savegame of it was loaded)?
+# Not when the clock is back near zero (a new game), when the first own town is another one, or when
+# the human had towns at that time and has none now.
+function Test-SameGame($s, $snap, $st) {
+    if ($snap.Clock -lt 2 * $SampleClocks -and ($s.LastClock - $snap.Clock) -gt 10 * $SampleClocks) { return $false }
+    $key = Get-FirstTownKey $snap $st
+    if ($s.FirstTown -and $key -and $key -ne $s.FirstTown) { return $false }
+    $before = $null
+    foreach ($row in $s.Samples) { if ($row[0] -le $snap.Clock) { $before = $row } else { break } }
+    if ($before -and $before[10] -gt 0 -and $st.Me.TownCount -eq 0) { return $false }
+    $true
+}
+
+# Called for every reading of a running game: continues, rewinds or replaces the session.
+# Returns the result of Complete-Session when an earlier game ended because of this, otherwise $null.
+function Sync-Session($lb, $snap, $st, [datetime]$now) {
+    $s = $lb.Session
+    $ended = $null
+    if ($s -and -not $s.Done) {
+        if ($s.Pid -eq [int]$lb.Conn.Pid -and $s.Scenario -eq [string]$snap.ScenarioName) {
+            $forward = $snap.Clock -ge $s.LastClock
+            if ($forward -and $snap.Clock -le $s.LastClock + 2 * $SampleClocks) { return $null }   # normal progress
+            if ($forward -and $snap.Clock -le $s.LastClock + $ClockPerHour -and (Test-SameGame $s $snap $st)) { return $null }
+            if (-not $forward -and $snap.Clock -ge $s.FirstClock -and (Test-SameGame $s $snap $st)) { Undo-SessionSamples $s $snap.Clock; return $null }
+        }
+        $ended = Complete-Session $lb 'quit' $now
+    }
+    [void](Start-Session $lb $snap $st $now)
+    $ended
+}
+
+# Peaks use the smaller value of two consecutive readings (a single half-loaded reading cannot set a peak).
+function Update-SessionReading($lb, $snap, $st) {
+    $s = $lb.Session
+    if (-not $s -or $s.Done) { return }
+    $vals = New-SampleValues $snap $st
+    $s.Readings++
+    $p = $s.Prev
+    if ($p) {
+        $v = [Math]::Min($p[2], $vals[2]); if ($v -gt $s.PeakResidents) { $s.PeakResidents = $v }
+        $v = [Math]::Min($p[1], $vals[1]); if ($v -gt $s.PeakGold) { $s.PeakGold = $v }
+        $v = [Math]::Min($p[10], $vals[10]); if ($v -gt $s.PeakTowns) { $s.PeakTowns = $v }
+        for ($k = 4; $k -gt $s.TopStage; $k--) { if ([Math]::Min($p[3 + $k], $vals[3 + $k]) -gt 0) { $s.TopStage = $k; break } }
+        if ($p[1] -lt 0 -and $vals[1] -lt 0) { $s.NegGold = $true }
+    }
+    $s.Prev = $vals
+    $s.LastClock = [long]$snap.Clock
+    if (-not $s.FirstTown) { $s.FirstTown = Get-FirstTownKey $snap $st }
+    [void](Add-SessionSample $s $vals)
+    if ($s.Unsaved -ge 5) { Save-HistoryFile $lb $s }
+}
+
+# Summary of a session (stored in logbook.json "games" and in the history file as "end").
+function New-SessionSummary($s, [string]$result, [datetime]$now, [long]$endClock) {
+    $last = if ($s.Samples.Count) { $s.Samples[$s.Samples.Count - 1] } else { $null }
+    $few = $s.Readings -lt 2 -and $last
+    $top = $s.TopStage
+    if ($few) { for ($k = 4; $k -ge 0; $k--) { if ($last[3 + $k] -gt 0) { $top = [Math]::Max($top, $k); break } } }
+    [ordered]@{
+        date = $now.ToString('s'); start = $s.Start.ToString('s')
+        scenario = $s.Scenario; game = $s.Game; kind = $s.Kind; mission = [bool]$s.HasMission; result = $result
+        gameHours = [Math]::Round($endClock / $ClockPerHour, 1); playedHours = [Math]::Round([Math]::Max(0, [Math]::Max($s.LastClock, $endClock) - $s.FirstClock) / $ClockPerHour, 1)
+        startClock = $s.FirstClock; endClock = $endClock
+        peakResidents = [long]$(if ($few) { [Math]::Max($s.PeakResidents, $last[2]) } else { $s.PeakResidents })
+        peakGold = [long]$(if ($s.PeakGold -ne [long]::MinValue) { $s.PeakGold } elseif ($last) { $last[1] } else { 0 })
+        towns = [long]$(if ($last) { $last[10] } else { 0 }); peakTowns = [long]$(if ($few) { [Math]::Max($s.PeakTowns, $last[10]) } else { $s.PeakTowns })
+        topStage = $top; events = $s.EventCount; reloads = $s.Reloads
+        achievements = @($s.Achievements)
+        history = $(if ($s.File) { Split-Path -Leaf $s.File } else { '' })
+    }
+}
+
+# Ends the session: summary, long-term achievements, one write of logbook.json (end unlocks, the finished
+# mission and the summary), history file with "end". A game left without a result after less than 5 game
+# minutes is not recorded (its history file is removed). Returns @{ Summary; NewUnlocks; SaveError }.
+function Complete-Session($lb, [string]$result, [datetime]$now, $snap = $null, $endUnlocks = @(), $missionEntry = $null) {
+    $out = @{ Summary = $null; NewUnlocks = @(); SaveError = $null }
+    $endUnlocks = @($endUnlocks | Where-Object { $_ })
+    $s = $lb.Session
+    if (-not $s -or $s.Done) {
+        if (($missionEntry -or $endUnlocks.Count) -and -not $lb.NoSave) {
+            try { [void](Add-LogbookEntries $endUnlocks @($missionEntry)) } catch { $out.SaveError = $_.Exception.Message }
+        }
+        foreach ($a in $endUnlocks) { $lb.Unlocked[$a.id] = $a; $lb.Fresh[$a.id] = 1 }
+        $out.NewUnlocks = $endUnlocks
+        return $out
+    }
+    $s.Done = $true; $s.Result = $result
+    $endClock = if ($snap) { [long]$snap.Clock } else { [long]$s.LastClock }
+    if ($s.Prev -and ($s.Samples.Count -eq 0 -or $s.Prev[0] -gt $s.Samples[$s.Samples.Count - 1][0])) { $s.Samples.Add($s.Prev) }
+    $worthy = $result -ne 'quit' -or ($s.LastClock - $s.FirstClock) -ge $QuitMinClocks
+    if (-not $worthy) {
+        if ($s.File -and -not $lb.NoSave) { try { if (Test-Path -LiteralPath $s.File) { Remove-Item -LiteralPath $s.File -Force } } catch { } }
+        $s.File = ''
+        return $out
+    }
+    foreach ($a in $endUnlocks) { if (-not $s.Achievements.Contains($a.id)) { [void]$s.Achievements.Add($a.id) } }
+    $summary = New-SessionSummary $s $result $now $endClock
+    $all = New-Object Collections.ArrayList
+    foreach ($a in $endUnlocks) { [void]$all.Add($a) }
+    if (-not $lb.NoSave) {
+        try {
+            $d = Read-LogbookData
+            if ($missionEntry) { [void]$d.missions.Add($missionEntry) }
+            $cond = Get-LongTermConditions @{ missions = $d.missions; games = @(@($d.games) + @($summary)) }
+            foreach ($id in @($cond.Keys | Sort-Object)) {
+                if ($lb.Unlocked.ContainsKey($id) -or @($all | Where-Object { $_.id -eq $id }).Count) { continue }
+                [void]$all.Add([ordered]@{ id = $id; date = $now.ToString('s'); game = $s.Game })
+            }
+            foreach ($a in $all) { if (-not $s.Achievements.Contains($a.id)) { [void]$s.Achievements.Add($a.id) } }
+            $summary.achievements = @($s.Achievements)
+            $have = @{}; foreach ($a in $d.achievements) { $have[$a.id] = 1 }
+            foreach ($a in $all) { if (-not $have.ContainsKey($a.id)) { [void]$d.achievements.Add($a); $have[$a.id] = 1 } }
+            [void]$d.games.Add($summary)
+            while ($d.games.Count -gt $GamesKeep) { $d.games.RemoveAt(0) }
+            Save-LogbookData $d
+            $lb.Games = $d.games
+        }
+        catch { $out.SaveError = $_.Exception.Message }
+        $s.End = $summary
+        try { Save-HistoryFile $lb $s } catch { [void]$lb.Errors.Add("history: $($_.Exception.Message)") }
+    }
+    else { $s.End = $summary }
+    foreach ($a in $all) { $lb.Unlocked[$a.id] = $a; $lb.Fresh[$a.id] = 1 }
+    $lb.LastSummary = $summary; $lb.ShowSummary = $true; $lb.SummaryFrom = $s.Id
+    $out.Summary = $summary; $out.NewUnlocks = @($all)
+    $out
+}
+
+# Start of the window: history files of games whose process is gone (the logbook was closed before the
+# game) are finished as "left" now.
+function Close-UnfinishedHistory($lb) {
+    $results = New-Object Collections.ArrayList
+    if ($lb.NoSave) { return , @($results) }
+    $dir = Get-HistoryFolder
+    if (-not (Test-Path -LiteralPath $dir)) { return , @($results) }
+    foreach ($f in @(Get-ChildItem -LiteralPath $dir -Filter '*.json' -File | Sort-Object Name)) {
+        # Quick look first: "end" is written last and is null only while the game is open.
+        try { if ([IO.File]::ReadAllText($f.FullName) -notmatch '"end":\s*null\s*\}\s*$') { continue } } catch { continue }
+        $h = Read-HistoryFile $f.FullName
+        if (-not $h -or $h.Done) { continue }
+        $p = if ($h.Pid) { Get-Process -Id $h.Pid -ErrorAction SilentlyContinue } else { $null }
+        if ($p -and ($p.ProcessName -eq 'Anno1602' -or $h.Pid -eq $TestProcessId)) { continue }   # still running: continued later
+        $keep = $lb.Session
+        $lb.Session = $h
+        try { $r = Complete-Session $lb 'quit' $f.LastWriteTime; if ($r.Summary) { [void]$results.Add($r) } }
+        finally { $lb.Session = $keep }
+    }
+    , @($results)
+}
+
+# Long-term achievements from logbook.json that are not unlocked yet (also for games played before
+# this version). Returns the new unlock entries.
+function Update-LongTermAchievements($lb, [datetime]$now) {
+    if ($lb.NoSave) { return @() }
+    $d = Read-LogbookData
+    $cond = Get-LongTermConditions $d
+    $new = @(foreach ($id in @($cond.Keys | Sort-Object)) { if (-not $lb.Unlocked.ContainsKey($id)) { [ordered]@{ id = $id; date = $now.ToString('s'); game = '' } } })
+    if ($new.Count) {
+        [void](Add-LogbookEntries $new @())
+        foreach ($a in $new) { $lb.Unlocked[$a.id] = $a; $lb.Fresh[$a.id] = 1 }
+    }
+    $new
+}
+
+# ---------------------------------------------------------------------------------------------
+# Events (written by anno-patcher.ps1 -Events into %APPDATA%\Anno1602-Extensions\events.json):
+# { "version": 1, "events": [ { "time", "pid", "clock", "id", "title": {de, en}, "text": {de, en},
+#   "effect": {de, en}, "endsClock", optional "endedEarly": true } ] } - newest last. The logbook shows those of
+# the game process it reads (same pid) and a banner for each new one. endedEarly: a temporary event that the
+# patcher ended before endsClock (game over, another game loaded or started, its window closed).
+# ---------------------------------------------------------------------------------------------
+function Get-EventsFile { Join-Path $script:AppDataFolder 'Anno1602-Extensions\events.json' }
+
+# Sign of an event effect ("+5'000 Gold", "Taxes -25% for 1 game hour"): 1 good, -1 bad, 0 unknown.
+function Get-EffectSign($effect) {
+    $t = '{0} {1}' -f $(if ($effect -is [string]) { $effect } elseif ($effect) { $effect.en } else { '' }), $(if ($effect -and $effect -isnot [string]) { $effect.de } else { '' })
+    if ($t -match '(^|\s)[-−]\s?\d') { return -1 }
+    if ($t -match '(^|\s)\+\s?\d') { return 1 }
+    0
+}
+
+function Get-LangText($o) {
+    if ($null -eq $o) { return '' }
+    if ($o -is [string]) { return $o }
+    $a = if ($script:UiGerman) { $o.de } else { $o.en }
+    if (-not $a) { $a = if ($script:UiGerman) { $o.en } else { $o.de } }
+    [string]$a
+}
+
+# All events of the file, or $null when the file is broken (a missing file is an empty list).
+function Read-EventsFile {
+    $file = Get-EventsFile
+    if (-not (Test-Path -LiteralPath $file)) { return , @() }
+    try { $j = [IO.File]::ReadAllText($file, [Text.Encoding]::UTF8) | ConvertFrom-Json } catch { return $null }
+    if (-not $j) { return $null }
+    $list = New-Object Collections.ArrayList
+    foreach ($e in @($j.events)) {
+        if (-not $e) { continue }
+        try {
+            [void]$list.Add(@{
+                    Time = (Convert-IsoDate $e.time); Pid = [int]$e.pid; Clock = [long]$e.clock; EndsClock = [long]$e.endsClock; Id = [string]$e.id; EndedEarly = [bool]$e.endedEarly
+                    Title = $e.title; Text = $e.text; Effect = $e.effect; Key = ('{0}|{1}|{2}' -f $e.time, $e.id, $e.clock)
+                })
+        }
+        catch { }
+    }
+    , @($list)
+}
+
+# Re-reads events.json when it changed. New events of this process go to Events.New (banner) when they
+# are recent: at most 2 minutes old, at the first reading for a process at most 20 seconds.
+function Update-Events($lb, [datetime]$now) {
+    $ev = $lb.Events
+    $ev.New = @()
+    $procId = [int]$lb.Conn.Pid
+    if ($ev.Pid -ne $procId) { $ev.Pid = $procId; $ev.List = @(); $ev.Seen = @{}; $ev.Stamp = ''; $ev.First = $true }
+    if (-not $procId) { return }
+    $stamp = 'none'
+    try { $fi = Get-Item -LiteralPath (Get-EventsFile) -ErrorAction Stop; $stamp = '{0}|{1}' -f $fi.Length, $fi.LastWriteTimeUtc.Ticks } catch { }
+    if ($stamp -eq $ev.Stamp) { return }
+    $all = Read-EventsFile
+    if ($null -eq $all) { return }   # broken: keep the list, read again next time
+    $mine = @($all | Where-Object { $_.Pid -eq $procId })
+    $new = New-Object Collections.ArrayList
+    foreach ($e in $mine) {
+        if ($ev.Seen.ContainsKey($e.Key)) { continue }
+        $ev.Seen[$e.Key] = 1
+        $limit = if ($ev.First) { 20 } else { 120 }
+        $recent = $e.Time -eq [datetime]::MinValue -or [Math]::Abs(($now - $e.Time).TotalSeconds) -le $limit
+        if ($recent -and -not ($ev.First -and $e.Time -eq [datetime]::MinValue)) { [void]$new.Add($e) }
+    }
+    $ev.List = $mine; $ev.New = @($new); $ev.First = $false; $ev.Stamp = $stamp
+}
+
+# Events that belong to the session: same process, not before the start of the session.
+function Get-SessionEvents($lb, $s) {
+    if (-not $s -or $lb.Events.Pid -ne $s.Pid) { return @() }
+    @($lb.Events.List | Where-Object { if ($_.Time -ne [datetime]::MinValue) { $_.Time -ge $s.Start.AddSeconds(-2) } else { $_.Clock -ge $s.FirstClock } })
+}
+
 # One step with a new snapshot (or $null): determines the phase, records a finished mission once,
 # unlocks achievements (condition must hold in two consecutive readings). $now for tests.
 function Update-GameState($lb, $snap, [datetime]$now) {
-    $st = @{ Phase = $lb.Conn.Status; Snap = $snap; NewUnlocks = @(); Result = '' }
+    $st = @{ Phase = $lb.Conn.Status; Snap = $snap; NewUnlocks = @(); Result = ''; NewEvents = @() }
     $lb.Fresh = @{}
+    # The game process ended since the last reading (Update-Attachment): its game was summarised.
+    $pendingEnd = $lb.PendingEnd; $lb.PendingEnd = $null
+    if ($pendingEnd) {
+        $st.NewUnlocks = @($pendingEnd.NewUnlocks); $st.Summary = $pendingEnd.Summary
+        foreach ($a in $st.NewUnlocks) { $lb.Fresh[$a.id] = 1 }
+        if ($pendingEnd.SaveError) { $st.SaveError = $pendingEnd.SaveError }
+    }
     if ($lb.Conn.Status -ne 'attached') { return $st }
+    try { Update-Events $lb $now; $st.NewEvents = @($lb.Events.New) } catch { Add-LogbookError $lb "events: $($_.Exception.Message)" }
     if ($null -eq $snap) { $st.Phase = 'starting'; return $st }
     $hs = Get-HumanSlot $snap; $hp = $snap.Players[$hs]
     $paused = $false
@@ -1105,7 +2095,23 @@ function Update-GameState($lb, $snap, [datetime]$now) {
         $lb.Track.HasMission = $null -ne $st.Mission -and $hp.MissionSlot -le 3
         $lb.Track.Race = $st.Mission -and $st.Mission.Race
         $lb.Track.Game = $game
-        $cond = Get-AchievementConditions $snap $st.Me $st.Money
+        # History: session, one point per game minute, peaks.
+        $ctx = @{ Session = $null; Events = @(); Now = $now; Kind = '' }
+        try {
+            $ended = Sync-Session $lb $snap $st $now
+            if ($ended) {
+                $st.NewUnlocks = @($st.NewUnlocks) + @($ended.NewUnlocks); $st.Summary = $ended.Summary
+                if ($ended.SaveError) { $st.SaveError = $ended.SaveError }
+            }
+            Update-SessionReading $lb $snap $st
+            $s = $lb.Session
+            $s.Game = $game
+            $ctx.Session = $s; $ctx.Kind = $s.Kind; $ctx.Events = @(Get-SessionEvents $lb $s); $s.EventCount = $ctx.Events.Count
+            # The card of the previous game folds away after 10 game minutes of the next one.
+            if ($lb.ShowSummary -and $lb.SummaryFrom -ne $s.Id -and ($s.LastClock - $s.FirstClock) -ge 10 * $SampleClocks) { $lb.ShowSummary = $false }
+        }
+        catch { Add-LogbookError $lb "history: $($_.Exception.Message)" }
+        $cond = Get-AchievementConditions $snap $st.Me $st.Money $ctx
         foreach ($id in $cond.Keys) {
             if ($lb.Unlocked.ContainsKey($id)) { continue }
             if ($lb.Pending.ContainsKey($id)) { [void]$newOnes.Add([ordered]@{ id = $id; date = $now.ToString('s'); game = $game }) }
@@ -1128,20 +2134,26 @@ function Update-GameState($lb, $snap, [datetime]$now) {
                     }
                 }
             }
-            if ($missionEntry -or $newOnes.Count) {
-                try { [void](Add-LogbookEntries @($newOnes) @($missionEntry)) } catch { $st.SaveError = $_.Exception.Message }
-                foreach ($a in $newOnes) { $lb.Unlocked[$a.id] = $a; $lb.Fresh[$a.id] = 1 }
-                $st.NewUnlocks = @($newOnes)
-            }
+            # One write: end unlocks, the mission, the game summary and the long-term achievements.
+            $done = Complete-Session $lb $st.Result $now $snap @($newOnes) $missionEntry
+            if ($done.SaveError) { $st.SaveError = $done.SaveError }
+            $st.NewUnlocks = @($st.NewUnlocks) + @($done.NewUnlocks)
+            $st.Summary = $done.Summary
             return $st
         }
     }
     if ($newOnes.Count) {
         try { [void](Add-LogbookEntries @($newOnes) @()) } catch { $st.SaveError = $_.Exception.Message }
         foreach ($a in $newOnes) { $lb.Unlocked[$a.id] = $a; $lb.Fresh[$a.id] = 1 }
-        $st.NewUnlocks = @($newOnes)
+        if ($lb.Session -and -not $lb.Session.Done) { foreach ($a in $newOnes) { if (-not $lb.Session.Achievements.Contains($a.id)) { [void]$lb.Session.Achievements.Add($a.id) } } }
+        $st.NewUnlocks = @($st.NewUnlocks) + @($newOnes)
     }
     $st
+}
+
+function Add-LogbookError($lb, [string]$text) {
+    [void]$lb.Errors.Add($text)
+    while ($lb.Errors.Count -gt 20) { $lb.Errors.RemoveAt(0) }
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -1176,6 +2188,212 @@ function Add-GoalItems($list, $ev) {
     }
 }
 
+$EventColor = [Drawing.Color]::FromArgb(104, 160, 222)
+$TownColor = [Drawing.Color]::FromArgb(86, 156, 214)
+
+# Section header that can be clicked to fold the section away; returns $true when the section is open.
+function Add-SectionHeader($list, $lb, [string]$id, [string]$text, [string]$right = '', $rightColor = $null, [string]$tip = '') {
+    $collapsed = $lb.Collapsed.ContainsKey($id)
+    $h = New-ViewItem -Kind Header -Text $text -Right $right -RightColor $rightColor -Tip $tip
+    $h.Key = "section:$id"; $h.Collapsible = $true; $h.Collapsed = $collapsed
+    $list.Add($h)
+    -not $collapsed
+}
+
+function Add-TabItems($list, $lb) {
+    $t = New-ViewItem -Kind Tabs
+    $t.Legend = [string[]]@((Txt 'Game' 'Spiel'), (Txt 'History' 'Verlauf'))
+    $t.Value1 = $(if ($lb.Tab -eq 'history') { 1 } else { 0 })
+    $t.Key = 'tabs'
+    $list.Add($t)
+}
+
+# Result of a game summary as text and colour.
+function Get-ResultLook($g) {
+    $good = [AnnoLogbook.Canvas]::Good; $bad = [AnnoLogbook.Canvas]::Bad; $dim = [AnnoLogbook.Canvas]::DimColor
+    switch ([string]$g.result) {
+        'won' { @{ Text = (Txt 'Won' 'Gewonnen'); Color = $good; Border = $good } }
+        'lost' { @{ Text = (Txt 'Lost' 'Verloren'); Color = $bad; Border = $bad } }
+        default {
+            if ($g.mission) { @{ Text = (Txt 'Not finished' 'Nicht beendet'); Color = $dim; Border = [AnnoLogbook.Canvas]::Rule } }
+            else { @{ Text = (Txt 'Played' 'Gespielt'); Color = [AnnoLogbook.Canvas]::Accent; Border = [AnnoLogbook.Canvas]::Rule } }
+        }
+    }
+}
+
+function Get-SummaryName($g) {
+    if ([string]$g.kind -eq 'endless') { return (Txt 'Endless game' 'Endlosspiel') }
+    if ($g.game) { return [string]$g.game }
+    if ($g.scenario) { return [string]$g.scenario }
+    Txt 'Scenario' 'Szenario'
+}
+
+function Format-SummaryDate($v) {
+    $d = Convert-IsoDate $v
+    if ($d -eq [datetime]::MinValue) { return [string]$v }
+    $d.ToString('g', (Get-Culture2))
+}
+
+function Get-SummaryClock($g) {
+    if ($null -ne $g.endClock) { return [long]$g.endClock }
+    [long]([double]$g.gameHours * $ClockPerHour)
+}
+
+# The summary card of a finished game.
+function New-SummaryCard($g) {
+    $look = Get-ResultLook $g
+    $sub = if ([string]$g.kind -eq 'endless') { Format-SummaryDate $g.date } else { '{0} · {1}' -f (Get-GameKindName ([string]$g.kind)), (Format-SummaryDate $g.date) }
+    $card = New-ViewItem -Kind Card -Text (Get-SummaryName $g) -Right $look.Text -RightColor $look.Color -Sub $sub
+    $card.BarColor = $look.Border
+    $towns = [string]$g.towns
+    if ([long]$g.peakTowns -gt [long]$g.towns) { $towns += ' ' + ((Txt '(max. {0})' '(max. {0})') -f $g.peakTowns) }
+    $top = [int]$(if ($null -ne $g.topStage) { $g.topStage } else { -1 })
+    $ids = @($g.achievements | Where-Object { $_ })
+    $cells = @(
+        (Txt 'Game time' 'Spielzeit'), (Format-GameTime (Get-SummaryClock $g)),
+        (Txt 'Most residents' 'Max. Einwohner'), (Format-Num ([double]$g.peakResidents)),
+        (Txt 'Most gold' 'Max. Gold'), (Format-Num ([double]$g.peakGold)),
+        (Txt 'Towns' 'Städte'), $towns,
+        (Txt 'Highest stage' 'Höchste Stufe'), $(if ($top -ge 0) { Get-StageName $top } else { '–' }),
+        (Txt 'Achievements' 'Erfolge'), [string]$ids.Count)
+    if ([int]$g.events -gt 0) { $cells += @((Txt 'Events' 'Ereignisse'), [string]$g.events) }
+    if ([double]$g.playedHours -gt 0 -and [Math]::Abs([double]$g.playedHours - [double]$g.gameHours) -ge 0.2) { $cells += @((Txt 'Played this time' 'Diesmal gespielt'), (Format-GameTime ([double]$g.playedHours * $ClockPerHour))) }
+    $card.Cells = [string[]]$cells
+    $names = @(foreach ($id in $ids) { $a = $Achievements | Where-Object { $_.Id -eq $id }; if ($a) { Get-AchievementName $a } })
+    $card.Body = if ($names.Count) { (Txt 'Unlocked in this game: {0}' 'In dieser Partie freigeschaltet: {0}') -f ($names -join ', ') } else { Txt 'No new achievements in this game.' 'Keine neuen Erfolge in dieser Partie.' }
+    $card
+}
+
+# Events of the running game process: newest first (at most 5), active ones highlighted.
+function Add-EventItems($list, $lb, $st) {
+    $evs = @($lb.Events.List)
+    if (-not $evs.Count -or $lb.Events.Pid -ne $lb.Conn.Pid -or -not $lb.Conn.Pid) { return }
+    $clock = if ($st.Snap) { [long]$st.Snap.Clock } else { 0L }
+    if (-not (Add-SectionHeader $list $lb 'events' (Txt 'EVENTS' 'EREIGNISSE') ([string]$evs.Count))) { return }
+    $shown = 0
+    for ($i = $evs.Count - 1; $i -ge 0 -and $shown -lt 5; $i--) {
+        $e = $evs[$i]; $shown++
+        $title = Get-LangText $e.Title; if (-not $title) { $title = $e.Id }
+        $effect = Get-LangText $e.Effect
+        # endedEarly (set by the patcher): ended with the game, by loading another game or when its window closed.
+        $active = $e.EndsClock -gt 0 -and $clock -lt $e.EndsClock -and -not $e.EndedEarly
+        $sub = (Txt 'game time {0}' 'Spielzeit {0}') -f (Format-GameTime $e.Clock)
+        if ($active) { $sub += ' · ' + ((Txt 'active, {0} left' 'läuft noch {0}') -f (Format-GameTime ($e.EndsClock - $clock))) }
+        elseif ($e.EndedEarly) { $sub += ' · ' + (Txt 'ended early' 'vorzeitig beendet') }
+        elseif ($e.EndsClock -gt 0) { $sub += ' · ' + (Txt 'over' 'vorbei') }
+        $sign = Get-EffectSign $e.Effect
+        $color = if ($sign -gt 0) { [AnnoLogbook.Canvas]::Good } elseif ($sign -lt 0) { [AnnoLogbook.Canvas]::Bad } else { [AnnoLogbook.Canvas]::Accent }
+        $iconColor = if ($active) { $EventColor } else { [AnnoLogbook.Canvas]::DimColor }
+        $list.Add((New-ViewItem -Text $title -Right $effect -RightColor $color -Sub $sub -Icon ([string][char]0x2726) -IconColor $iconColor -Tip (Get-LangText $e.Text)))
+    }
+    if ($evs.Count -gt $shown) { $list.Add((New-ViewItem -Kind Note -Dim -Text ((Txt '… and {0} earlier events' '… und {0} frühere Ereignisse') -f ($evs.Count - $shown)))) }
+}
+
+# What the History tab shows: a game picked in the list, else the current (or last) session, else the
+# newest history file. Returns @{ Session; Summary; Live; Selected }.
+function Get-CachedHistory($lb, [string]$name) {
+    if (-not $name) { return $null }
+    if (-not $lb.HistoryCache.ContainsKey($name)) { $lb.HistoryCache[$name] = Read-HistoryFile (Join-Path (Get-HistoryFolder) $name) }
+    $lb.HistoryCache[$name]
+}
+function Get-HistorySource($lb) {
+    if ($lb.SelectedGame) {
+        $g = $lb.SelectedGame
+        return @{ Session = (Get-CachedHistory $lb ([string]$g.history)); Summary = $g; Live = $false; Selected = $true }
+    }
+    if ($lb.Session) { return @{ Session = $lb.Session; Summary = $(if ($lb.Session.Done) { $lb.Session.End } else { $null }); Live = -not $lb.Session.Done; Selected = $false } }
+    if (-not $lb.LastHistoryLoaded) {
+        $lb.LastHistoryLoaded = $true
+        try {
+            $f = Get-ChildItem -LiteralPath (Get-HistoryFolder) -Filter '*.json' -File -ErrorAction Stop | Sort-Object Name -Descending | Select-Object -First 1
+            if ($f) { $lb.LastHistory = Read-HistoryFile $f.FullName }
+        }
+        catch { }
+    }
+    if ($lb.LastHistory) { return @{ Session = $lb.LastHistory; Summary = $lb.LastHistory.End; Live = $false; Selected = $false } }
+    @{ Session = $null; Summary = $null; Live = $false; Selected = $false }
+}
+
+function New-ChartItem([string]$title, [string]$right, $rightColor, $x, $series, [string[]]$names, $colors) {
+    $c = New-ViewItem -Kind Chart -Text $title -Right $right -RightColor $rightColor
+    $c.X = [double[]]$x; $c.Series = [double[][]]$series; $c.SeriesNames = $names; $c.Colors = [Drawing.Color[]]$colors
+    $c.Culture = if ($script:UiGerman) { 'de-DE' } else { 'en-US' }
+    $c.ClockPerHour = $ClockPerHour
+    $c.EmptyText = Txt 'No history yet – the first point comes after one game minute.' 'Noch kein Verlauf – der erste Punkt folgt nach einer Spielminute.'
+    $c
+}
+
+# Four small charts: gold, residents per stage (stacked), balance (green above zero, red below), towns and ships.
+function Add-ChartItems($list, $s) {
+    $rows = $s.Samples
+    $x = [AnnoLogbook.Util]::Column($rows, 0)
+    $col = { param($i) , ([AnnoLogbook.Util]::Column($rows, $i)) }
+    $last = $rows[$rows.Count - 1]
+    $acc = [AnnoLogbook.Canvas]::Accent
+    $list.Add((New-ChartItem (Txt 'Gold' 'Gold') (Format-Num $last[1]) $acc $x @(, (& $col 1)) @((Txt 'Gold' 'Gold')) @($acc)))
+    $names = [string[]]@((0..4 | ForEach-Object { Get-StageName $_ }) + @((Txt 'Workers' 'Arbeiter')))
+    $res = New-ChartItem (Txt 'Residents' 'Einwohner') (Format-Num $last[2]) $null $x @((& $col 3), (& $col 4), (& $col 5), (& $col 6), (& $col 7), (& $col 8)) $names $StageColors
+    $res.Stacked = $true; $res.TotalName = Txt 'Total' 'Gesamt'; $res.Legend = $names
+    $list.Add($res)
+    $bal = New-ChartItem (Txt 'Balance' 'Bilanz') (Format-Signed $last[9]) $(if ($last[9] -lt 0) { [AnnoLogbook.Canvas]::Bad } else { [AnnoLogbook.Canvas]::Good }) $x @(, (& $col 9)) @((Txt 'Balance' 'Bilanz')) @([AnnoLogbook.Canvas]::Good)
+    $bal.ZeroSplit = $true
+    $list.Add($bal)
+    $tn = [string[]]@((Txt 'Towns' 'Städte'), (Txt 'Ships' 'Schiffe'))
+    $tw = New-ChartItem (Txt 'Towns · ships' 'Städte · Schiffe') ('{0} · {1}' -f $last[10], $last[11]) $null $x @((& $col 10), (& $col 11)) $tn @($TownColor, [AnnoLogbook.Canvas]::DimColor)
+    $tw.Legend = $tn
+    $list.Add($tw)
+}
+
+function Add-GameListItems($list, $lb) {
+    $games = @($lb.Games | Where-Object { $_ })
+    $n = $games.Count
+    if (-not (Add-SectionHeader $list $lb 'games' (Txt 'PLAYED GAMES' 'GESPIELTE PARTIEN') $(if ($n) { [string]$n } else { '' }))) { return }
+    if (-not $n) { $list.Add((New-ViewItem -Kind Note -Dim -Text (Txt 'No finished game yet – every game appears here when it ends.' 'Noch keine beendete Partie – jede Partie erscheint hier, sobald sie endet.'))); return }
+    $won = @($games | Where-Object { $_.result -eq 'won' }).Count; $lost = @($games | Where-Object { $_.result -eq 'lost' }).Count
+    $hours = 0.0; foreach ($g in $games) { try { $hours += [double]$g.playedHours } catch { } }
+    $list.Add((New-ViewItem -Kind Note -Dim -Text ((Txt '{0} won · {1} lost · {2} game hours played' '{0} gewonnen · {1} verloren · {2} Spielstunden gespielt') -f $won, $lost, (Format-Num ([Math]::Round($hours))))))
+    $max = if ($lb.ShowAllGames) { $n } else { [Math]::Min($n, 10) }
+    for ($i = $n - 1; $i -ge $n - $max; $i--) {
+        $g = $games[$i]
+        $look = Get-ResultLook $g
+        $sub = '{0} · {1} · {2} {3}' -f (Format-SummaryDate $g.date), (Format-GameTime (Get-SummaryClock $g)), (Format-Num ([double]$g.peakResidents)), (Txt 'residents max.' 'Einw. max.')
+        $row = New-ViewItem -Text (Get-SummaryName $g) -Right $look.Text -RightColor $look.Color -Sub $sub -Tip (Txt 'Click: show the history of this game' 'Klick: Verlauf dieser Partie zeigen')
+        $row.Key = "game:$i"
+        $row.Highlight = [object]::ReferenceEquals($g, $lb.SelectedGame)
+        $list.Add($row)
+    }
+    if ($n -gt 10) {
+        $more = New-ViewItem -Kind Note -Dim -Text $(if ($lb.ShowAllGames) { Txt '▴ Show fewer' '▴ Weniger anzeigen' } else { (Txt '▾ Show all {0} games' '▾ Alle {0} Partien anzeigen') -f $n })
+        $more.Key = 'games:more'; $more.TextColor = [AnnoLogbook.Canvas]::Accent
+        $list.Add($more)
+    }
+}
+
+function Add-HistoryItems($list, $lb, $st) {
+    $src = Get-HistorySource $lb
+    $s = $src.Session
+    $right = if ($src.Live) { Txt 'current game' 'laufende Partie' } elseif ($src.Summary) { Format-SummaryDate $src.Summary.date } elseif ($s) { Format-SummaryDate $s.Start.ToString('s') } else { '' }
+    if (Add-SectionHeader $list $lb 'charts' (Txt 'HISTORY' 'VERLAUF') $right) {
+        if ($src.Selected) {
+            $back = New-ViewItem -Kind Note -Dim -Text ((Txt '◂ Back to {0}' '◂ Zurück zur {0}') -f $(if ($lb.Session -and -not $lb.Session.Done) { Txt 'the current game' 'laufenden Partie' } else { Txt 'the last game' 'letzten Partie' }))
+            $back.Key = 'history:live'; $back.TextColor = [AnnoLogbook.Canvas]::Accent
+            $list.Add($back)
+        }
+        if ($s -and $s.Samples.Count -ge 2) {
+            if (-not $src.Live -and -not $src.Summary) { $list.Add((New-ViewItem -Kind Note -Dim -Text (Get-SummaryName @{ kind = $s.Kind; game = $s.Game; scenario = $s.Scenario }))) }
+            Add-ChartItems $list $s
+        }
+        elseif ($src.Selected) { $list.Add((New-ViewItem -Kind Note -Dim -Text (Txt 'No history saved for this game (only the newest 30 games keep theirs).' 'Für diese Partie ist kein Verlauf gespeichert (nur die neuesten 30 Partien behalten ihn).'))) }
+        else { $list.Add((New-ViewItem -Kind Note -Dim -Text (Txt 'No history yet – the logbook draws one point about every game minute while a game runs.' 'Noch kein Verlauf – das Logbuch zeichnet etwa jede Spielminute einen Punkt auf, solange ein Spiel läuft.'))) }
+        if ($src.Summary) { $list.Add((New-SummaryCard $src.Summary)) }
+        elseif ($src.Live -and $s.Readings -ge 2) {
+            $peakGold = if ($s.PeakGold -eq [long]::MinValue) { 0 } else { $s.PeakGold }
+            $list.Add((New-ViewItem -Kind Note -Dim -Text ((Txt 'Best so far: {0} residents · {1} gold · {2} towns' 'Bisher am besten: {0} Einwohner · {1} Gold · {2} Städte') -f (Format-Num $s.PeakResidents), (Format-Num $peakGold), $s.PeakTowns)))
+        }
+    }
+    Add-GameListItems $list $lb
+}
+
 function Get-ViewItems($lb, $st, [bool]$compact) {
     $list = New-Object 'System.Collections.Generic.List[AnnoLogbook.Item]'
     $good = [AnnoLogbook.Canvas]::Good; $bad = [AnnoLogbook.Canvas]::Bad
@@ -1187,7 +2405,8 @@ function Get-ViewItems($lb, $st, [bool]$compact) {
         'denied' { $list.Add((New-ViewItem -Kind Title -Text (Txt 'No access to the game' 'Kein Zugriff auf das Spiel') -Sub ((Txt 'Windows refused access ({0}).' 'Windows verweigert den Zugriff ({0}).') -f $lb.Conn.Detail))) }
         'nogame' { $list.Add((New-ViewItem -Kind Title -Text (Txt 'Anno 1602 is running' 'Anno 1602 läuft') -Sub (Txt 'Start or load a game.' 'Starte oder lade ein Spiel.'))) }
     }
-    if ($st.Phase -eq 'running' -or $st.Phase -eq 'ended') {
+    $inGame = $st.Phase -eq 'running' -or $st.Phase -eq 'ended'
+    if ($inGame) {
         $snap = $st.Snap; $me = $st.Me; $ev = $st.Mission
         $sub = Get-SpeedText $snap.Speed
         $subColor = $null
@@ -1197,54 +2416,68 @@ function Get-ViewItems($lb, $st, [bool]$compact) {
         }
         elseif ($st.Paused) { $sub += ' · ' + (Txt 'paused or in a menu' 'pausiert oder im Menü') }
         $list.Add((New-ViewItem -Kind Title -Text $st.GameName -Right (Format-GameTime $snap.Clock) -Sub $sub -SubColor $subColor -Tip ((Txt 'Game time at normal speed (game clock {0})' 'Spielzeit bei normalem Tempo (Spieluhr {0})') -f (Format-Num $snap.Clock))))
-
+    }
+    if (-not $compact) {
+        Add-TabItems $list $lb
+        if ($lb.Tab -eq 'history') { Add-HistoryItems $list $lb $st; return , $list }
+        if ($lb.ShowSummary -and $lb.LastSummary) {
+            $h = New-ViewItem -Kind Header -Text (Txt 'LAST GAME' 'LETZTE PARTIE') -Right (Txt 'hide ✕' 'ausblenden ✕') -Tip (Txt 'Click to hide; the History tab keeps every game.' 'Klicken zum Ausblenden; der Verlauf behält jede Partie.')
+            $h.Key = 'summary:hide'
+            $list.Add($h)
+            $list.Add((New-SummaryCard $lb.LastSummary))
+        }
+    }
+    if ($inGame) {
         # Mission
+        $open = $true
         if ($ev) {
             $tip = $ev.Mission.Text; if ($tip.Length -gt 1500) { $tip = $tip.Substring(0, 1500) + ' …' }
             $right = if ($ev.Fulfilled) { Txt 'accomplished' 'erfüllt' } else { (Txt '{0} of {1} met' '{0} von {1} erfüllt') -f $ev.Met, $ev.Count }
-            if (-not $compact) { $list.Add((New-ViewItem -Kind Header -Text (Txt 'MISSION' 'AUFTRAG') -Right $right -RightColor $(if ($ev.Fulfilled) { $good } else { $null }) -Tip $tip)) }
-            if ($ev.Race -and -not $compact) { $list.Add((New-ViewItem -Kind Note -Dim -Text (Txt 'Race: whoever completes the mission first wins – the rivals have the same goals.' 'Wettlauf: Wer den Auftrag zuerst erfüllt, gewinnt – die Gegner haben dieselben Ziele.'))) }
-            if ($snap.TimeLimit -gt 0 -and $st.Phase -eq 'running') {
-                $left = [Math]::Max(0, $snap.TimeLimit - $snap.Clock)
-                $list.Add((New-ViewItem -Text ((Txt 'Time limit: {0} left' 'Zeitlimit: noch {0}') -f (Format-GameTime $left)) -Icon '!' -IconColor $bad -TextColor $bad))
-            }
-            Add-GoalItems $list $ev
-            if ($ev.SubBits -band 3) {
-                $who = if ($ev.Mission.SupportPlayer -eq 7) { Txt 'the other players' 'die Mitspieler' } else { Get-PlayerName $snap $ev.Mission.SupportPlayer }
-                $okSub = -not ($ev.SubFailing -band 3)
-                $list.Add((New-ViewItem -Text ((Txt 'Condition: protect {0}' 'Bedingung: {0} beschützen') -f $who) -Icon $(if ($okSub) { [string][char]0x2713 } else { '!' }) -Done:$okSub -Right $(if ($okSub) { 'ok' } else { Txt 'at risk' 'in Gefahr' }) -RightColor $(if ($okSub) { $good } else { $bad }) -Sub (Txt 'If this fails, the game is lost.' 'Wenn das scheitert, ist das Spiel verloren.')))
+            if (-not $compact) { $open = Add-SectionHeader $list $lb 'mission' (Txt 'MISSION' 'AUFTRAG') $right $(if ($ev.Fulfilled) { $good } else { $null }) $tip }
+            if ($open) {
+                if ($ev.Race -and -not $compact) { $list.Add((New-ViewItem -Kind Note -Dim -Text (Txt 'Race: whoever completes the mission first wins – the rivals have the same goals.' 'Wettlauf: Wer den Auftrag zuerst erfüllt, gewinnt – die Gegner haben dieselben Ziele.'))) }
+                if ($snap.TimeLimit -gt 0 -and $st.Phase -eq 'running') {
+                    $list.Add((New-ViewItem -Text (Format-TimeLimit $snap.TimeLimit $snap.Clock) -Icon '!' -IconColor $bad -TextColor $bad))
+                }
+                Add-GoalItems $list $ev
+                if ($ev.SubBits -band 3) {
+                    $who = if ($ev.Mission.SupportPlayer -eq 7) { Txt 'the other players' 'die Mitspieler' } else { Get-PlayerName $snap $ev.Mission.SupportPlayer }
+                    $okSub = -not ($ev.SubFailing -band 3)
+                    $list.Add((New-ViewItem -Text ((Txt 'Condition: protect {0}' 'Bedingung: {0} beschützen') -f $who) -Icon $(if ($okSub) { [string][char]0x2713 } else { '!' }) -Done:$okSub -Right $(if ($okSub) { 'ok' } else { Txt 'at risk' 'in Gefahr' }) -RightColor $(if ($okSub) { $good } else { $bad }) -Sub (Txt 'If this fails, the game is lost.' 'Wenn das scheitert, ist das Spiel verloren.')))
+                }
             }
         }
         else {
-            if (-not $compact) { $list.Add((New-ViewItem -Kind Header -Text (Txt 'MISSION' 'AUFTRAG'))) }
-            $list.Add((New-ViewItem -Kind Note -Dim -Text (Txt 'No mission – free play. The achievements still count.' 'Kein Auftrag – freies Spiel. Die Erfolge zählen trotzdem.')))
+            if (-not $compact) { $open = Add-SectionHeader $list $lb 'mission' (Txt 'MISSION' 'AUFTRAG') }
+            if ($open) { $list.Add((New-ViewItem -Kind Note -Dim -Text (Txt 'No mission – free play. The achievements still count.' 'Kein Auftrag – freies Spiel. Die Erfolge zählen trotzdem.'))) }
         }
 
         if ($compact) {
             $list.Add((New-ViewItem -Kind Space))
             $list.Add((New-ViewItem -Text ('{0} {1} · {2} {3} · {4} {5}' -f (Txt 'Gold' 'Gold'), (Format-Num $snap.Players[$st.HumanSlot].Gold), (Format-Num $me.Total), (Txt 'res.' 'Einw.'), $me.TownCount, (Txt 'towns' 'Städte')) -Dim))
+            Add-CompactSummary $list $lb $st
             return , $list
         }
 
         # Your empire
-        $list.Add((New-ViewItem -Kind Header -Text (Txt 'YOUR EMPIRE' 'DEIN REICH') -Right $snap.Players[$st.HumanSlot].Name))
-        $gold = $snap.Players[$st.HumanSlot].Gold
-        $list.Add((New-ViewItem -Text (Txt 'Gold' 'Gold') -Right (Format-Num $gold) -RightColor $(if ($gold -lt 0) { $bad } else { [AnnoLogbook.Canvas]::Accent })))
-        $mo = $st.Money
-        $list.Add((New-ViewItem -Text (Txt 'Balance · trade balance' 'Bilanz · Handelsbilanz') -Right ('{0} · {1}' -f (Format-Signed $mo.Balance), (Format-Signed $mo.Trade)) -RightColor $(if ($mo.Balance -lt 0) { $bad } else { $null }) -Tip ((Txt 'Taxes {0}, sales {1}, purchases {2}, operating costs {3}, military {4}' 'Steuern {0}, Verkauf {1}, Einkauf {2}, Betriebskosten {3}, Militär {4}') -f (Format-Num $mo.Taxes), (Format-Num $mo.Sales), (Format-Num $mo.Purchases), (Format-Num $mo.Costs), (Format-Num $mo.Military))))
-        $bestText = if ($me.Best) { (Txt 'largest: {0} ({1})' 'grösste: {0} ({1})') -f $me.Best.Name, (Format-Num $me.Best.Total) } else { '' }
-        $list.Add((New-ViewItem -Text (Txt 'Towns' 'Städte') -Right ([string]$me.TownCount) -Sub $bestText))
-        $list.Add((New-ViewItem -Text (Txt 'Ships' 'Schiffe') -Right ([string]$me.Ships)))
-        $stack = New-ViewItem -Kind Stack -Text (Txt 'Residents' 'Einwohner') -Right (Format-Num $me.Total) -Tip (Txt 'Workers: residents working in production and public buildings; the game counts them in the total.' 'Arbeiter: Einwohner in Betrieben und öffentlichen Gebäuden; das Spiel zählt sie zur Gesamtzahl.')
-        $stack.Values = [int[]]@($me.Stages[0], $me.Stages[1], $me.Stages[2], $me.Stages[3], $me.Stages[4], $me.Workers)
-        $stack.Colors = [Drawing.Color[]]$StageColors
-        $stack.Legend = [string[]]@((0..4 | ForEach-Object { '{0} {1}' -f (Get-StageName $_), (Format-Num $me.Stages[$_]) }) + @('{0} {1}' -f (Txt 'Workers' 'Arbeiter'), (Format-Num $me.Workers)))
-        $list.Add($stack)
+        if (Add-SectionHeader $list $lb 'empire' (Txt 'YOUR EMPIRE' 'DEIN REICH') $snap.Players[$st.HumanSlot].Name) {
+            $gold = $snap.Players[$st.HumanSlot].Gold
+            $list.Add((New-ViewItem -Text (Txt 'Gold' 'Gold') -Right (Format-Num $gold) -RightColor $(if ($gold -lt 0) { $bad } else { [AnnoLogbook.Canvas]::Accent })))
+            $mo = $st.Money
+            $list.Add((New-ViewItem -Text (Txt 'Balance · trade balance' 'Bilanz · Handelsbilanz') -Right ('{0} · {1}' -f (Format-Signed $mo.Balance), (Format-Signed $mo.Trade)) -RightColor $(if ($mo.Balance -lt 0) { $bad } else { $null }) -Tip ((Txt 'Taxes {0}, sales {1}, purchases {2}, operating costs {3}, military {4}' 'Steuern {0}, Verkauf {1}, Einkauf {2}, Betriebskosten {3}, Militär {4}') -f (Format-Num $mo.Taxes), (Format-Num $mo.Sales), (Format-Num $mo.Purchases), (Format-Num $mo.Costs), (Format-Num $mo.Military))))
+            $bestText = if ($me.Best) { (Txt 'largest: {0} ({1})' 'grösste: {0} ({1})') -f $me.Best.Name, (Format-Num $me.Best.Total) } else { '' }
+            $list.Add((New-ViewItem -Text (Txt 'Towns' 'Städte') -Right ([string]$me.TownCount) -Sub $bestText))
+            $list.Add((New-ViewItem -Text (Txt 'Ships' 'Schiffe') -Right ([string]$me.Ships)))
+            $stack = New-ViewItem -Kind Stack -Text (Txt 'Residents' 'Einwohner') -Right (Format-Num $me.Total) -Tip (Txt 'Workers: residents working in production and public buildings; the game counts them in the total.' 'Arbeiter: Einwohner in Betrieben und öffentlichen Gebäuden; das Spiel zählt sie zur Gesamtzahl.')
+            $stack.Values = [int[]]@($me.Stages[0], $me.Stages[1], $me.Stages[2], $me.Stages[3], $me.Stages[4], $me.Workers)
+            $stack.Colors = [Drawing.Color[]]$StageColors
+            $stack.Legend = [string[]]@((0..4 | ForEach-Object { '{0} {1}' -f (Get-StageName $_), (Format-Num $me.Stages[$_]) }) + @('{0} {1}' -f (Txt 'Workers' 'Arbeiter'), (Format-Num $me.Workers)))
+            $list.Add($stack)
+        }
 
         # Rivals
         $rivals = @($st.Rivals)
-        if ($rivals.Count) {
-            $list.Add((New-ViewItem -Kind Header -Text (Txt 'RIVALS' 'GEGNER')))
+        if ($rivals.Count -and (Add-SectionHeader $list $lb 'rivals' (Txt 'RIVALS' 'GEGNER'))) {
             foreach ($r in $rivals) {
                 $out = $r.Kind -eq 9 -and $st.Phase -ne 'ended'
                 $ships = if ($r.Ships -eq 1) { Txt '1 ship' '1 Schiff' } else { (Txt '{0} ships' '{0} Schiffe') -f $r.Ships }
@@ -1262,22 +2495,52 @@ function Get-ViewItems($lb, $st, [bool]$compact) {
                 $list.Add((New-ViewItem @prm))
             }
         }
+
+        # Events of this game process
+        Add-EventItems $list $lb $st
     }
-    if ($compact) { return , $list }
+    if ($compact) { Add-CompactSummary $list $lb $st; return , $list }
 
     # Achievements (also while waiting)
     $n = @($Achievements | Where-Object { $lb.Unlocked.ContainsKey($_.Id) }).Count
-    $list.Add((New-ViewItem -Kind Header -Text (Txt 'ACHIEVEMENTS' 'ERFOLGE') -Right ('{0} / {1}' -f $n, $Achievements.Count)))
-    foreach ($a in $Achievements) {
-        $u = $lb.Unlocked[$a.Id]
-        $desc = if ($script:UiGerman) { $a.DescDe } else { $a.DescEn }
-        if ($u) {
-            $when = $u.date; try { $when = ([datetime]$u.date).ToString('g', (Get-Culture2)) } catch { }
-            $desc += "`n" + ((Txt 'Unlocked {0} – {1}' 'Freigeschaltet {0} – {1}') -f $when, $u.game)
+    if (Add-SectionHeader $list $lb 'achievements' (Txt 'ACHIEVEMENTS' 'ERFOLGE') ('{0} / {1}' -f $n, $Achievements.Count)) {
+        foreach ($a in $Achievements) {
+            $u = $lb.Unlocked[$a.Id]
+            $desc = if ($script:UiGerman) { $a.DescDe } else { $a.DescEn }
+            if ($u) {
+                $when = $u.date; try { $when = ([datetime]$u.date).ToString('g', (Get-Culture2)) } catch { }
+                $desc += "`n" + $(if ($u.game) { (Txt 'Unlocked {0} – {1}' 'Freigeschaltet {0} – {1}') -f $when, $u.game } else { (Txt 'Unlocked {0}' 'Freigeschaltet {0}') -f $when })
+            }
+            $list.Add((New-ViewItem -Kind Badge -Text (Get-AchievementName $a) -Done:([bool]$u) -Highlight:($lb.Fresh.ContainsKey($a.Id)) -Tip $desc))
         }
-        $list.Add((New-ViewItem -Kind Badge -Text (Get-AchievementName $a) -Done:([bool]$u) -Highlight:($lb.Fresh.ContainsKey($a.Id)) -Tip $desc))
     }
     , $list
+}
+
+# Compact mode: one line about the game that just ended (click hides it).
+function Add-CompactSummary($list, $lb, $st) {
+    if (-not $lb.ShowSummary -or -not $lb.LastSummary -or $st.Phase -eq 'ended') { return }   # ended: the title says it
+    $g = $lb.LastSummary
+    $look = Get-ResultLook $g
+    $row = New-ViewItem -Text ((Txt 'Last game: {0} · {1} · {2} res.' 'Zuletzt: {0} · {1} · {2} Einw.') -f $look.Text, (Format-GameTime (Get-SummaryClock $g)), (Format-Num ([double]$g.peakResidents))) -Dim -Tip ((Txt '{0} – click to hide' '{0} – klicken zum Ausblenden') -f (Get-SummaryName $g))
+    $row.Key = 'summary:hide'
+    $list.Add($row)
+}
+
+# A click on the canvas (Item.Key). Returns 'settings' (tab or folded sections changed: save them),
+# 'view' (only the view changed) or '' (nothing).
+function Invoke-ViewClick($lb, [string]$key) {
+    if ($key -match '^tabs:(\d+)$') { $lb.Tab = $(if ([int]$Matches[1] -eq 1) { 'history' } else { 'game' }); return 'settings' }
+    if ($key -match '^section:(.+)$') { $id = $Matches[1]; if ($lb.Collapsed.ContainsKey($id)) { $lb.Collapsed.Remove($id) } else { $lb.Collapsed[$id] = 1 }; return 'settings' }
+    if ($key -eq 'summary:hide') { $lb.ShowSummary = $false; return 'view' }
+    if ($key -match '^game:(\d+)$') {
+        $g = @($lb.Games | Where-Object { $_ })[[int]$Matches[1]]
+        $lb.SelectedGame = if ($g -and -not [object]::ReferenceEquals($g, $lb.SelectedGame)) { $g } else { $null }
+        return 'view'
+    }
+    if ($key -eq 'history:live') { $lb.SelectedGame = $null; return 'view' }
+    if ($key -eq 'games:more') { $lb.ShowAllGames = -not $lb.ShowAllGames; return 'view' }
+    ''
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -1365,8 +2628,37 @@ function Show-Unlocks($ui, $unlocks) {
     if (-not $unlocks -or $unlocks.Count -eq 0) { return }
     $names = @(foreach ($u in $unlocks) { $a = $Achievements | Where-Object { $_.Id -eq $u.id }; if ($a) { Get-AchievementName $a } else { $u.id } })
     $star = [string][char]0x2605
-    $ui.Banner.Text = if ($names.Count -eq 1) { '{0} {1}: {2}' -f $star, (Txt 'Achievement unlocked' 'Erfolg freigeschaltet'), $names[0] } else { '{0} {1}: {2}' -f $star, ((Txt '{0} achievements unlocked' '{0} Erfolge freigeschaltet') -f $names.Count), ($names -join ', ') }
-    $ui.Banner.Visible = $true
+    $text = if ($names.Count -eq 1) { '{0} {1}: {2}' -f $star, (Txt 'Achievement unlocked' 'Erfolg freigeschaltet'), $names[0] } else { '{0} {1}: {2}' -f $star, ((Txt '{0} achievements unlocked' '{0} Erfolge freigeschaltet') -f $names.Count), ($names -join ', ') }
+    Set-BannerText $ui $text ([AnnoLogbook.Canvas]::Accent)
+}
+
+# Banner text and colour; the banner grows to show up to three lines (several unlocks at once).
+function Set-BannerText($ui, [string]$text, $back) {
+    $b = $ui.Banner
+    $b.Text = $text
+    $b.BackColor = $back; $b.ForeColor = [AnnoLogbook.Canvas]::Back
+    $scale = if ($script:DpiScale) { $script:DpiScale } else { 1.0 }
+    $w = [Math]::Max(100, $(if ($b.Parent) { $b.Parent.ClientSize.Width } else { $b.Width }) - [int](16 * $scale))
+    $need = [Windows.Forms.TextRenderer]::MeasureText($text, $b.Font, (New-Object Drawing.Size($w, 1000)), [Windows.Forms.TextFormatFlags]::WordBreak).Height + [int](14 * $scale)
+    $b.Height = [Math]::Max([int](36 * $scale), [Math]::Min([int](76 * $scale), $need))
+    $b.Visible = $true
+}
+
+# Banner for new events (blue): the newest one with its effect, plus how many more came at once.
+function Get-EventBannerText($events) {
+    $evs = @($events)
+    if (-not $evs.Count) { return '' }
+    $e = $evs[$evs.Count - 1]
+    $title = Get-LangText $e.Title; if (-not $title) { $title = $e.Id }
+    $text = '{0} {1}: {2}' -f [string][char]0x2726, (Txt 'Event' 'Ereignis'), $title
+    $effect = Get-LangText $e.Effect
+    if ($effect) { $text += ' – ' + $effect }
+    if ($evs.Count -gt 1) { $text += ' ' + ((Txt '(+{0} more)' '(+{0} weitere)') -f ($evs.Count - 1)) }
+    $text
+}
+function Show-EventBanner($ui, $events) {
+    if (-not @($events).Count) { return }
+    Set-BannerText $ui (Get-EventBannerText $events) $EventColor
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -1457,6 +2749,70 @@ function New-TestImage([string]$variant = 'race') {
     $img
 }
 
+# Test events file (interface of anno-patcher.ps1 -Events).
+function New-TestEvent([int]$procId, [datetime]$time, [long]$clock, [string]$id, [string]$de, [string]$en, [string]$effDe, [string]$effEn, [long]$ends = 0) {
+    [ordered]@{ time = $time.ToString('s'); pid = $procId; clock = $clock; id = $id; title = [ordered]@{ de = $de; en = $en }
+        text = [ordered]@{ de = "$de – Text"; en = "$en – text" }; effect = [ordered]@{ de = $effDe; en = $effEn }; endsClock = $ends }
+}
+function Write-TestEvents($events) {
+    Write-TextFileAtomic (Get-EventsFile) (ConvertTo-Json ([ordered]@{ version = 1; events = @($events) }) -Depth 5)
+}
+
+# A made-up game history (smooth curves) for the PNG files of the History tab.
+function New-DemoHistory($lb, [datetime]$start, [int]$points, [string]$scenario, [string]$kind) {
+    $s = @{
+        Id = $start.ToString('yyyyMMdd-HHmmss'); File = ''; Start = $start; Pid = 4711; Scenario = $scenario; Game = $scenario; Kind = $kind; HasMission = $kind -ne 'endless'
+        FirstClock = 5000L; LastClock = 0L; Interval = $SampleClocks; Samples = (New-Object 'System.Collections.Generic.List[long[]]'); Unsaved = 0; Prev = $null; Readings = $points
+        PeakResidents = 0L; PeakGold = [long]::MinValue; PeakTowns = 0L; TopStage = -1; NegGold = $false; Reloads = 0; EventCount = 2
+        Achievements = (New-Object Collections.ArrayList); Done = $false; Result = ''; End = $null
+    }
+    for ($i = 0; $i -lt $points; $i++) {
+        $t = $i / [double]$points
+        $total = 2600 / (1 + [Math]::Exp(-9 * ($t - 0.45)))
+        $st = @((0.30 - 0.18 * $t), (0.36 - 0.12 * $t), (0.22 + 0.06 * $t), [Math]::Max(0, 0.06 + 0.16 * ($t - 0.3)), [Math]::Max(0, 0.08 * ($t - 0.6)))
+        $stages = @($st | ForEach-Object { [long]($total * $_) })
+        $workers = [long]($total * 0.12)
+        $gold = [long](30000 + 18000 * [Math]::Sin($t * 9) * (1 - $t) + 95000 * $t * $t - 12000 * [Math]::Exp(-30 * [Math]::Pow($t - 0.2, 2)))
+        $bal = [long](-180 + 760 * $t + 90 * [Math]::Sin($t * 23))
+        $vals = [long[]]@((5000 + $SampleClocks * $i), $gold, ($workers + ($stages | Measure-Object -Sum).Sum), $stages[0], $stages[1], $stages[2], $stages[3], $stages[4], $workers, $bal, (1 + [Math]::Floor($t * 4.6)), (1 + [Math]::Floor($t * 7.5)))
+        [void](Add-SessionSample $s $vals)
+        $s.LastClock = $vals[0]
+        if ($vals[2] -gt $s.PeakResidents) { $s.PeakResidents = $vals[2] }; if ($gold -gt $s.PeakGold) { $s.PeakGold = $gold }; if ($vals[10] -gt $s.PeakTowns) { $s.PeakTowns = $vals[10] }
+    }
+    $s.TopStage = 4
+    $s
+}
+
+# Made-up played games for the list (names as the scenario files are called in the UI language).
+function New-DemoGames {
+    $de = $script:UiGerman
+    $rows = @(
+        @(@('Sturmsee 1 - Schiffbruch', 'Storm Sea 1 - Shipwreck'), 'campaign', 'won', 3.4, 1240, 28000, 2, 2),
+        @(@('Endlosspiel', 'Endless game'), 'endless', 'quit', 14.2, 6800, 310000, 6, 4),
+        @(@('Sturmsee 2 - Tabak und Kakao', 'Storm Sea 2 - Tobacco and Cocoa'), 'campaign', 'lost', 5.0, 1810, 9000, 3, 3),
+        @(@('Sturmsee 2 - Tabak und Kakao', 'Storm Sea 2 - Tobacco and Cocoa'), 'campaign', 'won', 6.1, 2390, 41000, 3, 3),
+        @(@('Herausforderung - Goldrausch', 'Challenge - Gold Rush'), 'challenge', 'won', 2.7, 960, 128000, 2, 2),
+        @(@('Abenteuer 4711 Fordernd', 'Adventure 4711 Demanding'), 'adventure', 'lost', 7.9, 2110, 18500, 3, 3),
+        @(@('Tagesabenteuer 2026-11-13', 'Daily Adventure 2026-11-13'), 'daily', 'won', 4.2, 1530, 52000, 2, 3),
+        @(@('Eigenes - Piratenbucht', 'Custom - Pirate Bay'), 'custom', 'quit', 1.6, 410, 22000, 1, 1),
+        @(@('Wettlauf 1 - Erster Hafen', 'Race 1 - First Harbour'), 'campaign', 'won', 3.0, 1120, 35000, 2, 2),
+        @(@('Wettlauf 2 - Buergerstolz', 'Race 2 - Civic Pride'), 'campaign', 'lost', 5.1, 1490, 26000, 3, 2),
+        @(@('Endlosspiel', 'Endless game'), 'endless', 'quit', 22.5, 9100, 640000, 8, 4),
+        @(@('Sturmsee 3 - Der Freihafen', 'Storm Sea 3 - The Free Port'), 'campaign', 'won', 8.3, 3350, 87000, 4, 4))
+    $list = New-Object Collections.ArrayList
+    $day = [datetime]'2026-11-02T19:30:00'
+    foreach ($r in $rows) {
+        $name = if ($de) { $r[0][0] } else { $r[0][1] }
+        [void]$list.Add([ordered]@{
+                date = $day.AddHours($r[3] / 4 + 1).ToString('s'); start = $day.ToString('s'); scenario = $(if ($r[1] -eq 'endless') { '' } else { $name }); game = $name; kind = $r[1]
+                mission = $r[1] -ne 'endless'; result = $r[2]; gameHours = $r[3]; playedHours = $r[3]; startClock = 0; endClock = [long]($r[3] * $ClockPerHour)
+                peakResidents = $r[4]; peakGold = $r[5]; towns = $r[6]; peakTowns = $r[6]; topStage = $r[7]; events = 0; reloads = 0; achievements = @(); history = ''
+            })
+        $day = $day.AddDays(1)
+    }
+    $list
+}
+
 function Invoke-SelfTest {
     $script:failed = 0; $script:checks = 0
     $check = {
@@ -1468,6 +2824,8 @@ function Invoke-SelfTest {
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $script:AppDataFolder = Join-Path $folder 'appdata'
     if (Test-Path -LiteralPath $script:AppDataFolder) { Remove-Item -LiteralPath $script:AppDataFolder -Recurse -Force }
+    $script:DocumentsFolder = Join-Path $folder 'documents'   # chapters per campaign: never the player's own scenarios
+    if (Test-Path -LiteralPath $script:DocumentsFolder) { Remove-Item -LiteralPath $script:DocumentsFolder -Recurse -Force }
     $langBefore = $script:UiGerman
     $script:UiGerman = $false
 
@@ -1701,6 +3059,370 @@ function Invoke-SelfTest {
         & $check "view for '$ph': $($items[0].Text)" ($items.Count -ge 2 -and $items[0].Text)
     }
 
+
+    # ==========================================================================================
+    # Logbook 2.0: achievements, history, game summaries, played games, events, tabs.
+    # ==========================================================================================
+    $script:UiGerman = $false
+    $useFolder = {
+        param([string]$name)
+        $script:AppDataFolder = Join-Path $folder $name
+        if (Test-Path -LiteralPath $script:AppDataFolder) { Remove-Item -LiteralPath $script:AppDataFolder -Recurse -Force }
+    }
+    & $useFolder 'appdata2'
+    $script:DocumentsFolder = Join-Path $folder 'documents'
+    if (Test-Path -LiteralPath $script:DocumentsFolder) { Remove-Item -LiteralPath $script:DocumentsFolder -Recurse -Force }
+    $t1 = [datetime]'2026-11-14T20:00:00'
+    $isKind = { param($it, [string]$k) $it.Kind -eq [AnnoLogbook.Kind]$k }
+
+    Write-Host 'Achievements 2.0, kinds of game'
+    $ids = @($Achievements | ForEach-Object { $_.Id })
+    $oldIds = 'first_town settlers citizens merchants aristocrats res_1000 res_5000 res_10000 city_2500 aristo_1000 towns_3 towns_5 towns_10 gold_250k gold_1m ships_5 ships_10 balance_500 hours_10 hours_50 turbo rival_defeated mission_won race_won' -split ' '
+    & $check "$($ids.Count) achievements, ids unique, the 24 ids of version 2 kept" ($ids.Count -eq 53 -and @($ids | Select-Object -Unique).Count -eq $ids.Count -and @($oldIds | Where-Object { $ids -notcontains $_ }).Count -eq 0)
+    & $check 'every achievement has German and English names and descriptions; names unique in each language' (@($Achievements | Where-Object { -not ($_.De -and $_.En -and $_.DescDe -and $_.DescEn) }).Count -eq 0 -and @($Achievements.De | Select-Object -Unique).Count -eq 53 -and @($Achievements.En | Select-Object -Unique).Count -eq 53)
+    $kinds = @(@('Tagesabenteuer 2026-11-14', 'daily'), @('Daily Adventure 2026-11-14', 'daily'), @('Abenteuer 4711 Fordernd', 'adventure'), @('Adventure 12 Hard', 'adventure'), @('Abenteuer 4711', 'adventure'),
+        @('Eigenes - Meine Insel', 'custom'), @('Custom - Pirate Bay', 'custom'), @('Herausforderung - Goldrausch', 'challenge'), @('Challenge - Gold Rush', 'challenge'),
+        @('Sturmsee 3 - Der Freihafen', 'campaign'), @('Storm Sea 6 - The Golden Age', 'campaign'), @('Last Szenario', 'scenario'))
+    $wrong = @($kinds | Where-Object { (Get-GameKind $_[0] $true).Kind -ne $_[1] } | ForEach-Object { $_[0] })
+    & $check "kind of game from the scenario name ($($kinds.Count) names, wrong: $($wrong -join ', '))" ($wrong.Count -eq 0)
+    $k = Get-GameKind 'Sturmsee 3 - Der Freihafen' $true
+    & $check "campaign '$($k.Campaign)', chapter $($k.Chapter)" ($k.Campaign -eq 'Sturmsee' -and $k.Chapter -eq 3)
+    & $check 'no mission: endless game even with an old scenario name in memory; [[..]] with a mission: scenario' ((Get-GameKind 'Abenteuer 4711 Fordernd' $false $false).Kind -eq 'endless' -and (Get-GameKind '[[123]]' $true $false).Kind -eq 'scenario' -and (Get-GameKind '' $false).Kind -eq 'endless' -and (Get-GameKind 'Eigenes - Ohne Ziel' $false $true).Kind -eq 'custom')
+
+    $rich = New-TestImage 'endless'
+    Set-TestPlayer $rich 0 0 2500000 'Kapitänin Ada'
+    Add-TestTown $rich 0 'Zaustaden' 3 0 @(2000, 4000, 4000, 2500, 900) 1200
+    Add-TestTown $rich 2 'Neu-Brandt' 11 0 @(1500, 3000, 3000, 2000, 300) 800
+    Set-ImgU32 $rich ($RvaPlayers + 0x78) (480 * 2000); Set-ImgU32 $rich ($RvaPlayers + 0x74) (480 * 1000)
+    Set-ImgU16 $rich ($RvaPlayers + 0x8E) 3
+    for ($i = 20; $i -lt 36; $i++) { Set-ImgByte $rich ($RvaShips + $i * $ShipSize) 0x50; Set-ImgByte $rich ($RvaShips + $i * $ShipSize + 0x28) 0 }
+    Set-ImgI32 $rich ($RvaTimers + 0x190) (101 * $ClockPerHour)
+    $rs = Get-LogbookSnapshot $rich; $rme = Get-PlayerStats $rs 0; $rmo = Get-Balance $rs 0
+    $c = Get-AchievementConditions $rs $rme $rmo @{ Session = $null; Events = @(); Now = $t1; Kind = 'endless' }
+    $want = 'res_25000 city_5000 noble_town full_society balance_2000 trade_500 ships_20 hours_100 rivals_3 top_dog' -split ' '
+    $miss = @($want | Where-Object { -not $c.ContainsKey($_) })
+    $extra = @('fast_1000', 'night_owl', 'comeback', 'adventure', 'daily', 'custom', 'event_first' | Where-Object { $c.ContainsKey($_) })
+    & $check "big empire ($($rme.Total) res., $($rme.Ships) ships, balance $($rmo.Balance)): 10 new conditions hold (missing: $($miss -join ',')), no time/kind/event one ($($extra -join ','))" ($miss.Count -eq 0 -and $extra.Count -eq 0)
+    $rc = Get-AchievementConditions (Get-LogbookSnapshot (New-TestImage 'race')) (Get-PlayerStats (Get-LogbookSnapshot (New-TestImage 'race')) 0) (Get-Balance (Get-LogbookSnapshot (New-TestImage 'race')) 0) @{ Now = $t1; Kind = 'campaign'; Events = @() }
+    & $check "race image: the new conditions do not hold (top dog needs 2,000 and more than all rivals)" (@($want | Where-Object { $rc.ContainsKey($_) }).Count -eq 0)
+    $fimg = New-TestImage 'race'; Set-ImgI32 $fimg ($RvaTimers + 0x190) 60000
+    $fs = Get-LogbookSnapshot $fimg
+    $c1 = Get-AchievementConditions $fs (Get-PlayerStats $fs 0) (Get-Balance $fs 0) @{ Now = [datetime]'2026-11-15T02:30:00'; Kind = 'adventure'; Events = @() }
+    Set-ImgI32 $fimg ($RvaTimers + 0x190) 70000
+    $fs = Get-LogbookSnapshot $fimg
+    $c2 = Get-AchievementConditions $fs (Get-PlayerStats $fs 0) (Get-Balance $fs 0) @{ Now = $t1; Kind = 'daily'; Events = @() }
+    & $check "1,030 residents at 1 h 50 min: Boomtown; at 2 h 08 min: not" ($c1.fast_1000 -and -not $c2.fast_1000)
+    & $check 'night owl at 02:30, not at 20:00; random/daily adventure from the kind of the session' ($c1.night_owl -and -not $c2.night_owl -and $c1.adventure -and $c2.daily -and -not $c1.daily)
+
+    Write-Host 'Long-term achievements (logbook.json)'
+    $own = Get-OwnScenariosFolder
+    New-Item -ItemType Directory -Force -Path $own | Out-Null
+    foreach ($n in @((1..6 | ForEach-Object { "Sturmsee $_ - Kapitel" }) + @('Neue Welt 1 - Ankunft', 'Neue Welt 2 - Ernte', 'Neue Welt 3 - Krone', 'Herausforderung - Goldrausch'))) { [IO.File]::WriteAllBytes((Join-Path $own "$n.szs"), [byte[]]@(0)) }
+    & $check "chapters per campaign: Sturmsee $(Get-CampaignChapterCount 'Sturmsee'), Neue Welt $(Get-CampaignChapterCount 'Neue Welt') (files), Wettlauf $(Get-CampaignChapterCount 'Wettlauf') (known), unknown $(Get-CampaignChapterCount 'Gibtsnicht')" ((Get-CampaignChapterCount 'Sturmsee') -eq 6 -and (Get-CampaignChapterCount 'Neue Welt') -eq 3 -and (Get-CampaignChapterCount 'Wettlauf') -eq 4 -and (Get-CampaignChapterCount 'Gibtsnicht') -eq 0)
+    $mk = { param($scen, $res, $h = 5.0) [ordered]@{ scenario = $scen; title = ''; result = $res; date = '2026-11-13T10:00:00'; gameHours = $h } }
+    $ms = New-Object Collections.ArrayList
+    foreach ($i in 1..6) { [void]$ms.Add((& $mk "Sturmsee $i - Kapitel" 'won')) }
+    foreach ($i in 1..4) { [void]$ms.Add((& $mk "Wettlauf $i - Kapitel" 'won')) }
+    foreach ($i in 1..5) { [void]$ms.Add((& $mk "Smaragdinseln $i - Kapitel" 'won')) }
+    [void]$ms.Add((& $mk 'Neue Welt 1 - Ankunft' 'lost')); [void]$ms.Add((& $mk 'Neue Welt 1 - Ankunft' 'won')); [void]$ms.Add((& $mk 'Neue Welt 2 - Ernte' 'won')); [void]$ms.Add((& $mk 'Neue Welt 3 - Krone' 'won'))
+    [void]$ms.Add((& $mk 'Herausforderung - Goldrausch' 'won' 2.4)); [void]$ms.Add((& $mk 'Abenteuer 4711 Fordernd' 'won')); [void]$ms.Add((& $mk 'Tagesabenteuer 2026-11-14' 'won'))
+    $fin = @(Get-FinishedCampaigns $ms)
+    & $check "finished campaigns: $($fin -join ', ') (Smaragdinseln has 5 of 6)" (($fin -join ',') -eq 'Neue Welt,Sturmsee,Wettlauf')
+    $lt = Get-LongTermConditions @{ missions = $ms; games = @(1..10 | ForEach-Object { @{ result = 'quit' } }) }
+    $wantLt = 'chapter_won challenge_won adventure_won daily_won fast_win hattrick revenge campaign_done campaigns_3 games_10' -split ' '
+    & $check "long-term conditions: $((@($lt.Keys) | Sort-Object) -join ',')" (@($wantLt | Where-Object { -not $lt.ContainsKey($_) }).Count -eq 0 -and $lt.Count -eq $wantLt.Count)
+    $lt2 = Get-LongTermConditions @{ missions = @((& $mk 'Wettlauf 1 - A' 'won'), (& $mk 'Wettlauf 2 - B' 'lost'), (& $mk 'Wettlauf 1 - A' 'won'), (& $mk 'Wettlauf 3 - C' 'won' 0.0)); games = @(1..9) }
+    & $check 'won-lost-won-won is no hat trick, no revenge without an earlier loss of that scenario, 9 games are not 10, 0.0 h is no lightning victory' (-not $lt2.hattrick -and -not $lt2.revenge -and -not $lt2.games_10 -and -not $lt2.fast_win -and $lt2.chapter_won -and -not $lt2.campaign_done)
+    $d = Read-LogbookData; foreach ($m in $ms) { [void]$d.missions.Add($m) }; Save-LogbookData $d
+    $lbl = New-LogbookState
+    $new = @(Update-LongTermAchievements $lbl $t1)
+    $again = @(Update-LongTermAchievements $lbl $t1)
+    $saved = @((Read-LogbookData).achievements | ForEach-Object { $_.id })
+    & $check "earlier games unlock retroactively: $($new.Count) new and stored, a second call adds nothing" ($new.Count -eq 9 -and $again.Count -eq 0 -and @($wantLt | Where-Object { $_ -ne 'games_10' -and $saved -notcontains $_ }).Count -eq 0)
+
+    Write-Host 'History (one point per game minute)'
+    & $useFolder 'appdata3'
+    $histDir = Get-HistoryFolder
+    $lbh = New-LogbookState; $lbh.Conn.Status = 'attached'; $lbh.Conn.Pid = 5151
+    $himg = New-TestImage 'race'
+    $setClock = { param($img, [long]$v) Set-ImgI32 $img ($RvaTimers + 0x190) $v }
+    $read = { param($lbx, $img, [long]$clock) & $setClock $img $clock; $script:tickTime = $t1.AddSeconds(3 * $script:tickNo); $script:tickNo++; Update-GameState $lbx (Get-LogbookSnapshot $img) $script:tickTime }
+    $script:tickNo = 0
+    for ($i = 0; $i -lt 20; $i++) { Set-ImgI32 $himg ($RvaPlayers + 4) (45210 + 100 * $i); $st = & $read $lbh $himg (100000 + 300 * $i) }
+    $hs = $lbh.Session
+    $clocks = @($hs.Samples | ForEach-Object { $_[0] })
+    & $check "20 readings 300 clock units apart: $($clocks.Count) points (every >= 545 = one game minute), $($clocks[0]) .. $($clocks[-1])" ($clocks.Count -eq 10 -and $clocks[1] -eq 100600 -and $clocks[-1] -eq 105400 -and $hs.Kind -eq 'campaign')
+    & $check "history file $(Split-Path -Leaf $hs.File) written (every 5 points) and readable" ((Split-Path -Leaf $hs.File) -eq '20261114-200000.json' -and (Read-HistoryFile $hs.File).Samples.Count -eq 10)
+    foreach ($i in 1..3) { $st = & $read $lbh $himg 105700 }
+    & $check "paused (same clock): no new point ($($hs.Samples.Count)), paused $($st.Paused)" ($hs.Samples.Count -eq 10 -and $st.Paused)
+    Add-TestTown $himg 6 'Fischerhude' 23 0 @(99000, 0, 0, 0, 0) 0
+    $st = & $read $lbh $himg 106000
+    Add-TestTown $himg 6 'Fischerhude' 23 0 @(35, 0, 0, 0, 0) 0
+    $st = & $read $lbh $himg 106300
+    & $check "a single reading with 99,000 more residents is no peak ($($hs.PeakResidents))" ($hs.PeakResidents -eq 1030)
+    Add-TestTown $himg 6 'Fischerhude' 23 0 @(500, 0, 0, 0, 0) 0
+    $st = & $read $lbh $himg 106600; $st = & $read $lbh $himg 106900
+    & $check "two readings with 1,495 residents: peak $($hs.PeakResidents), top stage $($hs.TopStage) (merchants)" ($hs.PeakResidents -eq 1495 -and $hs.TopStage -eq 3)
+    $id0 = $hs.Id; $n0 = $hs.Samples.Count
+    $st = & $read $lbh $himg 102000
+    & $check "savegame of the same game loaded (clock back to 102,000): same session, later points dropped ($n0 -> $($lbh.Session.Samples.Count)), reloads $($lbh.Session.Reloads)" ($lbh.Session.Id -eq $id0 -and $lbh.Session.Samples.Count -eq 4 -and $lbh.Session.Reloads -eq 1)
+    foreach ($v in 102600, 103200, 103800, 104400) { $st = & $read $lbh $himg $v }
+    Set-ImgText $himg ($RvaScenario + 0x13) 'Abenteuer 4711 Fordernd' 0x40
+    $st = & $read $lbh $himg 1000
+    $g = @($lbh.Games)[-1]
+    & $check "another scenario started: the old game ends as 'left' ($($g.result), $($g.game), $($g.playedHours) h, max. $($g.peakResidents) res.)" ($g.result -eq 'quit' -and $g.scenario -eq 'Wettlauf 2 - Buergerstolz' -and $g.peakResidents -eq 1495 -and $lbh.ShowSummary -and $st.Summary)
+    $oldFile = Read-HistoryFile (Join-Path $histDir "$id0.json")
+    & $check "new session '$($lbh.Session.Kind)', the old history file has its end ($($oldFile.Result))" ($lbh.Session.Kind -eq 'adventure' -and $lbh.Session.Id -ne $id0 -and $oldFile.Done -and $oldFile.Result -eq 'quit')
+    $st = & $read $lbh $himg 1300
+    & $check "a random adventure unlocks 'Call of Adventure' after two readings" ($lbh.Unlocked.ContainsKey('adventure') -and $lbh.Session.Achievements -contains 'adventure')
+    foreach ($v in 2000, 3000, 4000, 5000, 6000, 7000) { $st = & $read $lbh $himg $v }
+    & $check 'the card of the previous game folds away after 10 game minutes of the next one' (-not $lbh.ShowSummary)
+    $r = Close-GameProcess $lbh $t1.AddMinutes(30)
+    $g = @($lbh.Games)[-1]
+    & $check "game process ended: the adventure ends as 'left' ($($g.kind), $($g.gameHours) h) with its achievements, card shown" ($r.Summary -and $g.kind -eq 'adventure' -and $g.result -eq 'quit' -and $lbh.ShowSummary -and @($g.achievements) -contains 'adventure')
+    $lbh.Conn.Status = 'waiting'; $lbh.PendingEnd = $r
+    $st = Update-GameState $lbh $null $t1.AddMinutes(30)
+    $items = Get-ViewItems $lbh $st $false
+    $card = @($items | Where-Object { & $isKind $_ 'Card' })
+    & $check "waiting after the game: summary card '$($card[0].Text)' with $($card[0].Cells.Length / 2) values" ($card.Count -eq 1 -and $card[0].Cells.Length -ge 12 -and $st.Summary)
+    $citems = Get-ViewItems $lbh $st $true
+    & $check "compact mode: one line about the last game ('$(@($citems)[-1].Text)'), no tabs" (@($citems)[-1].Key -eq 'summary:hide' -and @($citems | Where-Object { & $isKind $_ 'Tabs' }).Count -eq 0)
+    $lbh.Conn.Status = 'attached'; $lbh.Conn.Pid = 5152
+    Set-ImgText $himg ($RvaScenario + 0x13) 'Eigenes - Testinsel' 0x40
+    $st = & $read $lbh $himg 500; $st = & $read $lbh $himg 900
+    $sid = $lbh.Session.Id; $nGames = @($lbh.Games).Count
+    $r = Close-GameProcess $lbh $t1.AddMinutes(40)
+    & $check "a game left after less than 5 game minutes is not recorded, its history file is removed; own scenario played ('A World of Your Own')" (-not $r.Summary -and @($lbh.Games).Count -eq $nGames -and -not (Test-Path -LiteralPath (Join-Path $histDir "$sid.json")) -and $lbh.Unlocked.ContainsKey('custom'))
+    $lbh.Conn.Status = 'attached'; $lbh.Conn.Pid = 5153
+    Set-ImgText $himg ($RvaScenario + 0x13) 'Wettlauf 2 - Buergerstolz' 0x40
+    foreach ($v in 200000, 200600, 201200, 201800, 202400, 203000) { $st = & $read $lbh $himg $v }
+    Save-HistoryFile $lbh $lbh.Session
+    $rid = $lbh.Session.Id; $rn = $lbh.Session.Samples.Count
+    $lbr = New-LogbookState; $lbr.Conn.Status = 'attached'; $lbr.Conn.Pid = 5153
+    $st = & $read $lbr $himg 203700
+    & $check "logbook restarted while the game runs: the history continues in the same file ($rid, $rn -> $($lbr.Session.Samples.Count) points)" ($lbr.Session.Id -eq $rid -and $lbr.Session.Samples.Count -eq $rn + 1)
+    Save-HistoryFile $lbr $lbr.Session
+    $lbh.Session = $null
+    $lbu = New-LogbookState
+    $closed = @(Close-UnfinishedHistory $lbu)
+    & $check "start of the window: the unfinished history of a game process that is gone is closed ($($closed.Count), $($closed[0].Summary.result), $($closed[0].Summary.game))" ($closed.Count -eq 1 -and $closed[0].Summary.result -eq 'quit' -and (Read-HistoryFile (Join-Path $histDir "$rid.json")).Done -and $lbu.ShowSummary)
+    $j = [IO.File]::ReadAllText((Join-Path $histDir "$id0.json")) | ConvertFrom-Json
+    & $check "history file format: $(@($j.fields).Count) fields, rows of $(@(@($j.samples)[0]).Count) numbers, pid $($j.pid), end '$($j.end.result)'" (@($j.fields).Count -eq 12 -and @(@($j.samples)[0]).Count -eq 12 -and $j.pid -eq 5151 -and $j.scenario -eq 'Wettlauf 2 - Buergerstolz' -and $j.end.result -eq 'quit' -and $j.state.peakResidents -eq 1495)
+    $pre = @(Get-ChildItem -LiteralPath $histDir -Filter '*.json' -File).Count
+    for ($i = 0; $i -lt 35; $i++) { [IO.File]::WriteAllText((Join-Path $histDir ('20250101-{0:D6}.json' -f $i)), '{}') }
+    $lbh.Conn.Pid = 5154
+    Set-ImgText $himg ($RvaScenario + 0x13) 'Sturmsee 1 - Schiffbruch' 0x40
+    $st = & $read $lbh $himg 50000
+    Save-HistoryFile $lbh $lbh.Session
+    $files = @(Get-ChildItem -LiteralPath $histDir -Filter '*.json' -File | Sort-Object Name)
+    & $check "rotation: $($files.Count) history files kept (newest 30), oldest '$($files[0].Name)', the new one present" ($files.Count -eq 30 -and $files[0].Name -eq ('20250101-{0:D6}.json' -f ($pre + 35 - 29)) -and (Test-Path -LiteralPath $lbh.Session.File))
+    $ts = @{ Samples = (New-Object 'System.Collections.Generic.List[long[]]'); Interval = $SampleClocks; Unsaved = 0 }
+    for ($i = 0; $i -lt 1000; $i++) { [void](Add-SessionSample $ts ([long[]]@(($SampleClocks * $i), $i, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))) }
+    & $check "cap: 1,000 game minutes -> $($ts.Samples.Count) points (max. 720), interval $($ts.Interval), first $($ts.Samples[0][0]), last $($ts.Samples[$ts.Samples.Count - 1][0])" ($ts.Samples.Count -eq 500 -and $ts.Interval -eq 2 * $SampleClocks -and $ts.Samples[0][0] -eq 0 -and $ts.Samples[$ts.Samples.Count - 1][0] -eq 998 * $SampleClocks)
+
+    # Same process, same (empty) scenario name: a new endless game or another savegame is a new game, not a reload.
+    $lbn = New-LogbookState; $lbn.Conn.Status = 'attached'; $lbn.Conn.Pid = 5160
+    $nimg = New-TestImage 'endless'
+    $script:tickNo = 200
+    $st = & $read $lbn $nimg 300; $st = & $read $lbn $nimg 20000
+    $first = $lbn.Session.Id
+    & $check "a jump of 19,700 forward with the same towns (a later savegame): same session ($($lbn.Session.FirstTown))" ($lbn.Session.Id -eq $first -and $lbn.Session.FirstTown -eq '3:Zaustaden' -and $lbn.Session.Samples.Count -eq 2)
+    $st = & $read $lbn $nimg 900
+    & $check "clock back to 900 (a new game starts near zero): new session, the old one recorded as a game ($(@($lbn.Games)[-1].result), $(@($lbn.Games)[-1].kind))" ($lbn.Session.Id -ne $first -and $lbn.Session.FirstClock -eq 900 -and @($lbn.Games)[-1].result -eq 'quit' -and @($lbn.Games)[-1].kind -eq 'endless')
+    $second = $lbn.Session.Id
+    foreach ($v in 1500, 2000, 2500, 3000, 3500, 4000) { $st = & $read $lbn $nimg $v }
+    Add-TestTown $nimg 0 'Zaustaden' 9 0 @(40, 180, 320, 150, 0) 120
+    $st = & $read $lbn $nimg 2000
+    & $check "clock back to 2,000 with the first town on another island (another savegame): new session ($($lbn.Session.FirstTown))" ($lbn.Session.Id -ne $second -and $lbn.Session.FirstTown -eq '9:Zaustaden')
+    $third = $lbn.Session.Id
+    foreach ($v in 2600, 3200, 3800) { $st = & $read $lbn $nimg $v }
+    foreach ($ti in 0, 2, 6) { $nimg.Write($RvaSettlements + $ti * $SettlementSize + 0x18, [byte[]]@(0xFF)) }
+    $st = & $read $lbn $nimg 3000
+    & $check 'clock back, the towns of that time are gone: new session' ($lbn.Session.Id -ne $third -and $lbn.Errors.Count -eq 0)
+
+    Write-Host 'Game summary, logbook.json'
+    & $useFolder 'appdata4'
+    $lbw = New-LogbookState; $lbw.Conn.Status = 'attached'; $lbw.Conn.Pid = 6000
+    $wimg = New-TestImage 'race'
+    foreach ($v in 100000, 100600, 101200) { $st = & $read $lbw $wimg $v }
+    Set-ImgByte $wimg ($RvaPlayers + 0x84) 1; Set-ImgI32 $wimg $RvaTimers 1
+    foreach ($i in 0..3) { Set-ImgI32 $wimg ($RvaPlayers + $i * $PlayerSize) 9 }
+    $stWon = & $read $lbw $wimg 101500
+    $g = @($lbw.Games)[-1]
+    & $check "won race: summary ($($g.result), $($g.gameHours) h, max. $($g.peakResidents) res., max. $($g.peakGold) gold, $($g.towns) towns, stage $($g.topStage), $(@($g.achievements) -join ','))" ($g.result -eq 'won' -and $g.gameHours -eq 3.1 -and $g.peakResidents -eq 1030 -and $g.peakGold -eq 45210 -and $g.towns -eq 3 -and $g.topStage -eq 3 -and $g.kind -eq 'campaign' -and $g.mission -and (@('mission_won', 'race_won', 'chapter_won', 'first_town') | Where-Object { @($g.achievements) -notcontains $_ }).Count -eq 0)
+    $d = Read-LogbookData
+    & $check "logbook.json: mission, achievements and the game written together; history '$($g.history)' has the end" ($d.missions.Count -eq 1 -and $d.games.Count -eq 1 -and @($d.achievements | Where-Object { $_.id -eq 'chapter_won' }).Count -eq 1 -and (Read-HistoryFile (Join-Path (Get-HistoryFolder) $g.history)).End.result -eq 'won' -and @($stWon.NewUnlocks | ForEach-Object { $_.id }) -contains 'chapter_won')
+    $d.extra['otherTool'] = 'keep me'; Save-LogbookData $d
+    [void](Add-LogbookEntries @() @() @())
+    $raw = [IO.File]::ReadAllText((Get-LogbookFile)) | ConvertFrom-Json
+    $keys = @($raw.PSObject.Properties | ForEach-Object { $_.Name }) -join ','
+    & $check "logbook.json keys ($keys): the old ones, 'games', and an unknown key of another tool kept" ($keys -eq 'version,achievements,missions,games,settings,otherTool' -and $raw.otherTool -eq 'keep me' -and @($raw.missions)[0].scenario -eq 'Wettlauf 2 - Buergerstolz')
+    $many = @(1..105 | ForEach-Object { [ordered]@{ date = '2026-11-14T10:00:00'; result = 'quit'; game = "G$_"; kind = 'endless' } })
+    [void](Add-LogbookEntries @() @() $many)
+    $d = Read-LogbookData
+    & $check "game summaries capped at $GamesKeep, the newest kept ($($d.games.Count), last $($d.games[$d.games.Count - 1].game))" ($d.games.Count -eq 100 -and $d.games[99].game -eq 'G105' -and $d.games[0].game -eq 'G6')
+
+    Write-Host 'Window: tabs, folding, history view, clicks'
+    $lbw.Games = New-Object Collections.ArrayList; [void]$lbw.Games.Add($g)
+    $items = Get-ViewItems $lbw $stWon $false
+    $tabs = @($items | Where-Object { & $isKind $_ 'Tabs' })
+    & $check "game tab: tab strip ($($tabs[0].Legend -join '/')), 'LAST GAME' card above the mission, 53 badges" ($tabs.Count -eq 1 -and $tabs[0].Value1 -eq 0 -and $items[2].Key -eq 'summary:hide' -and (& $isKind $items[3] 'Card') -and @($items | Where-Object { & $isKind $_ 'Badge' }).Count -eq 53)
+    & $check "click on the second tab -> '$(Invoke-ViewClick $lbw 'tabs:1')', History tab" ($lbw.Tab -eq 'history')
+    $items = Get-ViewItems $lbw $stWon $false
+    $charts = @($items | Where-Object { & $isKind $_ 'Chart' })
+    & $check "History tab: $($charts.Count) charts ($(($charts | ForEach-Object { $_.Text }) -join ' / ')) with $($charts[0].X.Length) points; residents stacked (6 series), balance split at zero" ($charts.Count -eq 4 -and $charts[0].X.Length -eq 3 -and $charts[1].Stacked -and $charts[1].Series.Length -eq 6 -and $charts[2].ZeroSplit -and $charts[3].Series.Length -eq 2)
+    & $check 'History tab: summary card and the played game in the list, no badges' (@($items | Where-Object { & $isKind $_ 'Card' }).Count -eq 1 -and @($items | Where-Object { $_.Key -eq 'game:0' }).Count -eq 1 -and @($items | Where-Object { & $isKind $_ 'Badge' }).Count -eq 0)
+    [void](Invoke-ViewClick $lbw 'section:charts')
+    $vi = Get-ViewItems $lbw $stWon $false; $n1 = @($vi | Where-Object { & $isKind $_ 'Chart' }).Count
+    [void](Invoke-ViewClick $lbw 'section:charts')
+    $vi = Get-ViewItems $lbw $stWon $false; $n2 = @($vi | Where-Object { & $isKind $_ 'Chart' }).Count
+    & $check "fold the charts away and back ($n1 / $n2)" ($n1 -eq 0 -and $n2 -eq 4)
+    [void](Invoke-ViewClick $lbw 'tabs:0'); [void](Invoke-ViewClick $lbw 'section:achievements')
+    $vi = Get-ViewItems $lbw $stWon $false; $b1 = @($vi | Where-Object { & $isKind $_ 'Badge' }).Count
+    [void](Invoke-ViewClick $lbw 'section:achievements'); [void](Invoke-ViewClick $lbw 'summary:hide')
+    $vi = Get-ViewItems $lbw $stWon $false
+    & $check "fold the achievements away ($b1 badges), back ($(@($vi | Where-Object { & $isKind $_ 'Badge' }).Count)); hide the card" ($b1 -eq 0 -and @($vi | Where-Object { & $isKind $_ 'Badge' }).Count -eq 53 -and @($vi | Where-Object { & $isKind $_ 'Card' }).Count -eq 0)
+    Save-LogbookSettings @{ tab = 'history'; collapsed = @('rivals', 'events') }
+    $lbs = New-LogbookState
+    & $check "tab and folded sections are restored from the settings ($($lbs.Tab); $(@($lbs.Collapsed.Keys | Sort-Object) -join ','))" ($lbs.Tab -eq 'history' -and $lbs.Collapsed.ContainsKey('rivals') -and $lbs.Collapsed.ContainsKey('events'))
+    # A game picked in the list: its history file and its summary.
+    $lbw.Session = $null; $lbw.Tab = 'history'
+    [void](Invoke-ViewClick $lbw 'game:0')
+    $items = Get-ViewItems $lbw $stWon $false
+    & $check "picked game: charts from its history file ($(@($items | Where-Object { & $isKind $_ 'Chart' }).Count)), its card, 'back' link, row highlighted" (@($items | Where-Object { & $isKind $_ 'Chart' }).Count -eq 4 -and @($items | Where-Object { $_.Key -eq 'history:live' }).Count -eq 1 -and @($items | Where-Object { $_.Key -eq 'game:0' -and $_.Highlight }).Count -eq 1)
+    [void](Invoke-ViewClick $lbw 'history:live')
+    & $check 'back to the current game' ($null -eq $lbw.SelectedGame)
+    $cv = New-Object AnnoLogbook.Canvas; $cv.Width = 444
+    $lbw.Tab = 'game'
+    $its = Get-ViewItems $lbw $stWon $false
+    $cv.SetItems($its)
+    $tab = @($its | Where-Object { & $isKind $_ 'Tabs' })[0]
+    $hdr = @($its | Where-Object { $_.Key -eq 'section:achievements' })[0]
+    $p1 = New-Object Drawing.Point(($tab.Parts[1].X + 5), ($tab.Parts[1].Y + 5))
+    $script:clickKey = $null
+    $cv.Add_ItemClicked({ param($source, $click) $script:clickKey = $click.Key })
+    $cv.RaiseItemClick($cv.KeyAt($p1))
+    & $check "canvas: hit test of the second tab '$($cv.KeyAt($p1))' raises ItemClicked ('$($script:clickKey)'), header -> '$($cv.KeyAt((New-Object Drawing.Point(($hdr.Bounds.X + 10), ($hdr.Bounds.Y + 20)))))'" ($script:clickKey -eq 'tabs:1' -and $cv.KeyAt((New-Object Drawing.Point(($hdr.Bounds.X + 10), ($hdr.Bounds.Y + 20)))) -eq 'section:achievements')
+    $cv.Dispose()
+
+    Write-Host 'Events (events.json of anno-patcher.ps1 -Events)'
+    & $useFolder 'appdata5'
+    $lbe = New-LogbookState; $lbe.Conn.Status = 'attached'; $lbe.Conn.Pid = 6161
+    $eimg = New-TestImage 'race'
+    $script:tickNo = 0
+    $st = & $read $lbe $eimg 100000
+    & $check 'no events.json: no events, no error' (@($lbe.Events.List).Count -eq 0 -and @($st.NewEvents).Count -eq 0 -and $lbe.Errors.Count -eq 0)
+    New-Item -ItemType Directory -Force -Path (Split-Path (Get-EventsFile)) | Out-Null
+    [IO.File]::WriteAllText((Get-EventsFile), '{ "version": 1, "events": [ {')
+    $st = & $read $lbe $eimg 100300
+    & $check 'broken events.json: ignored, no error' (@($lbe.Events.List).Count -eq 0 -and $lbe.Errors.Count -eq 0)
+    $evs = New-Object Collections.ArrayList
+    [void]$evs.Add((New-TestEvent 6161 $t1.AddMinutes(-10) 90000 'fire' 'Feuer im Lager' 'Fire in the Warehouse' '-10 t Holz' '-10 t wood'))
+    [void]$evs.Add((New-TestEvent 6161 $t1.AddMinutes(-5) 95000 'trader' 'Fliegender Händler' 'Travelling Trader' '+5''000 Gold' '+5,000 gold' 99000))
+    [void]$evs.Add((New-TestEvent 9999 $t1.AddMinutes(-1) 95000 'other' 'Anderes Spiel' 'Other Game' '' ''))
+    Write-TestEvents $evs
+    $st = & $read $lbe $eimg 100600
+    & $check "file appears: 2 events of this process (not the other one), no banner for events older than 2 minutes" (@($lbe.Events.List).Count -eq 2 -and @($st.NewEvents).Count -eq 0)
+    [void]$evs.Add((New-TestEvent 6161 $t1.AddSeconds(8) 100700 'storm' 'Sturmflut' 'Storm Surge' '-20 t Holz' '-20 t wood' 101500))
+    Write-TestEvents $evs
+    $st = & $read $lbe $eimg 100900
+    $bt = Get-EventBannerText $st.NewEvents
+    $script:UiGerman = $true; $btDe = Get-EventBannerText $st.NewEvents; $script:UiGerman = $false
+    & $check "a new event of this process: banner '$bt' / '$btDe'" (@($st.NewEvents).Count -eq 1 -and $bt -match 'Event: Storm Surge – -20 t wood$' -and $btDe -match 'Ereignis: Sturmflut – -20 t Holz$')
+    # A temporary event that the patcher ended early ("endedEarly": true) is not shown as running.
+    $early = New-TestEvent 6161 $t1.AddSeconds(4) 100650 'early' 'Frühes Ende' 'Early End' 'Steuern +50 % für 1 Spielstunde' 'Taxes +50% for 1 game hour' 140000
+    $early.endedEarly = $true
+    $evsEarly = New-Object Collections.ArrayList; foreach ($x in $evs) { [void]$evsEarly.Add($x) }; [void]$evsEarly.Insert($evsEarly.Count - 1, $early)
+    Write-TestEvents $evsEarly
+    $lbx = New-LogbookState; $lbx.Conn.Status = 'attached'; $lbx.Conn.Pid = 6161
+    $stx = & $read $lbx $eimg 100900
+    $xitems = Get-ViewItems $lbx $stx $false
+    $xrow = @($xitems | Where-Object { [string]$_.Text -eq 'Early End' })
+    $srow = @($xitems | Where-Object { [string]$_.Text -eq 'Storm Surge' })
+    & $check "ended early: '$($xrow[0].Sub)' (not running); a running one: '$($srow[0].Sub)'" ($xrow.Count -eq 1 -and $xrow[0].Sub -match 'ended early$' -and $xrow[0].Sub -notmatch 'left' -and $srow.Count -eq 1 -and $srow[0].Sub -match 'left$')
+    Write-TestEvents $evs
+    $items = Get-ViewItems $lbe $st $false
+    $rows = @($items | Where-Object { & $isKind $_ 'Row' } | Where-Object { $_.Icon -eq [string][char]0x2726 })
+    & $check "events section: $($rows.Count) rows, newest first ('$($rows[0].Text)', '$($rows[0].Right)' red, '$($rows[0].Sub)'), gain in green" ($rows.Count -eq 3 -and $rows[0].Text -eq 'Storm Surge' -and $rows[0].RightColor -eq [AnnoLogbook.Canvas]::Bad -and $rows[0].Sub -match 'left' -and $rows[1].RightColor -eq [AnnoLogbook.Canvas]::Good -and @($items | Where-Object { $_.Key -eq 'section:events' }).Count -eq 1)
+    $st = & $read $lbe $eimg 101200
+    & $check "first event of the game: 'Expect the Unexpected' after two readings; older events of the process before the session do not count ($($lbe.Session.EventCount))" ($lbe.Unlocked.ContainsKey('event_first') -and $lbe.Session.EventCount -eq 1 -and -not $lbe.Unlocked.ContainsKey('event_survived'))
+    $st = & $read $lbe $eimg 101600; $st = & $read $lbe $eimg 101900
+    & $check "the storm surge is over (clock >= 101,500): 'Weathered the Storm'" ($lbe.Unlocked.ContainsKey('event_survived'))
+    foreach ($i in 1..4) { [void]$evs.Add((New-TestEvent 6161 $t1.AddSeconds(30 + $i) (102000 + $i) "e$i" "Ereignis $i" "Event $i" '' '')) }
+    Write-TestEvents $evs
+    $st = & $read $lbe $eimg 102300
+    & $check "four more at once: one banner '$(Get-EventBannerText $st.NewEvents)'" (@($st.NewEvents).Count -eq 4 -and (Get-EventBannerText $st.NewEvents) -match '\(\+3 more\)$')
+    $st = & $read $lbe $eimg 102600
+    & $check "five events in this game: 'Eventful Times'" ($lbe.Unlocked.ContainsKey('events_5'))
+    $signs = @(@{ de = "+5'000 Gold"; en = '+5,000 gold' }, @{ de = '-1.000 Gold'; en = '-1,000 gold' }, @{ de = 'Steuern -25 % für 1 Spielstunde'; en = 'Taxes -25% for 1 game hour' },
+        @{ de = 'Produktion +50 % für 1 Spielstunde'; en = 'Production +50% for 1 game hour' }, @{ de = '+12 t Werkzeug'; en = '+12 t tools' }, @{ de = 'Sturm'; en = 'Storm' }, '−20 t wood') | ForEach-Object { Get-EffectSign $_ }
+    & $check "effect signs of the patcher's texts: $($signs -join ' ')" (($signs -join ' ') -eq '1 -1 -1 1 1 0 -1')
+    # Mission time limit (3.0: the patcher's TIMERS hook sets 0x5EC1A8 from the scenario), in the game's clock units.
+    $timg = New-TestImage 'race'; Set-ImgI32 $timg ($RvaTimers + 0x240) 108000
+    $lbt = New-LogbookState; $lbt.Conn.Status = 'attached'; $lbt.Conn.Pid = 7272
+    $null = & $read $lbt $timg 9000; $stt = & $read $lbt $timg 9030
+    $uiWas = $script:UiGerman; $script:UiGerman = $false
+    $titems = Get-ViewItems $lbt $stt $false
+    $trow = @($titems | Where-Object { [string]$_.Text -match '^Time limit' })
+    $script:UiGerman = $true; $tde = Format-TimeLimit 108000 9030; $script:UiGerman = $uiWas
+    & $check "time limit 108,000 at clock 9,030: '$($trow[0].Text)' / '$tde'" ($trow.Count -eq 1 -and $trow[0].Text -eq 'Time limit: 2 h 44 min left (clock 15:03 of 180:00)' -and $tde -eq 'Zeitlimit: noch 2 h 44 min (Uhr 15:03 von 180:00)')
+    $lbe2 = New-LogbookState; $lbe2.Conn.Status = 'attached'; $lbe2.Conn.Pid = 6161
+    $st = Update-GameState $lbe2 (Get-LogbookSnapshot $eimg) $t1.AddSeconds(40)
+    & $check "logbook started a few seconds after an event: banner for the recent ones only ($(@($st.NewEvents).Count))" (@($st.NewEvents).Count -eq 4 -and $lbe2.Errors.Count -eq 0 -and $lbe.Errors.Count -eq 0)
+
+    Write-Host 'Window with the new parts (PNG files)'
+    foreach ($lang in 'de', 'en') {
+        $script:UiGerman = $lang -eq 'de'
+        & $useFolder "appdata-png-$lang"
+        # History tab: a long made-up game and twelve played games.
+        $lbv = New-LogbookState; $lbv.Conn.Status = 'attached'; $lbv.Conn.Pid = 4711
+        $img = New-TestImage 'race'
+        $st = Update-GameState $lbv (Get-LogbookSnapshot $img) $t1
+        $lbv.Session = New-DemoHistory $lbv $t1 380 $st.GameName 'campaign'
+        $lbv.Games = New-DemoGames
+        $lbv.Tab = 'history'
+        $file = Join-Path $folder "logbook-$lang-history.png"
+        Save-WindowImage $lbv $st $false $file; $pngs += $file
+        & $check "PNG $file" ((Test-Path -LiteralPath $file) -and (Get-Item -LiteralPath $file).Length -gt 3000)
+        # A game picked in the list (its own history file) with its summary card.
+        $old = New-DemoHistory $lbv ([datetime]'2026-11-13T19:00:00') 200 (Txt 'Endless game' 'Endlosspiel') 'endless'
+        $old.File = Join-Path (Get-HistoryFolder) 'demo-endless.json'; Save-HistoryFile $lbv $old
+        $lbv.Games[10].history = 'demo-endless.json'
+        [void](Invoke-ViewClick $lbv 'game:10')
+        $file = Join-Path $folder "logbook-$lang-history-picked.png"
+        Save-WindowImage $lbv $st $false $file; $pngs += $file
+        & $check "PNG $file" ((Test-Path -LiteralPath $file) -and (Get-Item -LiteralPath $file).Length -gt 3000)
+        # Game tab with events and the event banner.
+        $lbv = New-LogbookState; $lbv.Conn.Status = 'attached'; $lbv.Conn.Pid = 4711
+        $evs = @(
+            (New-TestEvent 4711 $t1.AddMinutes(-20) 251000 'trader' 'Fliegender Händler' 'Travelling Trader' '+5''000 Gold' '+5,000 gold'),
+            (New-TestEvent 4711 $t1.AddMinutes(-8) 258000 'drought' 'Dürre auf Kalmar' 'Drought on Kalmar' '-50 % Ernte' '-50 % harvest' 280000),
+            (New-TestEvent 4711 $t1 264900 'storm' 'Sturmflut' 'Storm Surge' '-20 t Holz' '-20 t wood' 270000))
+        Write-TestEvents $evs
+        $st = Update-GameState $lbv (Get-LogbookSnapshot $img) $t1
+        $file = Join-Path $folder "logbook-$lang-events.png"
+        Save-WindowImage $lbv $st $false $file @() $st.NewEvents; $pngs += $file
+        & $check "PNG $file (banner for $(@($st.NewEvents).Count) new event)" ((Test-Path -LiteralPath $file) -and @($st.NewEvents).Count -eq 1)
+        # Game tab right after a won game: summary card.
+        $lbv = New-LogbookState; $lbv.Conn.Status = 'attached'; $lbv.Conn.Pid = 4712
+        $img = New-TestImage 'race'
+        $script:tickNo = 0
+        foreach ($v in 100000, 120000, 140000, 160000, 180000) { $st = & $read $lbv $img $v }
+        Set-ImgByte $img ($RvaPlayers + 0x84) 1; Set-ImgI32 $img $RvaTimers 1
+        foreach ($i in 0..3) { Set-ImgI32 $img ($RvaPlayers + $i * $PlayerSize) 9 }
+        $st = & $read $lbv $img 185000
+        $file = Join-Path $folder "logbook-$lang-summary.png"
+        Save-WindowImage $lbv $st $false $file $st.NewUnlocks; $pngs += $file
+        & $check "PNG $file ($($st.Result))" ((Test-Path -LiteralPath $file) -and $st.Result -eq 'won' -and $lbv.ShowSummary)
+        # The game was closed afterwards: compact window with the line about the last game.
+        $lbv.Conn.Status = 'waiting'
+        $stw = Update-GameState $lbv $null $t1
+        $file = Join-Path $folder "logbook-$lang-summary-compact.png"
+        Save-WindowImage $lbv $stw $true $file; $pngs += $file
+        $ci = Get-ViewItems $lbv $stw $true
+        & $check "PNG $file ('$(@($ci)[-1].Text)')" ((Test-Path -LiteralPath $file) -and (Get-Item -LiteralPath $file).Length -gt 2000 -and @($ci)[-1].Key -eq 'summary:hide')
+    }
+
     $script:UiGerman = $langBefore
     Write-Host ''
     Write-Host ("{0} of {1} checks passed. PNG files in {2}" -f ($script:checks - $script:failed), $script:checks, $folder)
@@ -1709,7 +3431,7 @@ function Invoke-SelfTest {
 
 # Builds the window invisibly with the given state and saves its content as a PNG: banner, the whole
 # canvas (also the part that would need scrolling) and the footer.
-function Save-WindowImage($lb, $st, [bool]$compact, [string]$file, $unlocks = @()) {
+function Save-WindowImage($lb, $st, [bool]$compact, [string]$file, $unlocks = @(), $events = @()) {
     $ui = New-LogbookForm $lb
     $f = $ui.Form
     $f.ShowInTaskbar = $false
@@ -1718,7 +3440,8 @@ function Save-WindowImage($lb, $st, [bool]$compact, [string]$file, $unlocks = @(
     $ui.CompactBox.Checked = $compact; $ui.TopBox.Checked = $true
     # The Shown handler runs while ShowDialog below waits, so it sees the variables of this function.
     $f.Add_Shown({
-            if ($unlocks.Count) { Show-Unlocks $ui $unlocks }
+            if (@($events).Count) { Show-EventBanner $ui $events }
+            elseif ($unlocks.Count) { Show-Unlocks $ui $unlocks }
             Show-ViewItems $ui (Get-ViewItems $lb $st $compact) $compact
             $ui.Status.Text = Get-StatusText $lb $st ([datetime]'2026-11-12T10:00:03') $compact
             [Windows.Forms.Application]::DoEvents()
@@ -1783,6 +3506,7 @@ if ($Dump) {
 
 if ($PreviewImage) {
     $lb = New-LogbookState
+    $lb.NoSave = $true   # a preview writes nothing (no history file, no logbook.json change)
     Update-Attachment $lb
     $snap = if ($lb.Conn.Status -eq 'attached') { Get-LogbookSnapshot $lb.Conn.Source } else { $null }
     $st = Update-GameState $lb $snap (Get-Date)
@@ -1821,6 +3545,40 @@ $script:Compact = $UI.CompactBox.Checked
 if ($script:Compact) { $UI.Form.Width = & $UI.Px 360 }
 $script:LastState = @{ Phase = 'waiting'; NewUnlocks = @() }
 
+$script:BannerQueue = New-Object Collections.Queue
+$script:BannerCurrent = $null; $script:BannerShownAt = Get-Date; $script:BannerDueAt = Get-Date
+
+# Banners (achievements gold, events blue), 8 seconds each (5 when another one waits). New items of the
+# kind shown are merged into the banner at once; the other kind waits (merged with a waiting one).
+function Request-Banner($item) {
+    $cur = $script:BannerCurrent
+    if (-not ($script:UI.Banner.Visible -and $script:BannerTimer.Enabled) -or -not $cur) { Show-BannerItem $item; return }
+    # Same kind: one banner for all; the time starts again only when nothing else waits.
+    if ($cur.Kind -eq $item.Kind) { Show-BannerItem @{ Kind = $item.Kind; Data = @(@($cur.Data) + @($item.Data)) } -KeepTimer:($script:BannerQueue.Count -gt 0); return }
+    foreach ($q in $script:BannerQueue) { if ($q.Kind -eq $item.Kind) { $q.Data = @(@($q.Data) + @($item.Data)); return } }
+    $script:BannerQueue.Enqueue($item)
+    # The banner on screen gets 5 seconds in all, then the waiting one follows.
+    $now = Get-Date
+    $want = $script:BannerShownAt.AddSeconds(5); if ($want -lt $now.AddMilliseconds(500)) { $want = $now.AddMilliseconds(500) }
+    if ($script:BannerDueAt -gt $want) {
+        $script:BannerTimer.Stop(); $script:BannerTimer.Interval = [int][Math]::Max(100, ($want - $now).TotalMilliseconds); $script:BannerTimer.Start()
+        $script:BannerDueAt = $want
+    }
+}
+function Show-BannerItem($item, [switch]$KeepTimer) {
+    if ($item.Kind -eq 'event') { Show-EventBanner $script:UI $item.Data }
+    else {
+        Show-Unlocks $script:UI $item.Data
+        try { [Media.SystemSounds]::Asterisk.Play() } catch { }
+    }
+    $script:BannerCurrent = $item
+    if ($KeepTimer) { return }
+    $script:BannerTimer.Stop()
+    $script:BannerTimer.Interval = $(if ($script:BannerQueue.Count) { 5000 } else { 8000 })
+    $script:BannerShownAt = Get-Date; $script:BannerDueAt = $script:BannerShownAt.AddMilliseconds($script:BannerTimer.Interval)
+    $script:BannerTimer.Start()
+}
+
 function Invoke-Refresh([bool]$read) {
     try {
         $now = Get-Date
@@ -1828,11 +3586,8 @@ function Invoke-Refresh([bool]$read) {
             Update-Attachment $script:LB
             $snap = if ($script:LB.Conn.Status -eq 'attached') { Get-LogbookSnapshot $script:LB.Conn.Source } else { $null }
             $script:LastState = Update-GameState $script:LB $snap $now
-            if ($script:LastState.NewUnlocks.Count) {
-                Show-Unlocks $script:UI $script:LastState.NewUnlocks
-                $script:BannerTimer.Stop(); $script:BannerTimer.Start()
-                try { [Media.SystemSounds]::Asterisk.Play() } catch { }
-            }
+            if (@($script:LastState.NewUnlocks).Count) { Request-Banner @{ Kind = 'unlock'; Data = @($script:LastState.NewUnlocks) } }
+            if (@($script:LastState.NewEvents).Count) { Request-Banner @{ Kind = 'event'; Data = @($script:LastState.NewEvents) } }
         }
         $script:LastItems = Get-ViewItems $script:LB $script:LastState $script:Compact
         Show-ViewItems $script:UI $script:LastItems $script:Compact
@@ -1843,9 +3598,18 @@ function Invoke-Refresh([bool]$read) {
     catch { $script:UI.Status.Text = (Txt 'Error: {0}' 'Fehler: {0}') -f $_.Exception.Message }
 }
 
+function Save-ViewSettings {
+    try { Save-LogbookSettings @{ tab = $script:LB.Tab; collapsed = @($script:LB.Collapsed.Keys | Sort-Object) } } catch { }
+}
+
 $BannerTimer = New-Object Windows.Forms.Timer
 $BannerTimer.Interval = 8000
-$BannerTimer.Add_Tick({ $script:BannerTimer.Stop(); $script:UI.Banner.Visible = $false; $script:LB.Fresh = @{}; Invoke-Refresh $false })
+$BannerTimer.Add_Tick({
+        $script:BannerTimer.Stop()
+        if ($script:BannerQueue.Count) { Show-BannerItem ($script:BannerQueue.Dequeue()) }
+        else { $script:UI.Banner.Visible = $false; $script:BannerCurrent = $null; $script:LB.Fresh = @{} }
+        Invoke-Refresh $false
+    })
 $Timer = New-Object Windows.Forms.Timer
 $Timer.Interval = 2500
 $script:TickCount = 0
@@ -1855,7 +3619,10 @@ $Timer.Add_Tick({
             $script:TickCount++
             if ($TestLog) {
                 $title = if ($script:LastItems -and $script:LastItems.Count) { $script:LastItems[0].Text } else { '' }
-                Add-Content -LiteralPath $TestLog -Encoding UTF8 -Value ('{0}|{1}|{2}|{3}|{4}|compact={5}|{6}x{7}|top={8}' -f $script:TickCount, $script:LastState.Phase, $script:UI.Status.Text, $title, $script:LB.Conn.Pid, $script:Compact, $script:UI.Form.Width, $script:UI.Form.Height, $script:UI.Form.TopMost)
+                $s = $script:LB.Session
+                $hist = if ($s) { '{0}:{1}:{2}' -f $s.Id, $s.Samples.Count, $(if ($s.Done) { $s.Result } else { 'open' }) } else { '-' }
+                $banner = if ($script:UI.Banner.Visible) { $script:UI.Banner.Text } else { '' }
+                Add-Content -LiteralPath $TestLog -Encoding UTF8 -Value ('{0}|{1}|{2}|{3}|{4}|compact={5}|{6}x{7}|top={8}|tab={9}|session={10}|games={11}|events={12}|banner={13}' -f $script:TickCount, $script:LastState.Phase, $script:UI.Status.Text, $title, $script:LB.Conn.Pid, $script:Compact, $script:UI.Form.Width, $script:UI.Form.Height, $script:UI.Form.TopMost, $script:LB.Tab, $hist, @($script:LB.Games).Count, @($script:LB.Events.List).Count, $banner)
             }
             if ($script:TickCount -ge $TestTicks) { $script:UI.Form.Close() }
         }
@@ -1877,14 +3644,36 @@ $UI.CompactBox.Add_CheckedChanged({
         $script:UI.Scroll.AutoScrollPosition = New-Object Drawing.Point(0, 0)
         Invoke-Refresh $false
     })
+# Clicks on tabs, section headers, the summary card and the list of played games.
+$UI.Canvas.Add_ItemClicked({
+        param($source, $click)
+        $what = Invoke-ViewClick $script:LB $click.Key
+        if (-not $what) { return }
+        if ($what -eq 'settings') { Save-ViewSettings }
+        if ($click.Key -like 'tabs:*') { $script:UI.Scroll.AutoScrollPosition = New-Object Drawing.Point(0, 0) }
+        Invoke-Refresh $false
+    })
 $script:NormalSize = $normalSize
 $UI.Scroll.Add_Resize({ if ($script:UI.Canvas.ItemCount) { Invoke-Refresh $false } })
-$UI.Form.Add_Shown({ Invoke-Refresh $true; $script:Timer.Start() })
+$UI.Form.Add_Shown({
+        # Games whose process ended while the logbook was closed, and long-term achievements of earlier games.
+        try {
+            $unlocks = New-Object Collections.ArrayList
+            foreach ($r in @(Close-UnfinishedHistory $script:LB)) { foreach ($a in @($r.NewUnlocks)) { [void]$unlocks.Add($a) } }
+            foreach ($a in @(Update-LongTermAchievements $script:LB (Get-Date))) { [void]$unlocks.Add($a) }
+            if ($unlocks.Count) { Request-Banner @{ Kind = 'unlock'; Data = @($unlocks) } }
+        }
+        catch { }
+        Invoke-Refresh $true; $script:Timer.Start()
+    })
 $UI.Form.Add_FormClosing({
         $script:Timer.Stop()
         $size = if ($script:Compact) { $script:NormalSize } else { $script:UI.Form.Size }
-        try { Save-LogbookSettings @{ alwaysOnTop = $script:UI.TopBox.Checked; compact = $script:Compact; left = $script:UI.Form.Left; top = $script:UI.Form.Top; width = $size.Width; height = $size.Height } } catch { }
+        try { Save-LogbookSettings @{ alwaysOnTop = $script:UI.TopBox.Checked; compact = $script:Compact; left = $script:UI.Form.Left; top = $script:UI.Form.Top; width = $size.Width; height = $size.Height; tab = $script:LB.Tab; collapsed = @($script:LB.Collapsed.Keys | Sort-Object) } } catch { }
+        # The game may go on: keep its history so that a restarted logbook continues it.
+        try { if ($script:LB.Session -and -not $script:LB.Session.Done) { Save-HistoryFile $script:LB $script:LB.Session } } catch { }
         Close-Attachment $script:LB
     })
+
 [Windows.Forms.Application]::Run($UI.Form)
 $mutex.ReleaseMutex()

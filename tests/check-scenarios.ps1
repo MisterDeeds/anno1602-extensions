@@ -15,7 +15,17 @@
   - small map 500 x 350 and big version ('GROS') inside the map and without overlaps, resources, villages
   - ships: positions in the water in all map versions, cargo space and cannons match the ship type,
     cargo (house no. known, whole tons, at most one hold per slot of the ship type), names
-  - random adventures ("Abenteuer <seed> <difficulty>" / "Adventure <seed> <difficulty>"): game id = seed and difficulty, name
+  - random adventures ("Abenteuer <seed> <difficulty>" / "Adventure <seed> <difficulty>"): game id = seed and difficulty, name;
+    daily adventures ("Tagesabenteuer <yyyy-MM-dd>" / "Daily Adventure <yyyy-MM-dd>"): game id = seed of the date and difficulty
+  - since 3.0: no protect condition (AUFTRAG4 +0x08, +0x48, +0x5C, +0x8A0 stay 0); a time limit (+0x58, clock units,
+    key TimeLimitHours, only with the patcher) is 1-50 whole or half hours and named in the text with its hours and the
+    extensions; every goal good can be produced on the map (its raw
+    material is on at least one island in both versions), monopoly crops have a fertility entry and islands of their
+    climate, at most 7 villages per climate, no more towns than islands, a single rival to
+    defeat is named by its start ship in the text; campaign files "<Campaign> <n> - <Title>" carry "Kapitel <n>: <Title>"
+    / "Chapter <n>: <Title>" in the first text line (umlauts as ae/oe/ue), challenges "HERAUSFORDERUNG: " /
+    "CHALLENGE: ", no chapter twice and one campaign title per campaign, game ids of campaigns and challenges unique
+    per language (designer scenarios "Eigenes - " / "Custom - " skip the story checks)
   Exit code 1 if a check fails.
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\tests\check-scenarios.ps1 -Folder .\src\scenarios
@@ -35,6 +45,27 @@ $failures = 0; $files = 0
 function Assert-Check([string]$what, [bool]$ok) { if (-not $ok) { Write-Host "   FAILED $what" -ForegroundColor Red; $script:failures++ } }
 function Write-Info([string]$line) { if (-not $Quiet) { $line } }
 function Test-Ascii([string]$s) { foreach ($ch in $s.ToCharArray()) { if ([int]$ch -gt 126 -or ([int]$ch -lt 32 -and $ch -ne "`n")) { return $false } }; $true }
+# Raw materials a goal good needs (SZENE resource house no.: 2401 ore, 2405 gold, 1336 tobacco, 1342 spices, 1338 cocoa,
+# 1340 sugar cane, 1344 wine); one of them must be on the map. Wool, cloth, clothes, food, wood, bricks: always possible.
+$goodNeeds = @{ 2 = @(2401); 10 = @(2401); 11 = @(2401); 12 = @(2401); 13 = @(2401); 22 = @(2401); 3 = @(2405); 21 = @(2405); 6 = @(1336); 15 = @(1336); 16 = @(1342); 17 = @(1338); 5 = @(1340); 18 = @(1340, 1344) }
+# Monopoly crops: fertility entry (house no.) and climate of the islands that can get it (FUN_1400d0ce0:
+# tobacco, sugar cane, wine only climate 0 = north; spices, cotton, cocoa only climate 1 = south; 2 = by position).
+# Grain (0x2D) has no fertility entry: its island count would be 0 and the goal met at once.
+$cropHouse = @{ 0x2E = 1336; 0x2F = 1342; 0x30 = 1340; 0x31 = 1332; 0x32 = 1344; 0x33 = 1338 }
+$cropClimate = @{ 0x2E = 0; 0x30 = 0; 0x32 = 0; 0x2F = 1; 0x31 = 1; 0x33 = 1 }
+# File title from a text title: umlauts as ae/oe/ue, sharp s as ss (the file names are plain ASCII).
+function ConvertTo-FileTitle([string]$s) {
+    foreach ($p in @(@(0xE4, 'ae'), @(0xF6, 'oe'), @(0xFC, 'ue'), @(0xC4, 'Ae'), @(0xD6, 'Oe'), @(0xDC, 'Ue'), @(0xDF, 'ss'))) { $s = $s.Replace([string][char]$p[0], $p[1]) }
+    $s
+}
+# One SZENE block (small map at 0, big version at 0x4A4): island count, climates, resources (house no. -> amount), villages.
+function Get-SceneBlock([byte[]]$s, [int]$o0) {
+    $n = [BitConverter]::ToInt32($s, $o0 + 0x64); $clim = @(0, 0, 0); $res = @{}
+    for ($i = 0; $i -lt $n; $i++) { $c = $s[$o0 + 0x174 + 16 * $i]; if ($c -le 2) { $clim[$c]++ } }
+    foreach ($k in 0..17) { $o = $o0 + 0x94 + 8 * $k; $nr = [int][BitConverter]::ToUInt16($s, $o); if ($nr) { $res[$nr] = [int]$res[$nr] + [int][BitConverter]::ToUInt16($s, $o + 2) } }
+    @{ Count = $n; Climate = $clim; Res = $res; North = [BitConverter]::ToInt32($s, $o0 + 0x40); South = [BitConverter]::ToInt32($s, $o0 + 0x44) }
+}
+$chapters = @{}; $campaignTitles = @{}; $gameIds = @{}
 
 function Test-IslandBlock([byte[]]$s, [int]$o0, [int]$w, [int]$h, [string]$name) {
     $n = [BitConverter]::ToInt32($s, $o0 + 0x64)
@@ -181,6 +212,84 @@ foreach ($f in Get-ChildItem -LiteralPath $Folder -Filter *.szs | Sort-Object Na
     Assert-Check ("Starting ships in the water ({0}) {1}" -f (($ships | ForEach-Object { "$($_[0]),$($_[1])" }) -join ' '), ($conflicts -join '; ')) ($conflicts.Count -eq 0)
     Write-Info ('   Ships: ' + ($shipInfo -join '; ') + $(if ($conflicts.Count -eq 0) { ' - all in the water in every map version' } else { '' }))
 
+    # No protect condition (+0x08 bits, +0x5C towns, +0x8A0 town: the human would lose at once when it fails) and nothing
+    # in the field the loader copies without a known meaning (+0x48 -> mission +0x2C).
+    $unused = @(@(0x08, 4), @(0x48, 4), @(0x5C, 2), @(0x8A0, 12) | Where-Object { $o = $_[0]; @($a[$o..($o + $_[1] - 1)] | Where-Object { $_ }).Count -gt 0 } | ForEach-Object { '+0x{0:X}' -f $_[0] })
+    Assert-Check "No protect condition (non-zero: $($unused -join ', '))" ($unused.Count -eq 0)
+    # Time limit (since 3.0, key TimeLimitHours): +0x58 -> mission +0x20; the patcher's TIMERS hook copies it to the game's
+    # time limit 0x1405ec1a8 (clock units, 36,000 per hour of the game's own mm:ss display). Whole or half hours, 1-50 h;
+    # the text must name it ("Zeitlimit" / "time limit") with its hours, and say that it needs the extensions.
+    $tl = [BitConverter]::ToInt32($a, 0x58)
+    if ($tl -ne 0) {
+        $hours = $tl / 36000.0
+        Assert-Check "Time limit $tl = $hours h (whole or half hours, 1 to 50)" ($tl % 18000 -eq 0 -and $hours -ge 1 -and $hours -le 50)
+        $hoursText = if ($de) { ([string]$hours).Replace('.', ',') } else { [string]$hours }
+        $named = if ($de) { $txt -match 'Zeitlimit' -and $txt -match 'Erweiterungen' } else { $txt -match '(?i)time limit' -and $txt -match 'extensions' }
+        Assert-Check "Time limit named in the text with $hoursText hours and the extensions" ($named -and $txt -match ('(?<![0-9,.])' + [regex]::Escape($hoursText) + '(?![0-9])'))
+        Write-Info ('   Time limit: {0} h (clock {1}; the display shows {2}:00 at the end)' -f $hours, $tl, ($tl / 600))
+    }
+    $blocks = @(@{ Name = 'small'; B = (Get-SceneBlock $s 0) })
+    if ($s.Length -ge 2360) { $blocks += @{ Name = 'big'; B = (Get-SceneBlock $s 0x4A4) } }
+    foreach ($bk in $blocks) {
+        $b = $bk.B
+        Assert-Check "$($bk.Name): at most 7 villages per climate ($($b.North)+$($b.South))" ($b.North -ge 0 -and $b.North -le 7 -and $b.South -ge 0 -and $b.South -le 7)
+        # One warehouse per island and player (I): more towns than islands cannot be reached.
+        if ($bits -band 0x20) { $v = [BitConverter]::ToInt32($a, 0x40); Assert-Check "$($bk.Name): $v towns fit on $($b.Count) islands" ($v -le $b.Count) }
+        foreach ($w in 0, 1) {
+            if (-not ($bits -band (0x1000 -shl $w))) { continue }
+            $nr = [int]$a[0x868 + 4 * $w]
+            if ($goodNeeds.ContainsKey($nr)) { Assert-Check "$($bk.Name): goal good $nr ($($goodsNames[$nr])) can be produced (raw material $($goodNeeds[$nr] -join '/') on the map)" (@($goodNeeds[$nr] | Where-Object { $b.Res[$_] -gt 0 }).Count -gt 0) }
+        }
+        foreach ($m in 0, 1) {
+            if (-not ($bits -band (0x4000 -shl $m))) { continue }
+            $res = [int]$a[0x20 + 2 * $m]
+            if (-not $cropHouse.ContainsKey($res)) { if ($bk.Name -eq 'small') { Assert-Check ('Monopoly crop 0x{0:X2} has a fertility entry (not grain)' -f $res) $false }; continue }
+            $amount = [int]$b.Res[$cropHouse[$res]]; $fit = $b.Climate[$cropClimate[$res]] + $b.Climate[2]
+            Assert-Check ('{0}: monopoly {1} on {2} island(s), {3} island(s) of its climate' -f $bk.Name, $cropNames[$res], $amount, $fit) ($amount -ge 1 -and $fit -ge 1)
+        }
+    }
+    Write-Info ('   Climate north/south/by position: ' + (($blocks | ForEach-Object { '{0} {1}' -f $_.Name, ($_.B.Climate -join '/') }) -join ', '))
+
+    # A single rival (or two) to defeat must be recognisable: the text names its start ship in quotes.
+    $designer = $f.BaseName -match '^(Eigenes|Custom) - '
+    if (($bits -band 0x400) -and -not $designer) {
+        $def = @(1..3 | Where-Object { $a[0x2C + $_] })
+        if ($def.Count -lt 3) {
+            foreach ($pl in $def) {
+                $ship = $null
+                for ($i = 0; $i -lt $sh.Length / 0x1B4; $i++) { if ($sh[$i * 0x1B4 + 0x4B] -eq $pl) { $ship = [Text.Encoding]::GetEncoding(1252).GetString($sh, $i * 0x1B4, 0x18).Split([char]0)[0]; break } }
+                Assert-Check "Rival $pl to defeat is named by its ship in the text (`"$ship`")" ($ship -and $txt.Contains('"' + $ship + '"'))
+            }
+        }
+    }
+
+    # Campaign chapters and challenges: title line of the text = file name; numbering and campaign title per campaign.
+    $firstLine = $txt.Split("`n")[0]
+    if (-not $designer -and $f.BaseName -match '^(.+?) (\d+) - (.+)$' -and $f.BaseName -notmatch '^(Abenteuer|Adventure|Tagesabenteuer|Daily Adventure) ') {
+        $fm = $Matches.Clone()
+        $word = if ($de) { 'Kapitel' } else { 'Chapter' }
+        $tm = $null; if ($firstLine -match ('^(.+) - ' + $word + ' (\d+): (.+)$')) { $tm = $Matches.Clone() }
+        Assert-Check "Title line '$firstLine' = '$word $($fm[2]): $($fm[3])'" ($tm -and [int]$tm[2] -eq [int]$fm[2] -and (ConvertTo-FileTitle $tm[3]) -ceq $fm[3])
+        $key = '{0}|{1}' -f $(if ($de) { 'de' } else { 'en' }), $fm[1]
+        if (-not $chapters.ContainsKey($key)) { $chapters[$key] = New-Object System.Collections.Generic.List[int]; $campaignTitles[$key] = @{} }
+        Assert-Check "Chapter $($fm[2]) of '$($fm[1])' only once" (-not $chapters[$key].Contains([int]$fm[2]))
+        $chapters[$key].Add([int]$fm[2]); if ($tm) { $campaignTitles[$key][$tm[1]] = $true }
+        Assert-Check "One campaign title for '$($fm[1])' ($($campaignTitles[$key].Keys -join ' / '))" ($campaignTitles[$key].Count -le 1)
+    }
+    elseif ($f.BaseName -match '^(Herausforderung|Challenge) - (.+)$') {
+        $fm = $Matches.Clone()
+        $head = if ($fm[1] -eq 'Herausforderung') { 'HERAUSFORDERUNG: ' } else { 'CHALLENGE: ' }
+        Assert-Check "Challenge language: '$($fm[1])' with a $(if ($de) { 'German' } else { 'English' }) text" (($fm[1] -eq 'Herausforderung') -eq $de)
+        Assert-Check "Title line '$firstLine' = '$head$($fm[2])'" ($firstLine.StartsWith($head) -and (ConvertTo-FileTitle $firstLine.Substring($head.Length)) -ceq $fm[2])
+    }
+    # Game ids: unique per language among the fixed scenarios of build-scenarios.ps1 (de and en of one scenario share
+    # the id). Adventures carry their seed (an old-format file may sit next to the new one), designer scenarios their map.
+    if (-not $designer -and $f.BaseName -notmatch '^(Abenteuer|Adventure|Tagesabenteuer|Daily Adventure) ') {
+        $key = '{0}|{1}' -f $(if ($de) { 'de' } else { 'en' }), $gameId
+        Assert-Check ('Game id 0x{0:X8} unique ({1})' -f $gameId, $(if ($gameIds.ContainsKey($key)) { 'also ' + $gameIds[$key] } else { 'first' })) (-not $gameIds.ContainsKey($key))
+        if (-not $gameIds.ContainsKey($key)) { $gameIds[$key] = $f.BaseName }
+    }
+
     # Random adventures: the game id carries seed and difficulty.
     # Name "Abenteuer <seed> <difficulty>" (since 2.2.0) or the older "Abenteuer <seed>".
     if ($f.BaseName -match '^(Abenteuer|Adventure) (\d+)(?: (\S+))?$') {
@@ -192,6 +301,17 @@ foreach ($f in Get-ChildItem -LiteralPath $Folder -Filter *.szs | Sort-Object Na
         Assert-Check "Adventure language $lang matches the text" (($lang -eq 'de' -and $de) -or ($lang -eq 'en' -and $en))
         $adventures.Add(@{ File = $f.FullName; Seed = $seed; Language = $lang; Difficulty = @('Easy', 'Average', 'Demanding', 'Hard')[$diff]; Expected = ('{0} {1} {2}.szs' -f $m[1], $seed, $levelNames[$diff]) })
     }
+    # Daily adventures ("Tagesabenteuer <yyyy-MM-dd>" / "Daily Adventure <yyyy-MM-dd>", random-adventure.ps1 -Daily): the
+    # seed comes from the date (Get-DailySeed: yyyyMMdd x 2654435761 mod 2^32, >> 12, mod 1,000,000), the difficulty
+    # is in the game id; only the name and the first text line differ from "Abenteuer <seed>".
+    elseif ($f.BaseName -match '^(Tagesabenteuer|Daily Adventure) (\d{4})-(\d{2})-(\d{2})$') {
+        $m = $Matches.Clone()
+        $lang = if ($m[1] -eq 'Tagesabenteuer') { 'de' } else { 'en' }; $diff = ($gameId -shr 20) -band 0xF
+        $seed = [int](((([long]($m[2] + $m[3] + $m[4]) * 2654435761) % 4294967296) -shr 12) % 1000000)
+        Assert-Check ('Daily adventure game id 0x{0:X8} = seed {1} of {2}-{3}-{4}, difficulty {5}' -f $gameId, $seed, $m[2], $m[3], $m[4], $diff) (($gameId -band 0xFFC00000) -eq 0x53000000 -and ($gameId -band 0xFFFFF) -eq $seed)
+        Assert-Check "Daily adventure language $lang matches the text" (($lang -eq 'de' -and $de) -or ($lang -eq 'en' -and $en))
+        $adventures.Add(@{ File = $f.FullName; Daily = ('{0}-{1}-{2}' -f $m[2], $m[3], $m[4]); Language = $lang; Difficulty = @('Easy', 'Average', 'Demanding', 'Hard')[$diff]; Expected = $f.Name })
+    }
 }
 
 # Regenerate every adventure with the same seed, difficulty and language; the files must be byte-identical.
@@ -200,11 +320,12 @@ if ($Reproduce -and $adventures.Count) {
     try {
         foreach ($adv in $adventures) {
             $gp = @{}; if ($GamePath) { $gp.GamePath = $GamePath }
-            & (Join-Path (Split-Path -Parent $PSScriptRoot) 'src\random-adventure.ps1') -Seed $adv.Seed -Difficulty $adv.Difficulty -Language $adv.Language -OutFolder $tmp @gp | Out-Null
+            $how = if ($adv.Daily) { @{ Daily = $true; Date = $adv.Daily } } else { @{ Seed = $adv.Seed } }
+            & (Join-Path (Split-Path -Parent $PSScriptRoot) 'src\random-adventure.ps1') @how -Difficulty $adv.Difficulty -Language $adv.Language -OutFolder $tmp @gp | Out-Null
             # The regenerated file has the current name (with the difficulty); the content does not contain the name.
             $new = Join-Path $tmp $adv.Expected
             $same = (Test-Path -LiteralPath $new) -and ((Get-FileHash -LiteralPath $new).Hash -eq (Get-FileHash -LiteralPath $adv.File).Hash)
-            Assert-Check "Reproduced byte for byte: $([IO.Path]::GetFileName($adv.File)) (seed $($adv.Seed), $($adv.Difficulty), $($adv.Language))" $same
+            Assert-Check "Reproduced byte for byte: $([IO.Path]::GetFileName($adv.File)) ($(if ($adv.Daily) { "day $($adv.Daily)" } else { "seed $($adv.Seed)" }), $($adv.Difficulty), $($adv.Language))" $same
         }
         Write-Host "$($adventures.Count) adventure(s) regenerated and compared."
     }

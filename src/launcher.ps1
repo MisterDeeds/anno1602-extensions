@@ -7,18 +7,32 @@
   - "New game": all options as drop-down lists in four groups, presets, remembers the last choice.
   - "Continue": the savegames with the settings they were made with (recorded by anno-patcher.ps1 in
     %APPDATA%\Anno1602-Extensions\saves.json), so a big world is always loaded with the right size.
-  - "Adventures": the own campaigns and challenges with their progress, and new random adventures.
+  - "Adventures": the own campaigns and challenges with their progress, random adventures, the daily adventure, the
+    scenario designer (scenario-designer.ps1) and the option to unlock the campaign chapters one by one.
   "Play with extensions" starts anno-patcher.ps1 (in its own window that stays open until the game ends) and the
   game through Ubisoft Connect. "Start original" only starts the game, without changes.
   The settings are stored in %APPDATA%\Anno1602-Extensions\settings.json (option id -> value key,
-  independent of the UI language). The settings of older versions
+  independent of the UI language; plus LogbookWithGame and UnlockChapters = 1/0). The settings of older versions
   (%APPDATA%\Anno1602-Erweiterungen\einstellungen.json) are taken over; the old file is left in place.
+
+  Unlocking chapters one by one: the installer keeps the full set of campaigns and challenges in the program folder
+  (scenarios\, with the index scenarios\chapters.json: file, campaign, chapter, names in both languages). With the
+  option on, Own Scenarios holds of each campaign only the chapters up to the first one not won yet (the logbook's
+  missions in logbook.json decide; a win in either language counts); the launcher copies the next chapter when it
+  starts and finds a new win and lists the locked chapters with a lock. Turning the option off copies all chapters
+  back. Only files named like a chapter of the index are copied or removed - never the player's own scenarios.
 #>
 param(
     # For testing only: build the window invisibly, save it as a PNG and exit.
     [string]$PreviewImage,
     # For testing only: tab shown in the preview (0 = new game, 1 = continue, 2 = adventures).
     [Parameter(DontShow)][int]$PreviewTab = 0,
+    # Tab shown at the start (the scenario designer opens the adventure list with 2).
+    [Parameter(DontShow)][int]$StartTab = 0,
+    # For the installer: apply the saved "unlock chapters one by one" setting to Own Scenarios (no window) and exit.
+    [Parameter(DontShow)][switch]$SyncChapters,
+    # For testing only: folder of the full chapter set instead of the program folder's scenarios subfolder.
+    [Parameter(DontShow)][string]$ChapterFolder = '',
     # For testing only: print the anno-patcher.ps1 arguments for the defaults, "Everything big",
     # "For campaigns" and the saved choice (one line each) and exit without showing the window.
     [Parameter(DontShow)][switch]$PrintArgs,
@@ -26,8 +40,9 @@ param(
     [Parameter(DontShow)][switch]$PrintSaves,
     # For testing only: print every choice of every option with its arguments (one line each) and exit.
     [Parameter(DontShow)][switch]$PrintChoices,
-    # For testing only: build the window invisibly, click the buttons in code (no process is started; random adventures
-    # go to -TestOutFolder instead of Own Scenarios), print what would have been started and exit.
+    # For testing only: build the window invisibly, click the buttons in code (no process is started; random and daily
+    # adventures go to -TestOutFolder instead of Own Scenarios, the designer builds a test design into Own Scenarios of
+    # -DocumentsFolder if that is given, otherwise into -TestOutFolder), print what would have been started and exit.
     [Parameter(DontShow)][switch]$TestClicks,
     [Parameter(DontShow)][string]$TestOutFolder = (Join-Path ([IO.Path]::GetTempPath()) 'anno1602-launcher-test'),
     # For testing only: folder used instead of %APPDATA% for the settings.
@@ -36,6 +51,9 @@ param(
     [Parameter(DontShow)][string]$DocumentsFolder = [Environment]::GetFolderPath('MyDocuments')
 )
 $ErrorActionPreference = 'Stop'
+# The click test builds the designer's test scenario into Own Scenarios only when a test documents folder is given.
+$DocumentsGiven = $PSBoundParameters.ContainsKey('DocumentsFolder')
+if (-not $ChapterFolder) { $ChapterFolder = Join-Path $PSScriptRoot 'scenarios' }
 
 # UI language: German on a German Windows, English otherwise. Override: $env:ANNO_EXTENSIONS_LANG = 'de' or 'en'.
 $UiGerman = if ($env:ANNO_EXTENSIONS_LANG) { $env:ANNO_EXTENSIONS_LANG -eq 'de' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'de' }
@@ -150,6 +168,11 @@ $Options = [ordered]@{
             'Default' = New-Choice 'Normal' 'Normal'
             'Off'     = New-Choice 'None (no fire, plague, drought)' 'Keine (kein Feuer, Pest, Dürre)' @('-Disasters', 'Off')
             'More'    = New-Choice 'More often' 'Häufiger' @('-Disasters', 'More') } }
+    # Random events during the game, applied by the running tool and shown in the logbook (anno-patcher.ps1 -Events).
+    Events        = @{ Group = 'Sea'; Label = (Txt 'Events' 'Ereignisse'); Default = 'Off'; Choices = [ordered]@{
+            'Off'   = New-Choice 'Off' 'Aus'
+            'Rare'  = New-Choice 'Rare' 'Selten' @('-Events', 'Rare')
+            'Often' = New-Choice 'Often' 'Häufig' @('-Events', 'Often') } }
 }
 # Groups in the window (order: left column top, right column top, left bottom, right bottom).
 $Groups = [ordered]@{
@@ -328,6 +351,87 @@ function Get-SaveDescription($entry) {
     }
 }
 
+# --- Own scenarios, progress and chapter unlocking (also used without the window: -SyncChapters) -------------------
+$OwnScenarios = Join-Path $GameDocs 'Own Scenarios'
+$LogbookFile = Join-Path $DataFolder 'logbook.json'
+$Generator = Join-Path $PSScriptRoot 'random-adventure.ps1'
+$Designer = Join-Path $PSScriptRoot 'scenario-designer.ps1'
+$Logbook = Join-Path $PSScriptRoot 'logbook.ps1'
+$ChapterIndexFile = Join-Path $ChapterFolder 'chapters.json'
+
+# Missions recorded by the logbook: scenario name -> best result ('won' beats 'lost') and date.
+function Get-MissionResults {
+    $results = @{}
+    try {
+        if (Test-Path -LiteralPath $LogbookFile) {
+            $j = Get-Content -LiteralPath $LogbookFile -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($m in @($j.missions | ForEach-Object { $_ })) {
+                if (-not $m.scenario) { continue }
+                $old = $results[[string]$m.scenario]
+                if (-not $old -or ($m.result -eq 'won' -and $old.result -ne 'won')) { $results[[string]$m.scenario] = $m }
+            }
+        }
+    }
+    catch { }
+    $results
+}
+# Campaign of a scenario file: "Smaragdinseln 3 - Zwei Kolonien" -> "Smaragdinseln", "Herausforderung - Goldrausch"
+# -> "Herausforderung", "Abenteuer 4711 Fordernd" -> "Abenteuer", "Tagesabenteuer 2026-11-14" -> "Tagesabenteuer",
+# "Eigenes - Meine Inseln" -> "Eigenes".
+function Get-CampaignName([string]$name) {
+    if ($name -match '^(Abenteuer|Adventure) \d+') { return $Matches[1] }   # random adventures, also with the difficulty in the name
+    if ($name -match '^(Tagesabenteuer|Daily Adventure) \d{4}-\d{2}-\d{2}$') { return $Matches[1] }
+    if ($name -match '^(Eigenes|Custom) - ') { return $Matches[1] }
+    if ($name -match '^(.+?)\s+\d+(\s+-\s+.*)?$') { return $Matches[1] }
+    if ($name -match '^(.+?)\s+-\s+') { return $Matches[1] }
+    $name
+}
+# Campaign chapters of the full set kept by the installer: @{ File; Campaign; Chapter; Names (both languages) },
+# only those whose file is there. No index (older installation or no game): nothing.
+function Get-ChapterIndex {
+    try {
+        if (-not (Test-Path -LiteralPath $ChapterIndexFile)) { return }
+        $j = Get-Content -LiteralPath $ChapterIndexFile -Raw -Encoding UTF8 | ConvertFrom-Json
+        foreach ($c in @($j.chapters | ForEach-Object { $_ })) {
+            if (-not $c.file -or -not (Test-Path -LiteralPath (Join-Path $ChapterFolder ([string]$c.file + '.szs')))) { continue }
+            @{ File = [string]$c.file; Campaign = [string]$c.campaign; Chapter = [int]$c.chapter; Names = @(@($c.names) + [string]$c.file | Where-Object { $_ } | Select-Object -Unique) }
+        }
+    }
+    catch { }
+}
+# Per chapter in campaign order: Locked ($true for every chapter after the first one not won yet) and Previous (number of the
+# chapter before it, which must be won first). A win under any name of the chapter (German or English) counts.
+function Get-ChapterStates($chapters, $results) {
+    foreach ($group in @($chapters) | Group-Object { $_.Campaign }) {
+        $open = $true; $previous = $null
+        foreach ($ch in $group.Group | Sort-Object { $_.Chapter }) {
+            $won = @($ch.Names | Where-Object { $results[$_] -and $results[$_].result -eq 'won' }).Count -gt 0
+            @{ File = $ch.File; Names = $ch.Names; Locked = -not $open; Previous = $previous; Won = $won }
+            if (-not $won) { $open = $false }
+            $previous = $ch.Chapter
+        }
+    }
+}
+# Brings Own Scenarios in line with the option: $unlock = only the open chapters (copies missing ones, removes locked
+# ones under any of their names), otherwise every chapter (copies the missing ones). Returns the copied chapters.
+function Sync-Chapters([bool]$unlock) {
+    $chapters = @(Get-ChapterIndex)
+    if (-not $chapters.Count) { return }
+    foreach ($ch in Get-ChapterStates $chapters (Get-MissionResults)) {
+        if ($unlock -and $ch.Locked) {
+            foreach ($n in $ch.Names) {
+                $p = Join-Path $OwnScenarios ($n + '.szs')
+                if (Test-Path -LiteralPath $p) { Remove-Item -LiteralPath $p -Force }
+            }
+        }
+        elseif (-not (Test-Path -LiteralPath (Join-Path $OwnScenarios ($ch.File + '.szs')))) {
+            New-Item -ItemType Directory -Force -Path $OwnScenarios | Out-Null
+            Copy-Item -LiteralPath (Join-Path $ChapterFolder ($ch.File + '.szs')) -Destination $OwnScenarios -Force
+            $ch.File
+        }
+    }
+}
+
 if ($PrintArgs) {
     'default: ' + ((Get-PatcherArgs (Complete-Choice @{})) -join ' ')
     'everything-big: ' + ((Get-PatcherArgs (Complete-Choice $EverythingBig)) -join ' ')
@@ -347,6 +451,15 @@ if ($PrintSaves) {
         $start = if ($e.Kind -eq 'known') { ' | ' + ((Get-PatcherArgs $e.Choice) -join ' ') } else { '' }
         '{0} | {1:yyyy-MM-dd HH:mm} | {2} | {3} | {4}{5}' -f $e.Name, $e.Time, $size, $e.Kind, (Get-SaveDescription $e), $start
     }
+    return
+}
+if ($SyncChapters) {
+    $chapters = @(Get-ChapterIndex)
+    if (-not $chapters.Count) { "No chapter set in $ChapterFolder - nothing to do."; return }
+    if ($saved['UnlockChapters'] -ne '1') { "Unlock chapters one by one: off - all $($chapters.Count) chapters stay installed."; return }
+    $added = @(Sync-Chapters $true)
+    $states = @(Get-ChapterStates $chapters (Get-MissionResults))
+    'Unlock chapters one by one: {0} of {1} chapters open, {2} locked; copied: {3}' -f @($states | Where-Object { -not $_.Locked }).Count, $states.Count, @($states | Where-Object { $_.Locked }).Count, $(if ($added.Count) { $added -join ', ' } else { '-' })
     return
 }
 
@@ -474,13 +587,13 @@ foreach ($g in $Groups.Keys) {
         $l.AutoSize = $true
         $l.MinimumSize = New-Object Drawing.Size($labelWidth, 0)
         $l.Anchor = 'Left'
-        $l.Margin = New-Object Windows.Forms.Padding(3, 6, 12, 6)
+        $l.Margin = New-Object Windows.Forms.Padding(3, 5, 12, 5)
         [void]$inner.RowStyles.Add((New-Object Windows.Forms.RowStyle('AutoSize')))
         $c = New-Object Windows.Forms.ComboBox
         $c.Name = "choice$name"
         $c.DropDownStyle = 'DropDownList'
         $c.Width = 250
-        $c.Margin = New-Object Windows.Forms.Padding(3, 3, 3, 3)
+        $c.Margin = New-Object Windows.Forms.Padding(3, 2, 3, 2)
         foreach ($key in $o.Choices.Keys) { [void]$c.Items.Add($o.Choices[$key].Text) }
         $inner.Controls.Add($l)
         $inner.Controls.Add($c)
@@ -585,81 +698,85 @@ $scenarioList.View = 'Details'
 $scenarioList.FullRowSelect = $true
 $scenarioList.MultiSelect = $false
 $scenarioList.Width = 900
-$scenarioList.Height = 330
+$scenarioList.Height = 320
 [void]$scenarioList.Columns.Add((Txt 'Scenario' 'Szenario'), 340)
 [void]$scenarioList.Columns.Add((Txt 'Campaign' 'Kampagne'), 170)
 [void]$scenarioList.Columns.Add((Txt 'Status' 'Stand'), 365)
 $pageAdventures.Controls.Add($scenarioList)
 
-$OwnScenarios = Join-Path $GameDocs 'Own Scenarios'
-$LogbookFile = Join-Path $DataFolder 'logbook.json'
-$Generator = Join-Path $PSScriptRoot 'random-adventure.ps1'
-$Logbook = Join-Path $PSScriptRoot 'logbook.ps1'
-
-# Missions recorded by the logbook: scenario name -> best result ('won' beats 'lost') and date.
-function Get-MissionResults {
-    $results = @{}
-    try {
-        if (Test-Path -LiteralPath $LogbookFile) {
-            $j = Get-Content -LiteralPath $LogbookFile -Raw -Encoding UTF8 | ConvertFrom-Json
-            foreach ($m in @($j.missions | ForEach-Object { $_ })) {
-                if (-not $m.scenario) { continue }
-                $old = $results[[string]$m.scenario]
-                if (-not $old -or ($m.result -eq 'won' -and $old.result -ne 'won')) { $results[[string]$m.scenario] = $m }
-            }
-        }
-    }
-    catch { }
-    $results
-}
-# Campaign of a scenario file: "Smaragdinseln 3 - Zwei Kolonien" -> "Smaragdinseln", "Herausforderung - Goldrausch"
-# -> "Herausforderung", "Abenteuer 4711 Fordernd" -> "Abenteuer".
-function Get-CampaignName([string]$name) {
-    if ($name -match '^(Abenteuer|Adventure) \d+') { return $Matches[1] }   # random adventures, also with the difficulty in the name
-    if ($name -match '^(.+?)\s+\d+(\s+-\s+.*)?$') { return $Matches[1] }
-    if ($name -match '^(.+?)\s+-\s+') { return $Matches[1] }
-    $name
-}
 function Update-ScenarioList {
     $results = Get-MissionResults
+    $unlock = $checkUnlock.Checked -and $checkUnlock.Enabled
     $scenarioList.BeginUpdate()
     $scenarioList.Items.Clear()
+    # The files in Own Scenarios plus, with chapters unlocked one by one, the locked chapters (not installed).
+    $entries = New-Object System.Collections.Generic.List[object]
     if (Test-Path -LiteralPath $OwnScenarios) {
-        $files = Get-ChildItem -LiteralPath $OwnScenarios -Filter '*.szs' -File | Sort-Object { Get-CampaignName $_.BaseName }, { if ($_.BaseName -match '\s(\d+)(\s|$)') { [int]$Matches[1] } else { 0 } }, BaseName
-        $nextMarked = @{}
-        foreach ($f in $files) {
+        foreach ($f in Get-ChildItem -LiteralPath $OwnScenarios -Filter '*.szs' -File) {
             # "Last Szenario" is the game's own autosave of the last scenario, not a scenario of its own.
-            if ($f.BaseName -eq 'Last Szenario') { continue }
-            $campaign = Get-CampaignName $f.BaseName
-            $item = New-Object Windows.Forms.ListViewItem($f.BaseName)
-            [void]$item.SubItems.Add($campaign)
-            $r = $results[$f.BaseName]
-            $won = $r -and $r.result -eq 'won'
-            # The first chapter of a campaign that is not won yet is the next one (also when it was lost before).
-            $isNext = (-not $won) -and $f.BaseName -match '\s\d+\s+-\s' -and -not $nextMarked.ContainsKey($campaign)
-            if ($isNext) { $nextMarked[$campaign] = $true }
-            $status = if ($won) { (Txt '✓ won {0}' '✓ gewonnen {0}') -f ([datetime]$r.date).ToString('dd.MM.yyyy') }
-            elseif ($r -and $isNext) { Txt '→ next chapter (lost before – try again)' '→ nächstes Kapitel (verloren – nochmals versuchen)' }
-            elseif ($r) { Txt 'lost – try again' 'verloren – nochmals versuchen' }
-            elseif ($isNext) { Txt '→ next chapter' '→ nächstes Kapitel' }
-            else { '' }
-            if ($r -and $r.result -eq 'won') { $item.ForeColor = [Drawing.Color]::SeaGreen }
-            [void]$item.SubItems.Add($status)
-            [void]$scenarioList.Items.Add($item)
+            if ($f.BaseName -ne 'Last Szenario') { $entries.Add(@{ Name = $f.BaseName; Locked = $null }) }
         }
+    }
+    if ($unlock) {
+        $have = @{}; foreach ($e in $entries) { $have[$e.Name] = $true }
+        foreach ($ch in Get-ChapterStates (Get-ChapterIndex) $results) { if ($ch.Locked -and -not $have.ContainsKey($ch.File)) { $entries.Add(@{ Name = $ch.File; Locked = $ch.Previous }) } }
+    }
+    $nextMarked = @{}
+    foreach ($e in $entries | Sort-Object { Get-CampaignName $_.Name }, { if ($_.Name -match '\s(\d+)(\s|$)') { [int]$Matches[1] } else { 0 } }, { $_.Name }) {
+        $campaign = Get-CampaignName $e.Name
+        $item = New-Object Windows.Forms.ListViewItem($e.Name)
+        [void]$item.SubItems.Add($campaign)
+        $r = $results[$e.Name]
+        $won = $r -and $r.result -eq 'won'
+        # The first chapter of a campaign that is not won yet is the next one (also when it was lost before).
+        $isNext = (-not $won) -and (-not $e.Locked) -and $e.Name -match '\s\d+\s+-\s' -and -not $nextMarked.ContainsKey($campaign)
+        if ($isNext) { $nextMarked[$campaign] = $true }
+        $new = if ($script:NewlyUnlocked -contains $e.Name) { Txt ' – just unlocked' ' – neu freigeschaltet' } else { '' }
+        $status = if ($e.Locked) { (Txt '🔒 locked – win chapter {0} first' '🔒 gesperrt – zuerst Kapitel {0} gewinnen') -f $e.Locked }
+        elseif ($won) { (Txt '✓ won {0}' '✓ gewonnen {0}') -f ([datetime]$r.date).ToString('dd.MM.yyyy') }
+        elseif ($r -and $isNext) { Txt '→ next chapter (lost before – try again)' '→ nächstes Kapitel (verloren – nochmals versuchen)' }
+        elseif ($r) { Txt 'lost – try again' 'verloren – nochmals versuchen' }
+        elseif ($isNext) { (Txt '→ next chapter' '→ nächstes Kapitel') + $new }
+        else { '' }
+        if ($e.Locked) { $item.ForeColor = [Drawing.Color]::Gray }
+        elseif ($won) { $item.ForeColor = [Drawing.Color]::SeaGreen }
+        $item.Tag = $e
+        [void]$item.SubItems.Add($status)
+        [void]$scenarioList.Items.Add($item)
     }
     $scenarioList.EndUpdate()
 }
 
-# Random adventure: difficulty, optional seed, then build it into "Own Scenarios".
+# Below the list: the scenario designer and the option to unlock the campaign chapters one by one.
+$adventureRow = New-ButtonRow $pageAdventures
+$adventureRow.Margin = New-Object Windows.Forms.Padding(0, 6, 0, 0)
+$buttonDesigner = New-Button (Txt 'Build your own scenario …' 'Eigenes Szenario bauen …') $adventureRow
+$buttonDesigner.Enabled = (Test-Path -LiteralPath $Designer) -and (Test-Path -LiteralPath $Generator)
+$checkUnlock = New-Object Windows.Forms.CheckBox
+$checkUnlock.Text = Txt 'Unlock chapters one by one (the next chapter of a campaign after each win)' 'Kapitel nacheinander freischalten (das nächste Kapitel einer Kampagne nach jedem Sieg)'
+$checkUnlock.AutoSize = $true
+$checkUnlock.Margin = New-Object Windows.Forms.Padding(12, 9, 3, 3)
+$adventureRow.Controls.Add($checkUnlock)
+$adventureTips = New-Object Windows.Forms.ToolTip
+$adventureTips.SetToolTip($buttonDesigner, (Txt 'Map, world, rivals, ships and a mission of your own – with a story and a preview of the mission text.' 'Karte, Welt, Gegner, Schiffe und ein eigener Auftrag – mit Geschichte und Vorschau des Auftragstexts.'))
+$hasChapterSet = @(Get-ChapterIndex).Count -gt 0
+$adventureTips.SetToolTip($checkUnlock, $(if ($hasChapterSet) { Txt 'Own Scenarios then holds of each campaign only the chapters you have won and the next one. Off: all chapters again.' 'In den eigenen Szenarien stehen dann von jeder Kampagne nur die gewonnenen Kapitel und das nächste. Aus: wieder alle Kapitel.' } else { Txt 'Needs the chapter set of the installer: please run install.cmd of this version again.' 'Braucht den Kapitelsatz des Installers: bitte install.cmd dieser Version nochmals ausführen.' }))
+$checkUnlock.Enabled = $hasChapterSet
+$checkUnlock.Checked = $hasChapterSet -and ($saved['UnlockChapters'] -eq '1')
+# With the option on, install the next chapter after a new win (and remove chapters that are locked again).
+$script:NewlyUnlocked = @()
+if ($checkUnlock.Checked) { try { $script:NewlyUnlocked = @(Sync-Chapters $true) } catch { } }
+
+# Random adventure: difficulty, optional seed, then build it into "Own Scenarios". The daily adventure: the same for
+# everyone on that day.
 $rollBox = New-Object Windows.Forms.GroupBox
 $rollBox.Text = Txt 'Random adventure – a new island world with a new mission every time' 'Zufallsabenteuer – jedes Mal eine neue Inselwelt mit neuem Auftrag'
 $rollBox.AutoSize = $true
 $rollBox.Padding = New-Object Windows.Forms.Padding(8, 6, 8, 6)
-$rollBox.Margin = New-Object Windows.Forms.Padding(3, 12, 3, 3)
+$rollBox.Margin = New-Object Windows.Forms.Padding(3, 8, 3, 3)
 $rollPanel = New-Object Windows.Forms.TableLayoutPanel
 $rollPanel.AutoSize = $true
-$rollPanel.ColumnCount = 5
+$rollPanel.ColumnCount = 6
 $rollPanel.Dock = 'Fill'
 $rollBox.Controls.Add($rollPanel)
 $pageAdventures.Controls.Add($rollBox)
@@ -682,41 +799,85 @@ $buttonRoll.AutoSize = $true
 $buttonRoll.Padding = New-Object Windows.Forms.Padding(10, 4, 10, 4)
 $buttonRoll.Margin = New-Object Windows.Forms.Padding(12, 3, 3, 3)
 $rollPanel.Controls.Add($buttonRoll)
+$buttonDaily = New-Object Windows.Forms.Button
+$buttonDaily.Text = Txt 'Daily adventure' 'Tagesabenteuer'
+$buttonDaily.AutoSize = $true
+$buttonDaily.Padding = New-Object Windows.Forms.Padding(10, 4, 10, 4)
+$buttonDaily.Margin = New-Object Windows.Forms.Padding(8, 3, 3, 3)
+$rollPanel.Controls.Add($buttonDaily)
+$adventureTips.SetToolTip($buttonDaily, (Txt 'A new adventure every day (difficulty Average) – the same for everyone on that day.' 'Jeden Tag ein neues Abenteuer (Durchschnittlich) – an diesem Tag für alle gleich.'))
 $rollResult = New-Object Windows.Forms.TextBox
 $rollResult.Multiline = $true
 $rollResult.ReadOnly = $true
 $rollResult.ScrollBars = 'Vertical'
 $rollResult.Width = 860
-$rollResult.Height = 90
+$rollResult.Height = 82
 $rollResult.Text = Txt 'The same number always gives the same adventure – handy for playing a map again or sharing it with friends.' 'Dieselbe Nummer ergibt immer dasselbe Abenteuer – praktisch, um eine Karte nochmals zu spielen oder mit Freunden zu teilen.'
 $rollPanel.Controls.Add($rollResult)
-$rollPanel.SetColumnSpan($rollResult, 5)
-if (-not (Test-Path -LiteralPath $Generator)) { $buttonRoll.Enabled = $false }
+$rollPanel.SetColumnSpan($rollResult, 6)
+if (-not (Test-Path -LiteralPath $Generator)) { $buttonRoll.Enabled = $false; $buttonDaily.Enabled = $false }
 
+# Runs random-adventure.ps1 with these arguments (plus -Install, or -OutFolder in the click test) and shows the
+# result: first line "<name>: <path>", then a technical summary, then the goals as "  - ...".
+function Invoke-Generator([string[]]$generatorArgs, $button) {
+    # Direct call of a native program: PowerShell quotes the path itself.
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Generator) + $generatorArgs
+    $a += if ($TestClicks) { @('-OutFolder', $TestOutFolder) } else { @('-Install') }
+    $form.Cursor = [Windows.Forms.Cursors]::WaitCursor
+    $button.Enabled = $false
+    try {
+        $output = @(& powershell @a 2>&1 | ForEach-Object { "$_" })
+        $titleLine = @($output | Where-Object { $_ -match '^\S.*\.szs$' } | Select-Object -First 1)
+        $goals = @($output | Where-Object { $_ -match '^\s+- ' } | ForEach-Object { $_.Trim() })
+        if ($LASTEXITCODE -eq 0 -and $titleLine.Count -and $goals.Count) {
+            $name = ($titleLine[0] -replace ':\s+\S:\\.*$', '')
+            $rollResult.Text = ((Txt '“{0}” is ready – in the game under “New Game” → “Own Scenarios”. Your mission:' '„{0}“ ist bereit – im Spiel unter „Neues Spiel“ → „Eigene Szenarien“. Dein Auftrag:') -f $name) + [Environment]::NewLine + ($goals -join [Environment]::NewLine)
+        }
+        else { $rollResult.Text = (@($output) | Where-Object { $_ } | Select-Object -Last 12) -join [Environment]::NewLine }
+    }
+    catch { $rollResult.Text = $_.Exception.Message }
+    finally { $form.Cursor = [Windows.Forms.Cursors]::Default; $button.Enabled = $true }
+    Update-ScenarioList
+}
 $buttonRoll.Add_Click({
-        # Direct call of a native program: PowerShell quotes the path itself.
-        $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $Generator, '-Difficulty', $DifficultyKeys[$rollDifficulty.SelectedIndex])
-        $a += if ($TestClicks) { @('-OutFolder', $TestOutFolder) } else { @('-Install') }
         $seedText = $rollSeed.Text.Trim()
-        if ($seedText) {
-            if ($seedText -notmatch '^\d{1,6}$') { $rollResult.Text = Txt 'The number must be a whole number from 0 to 999999.' 'Die Nummer muss eine ganze Zahl von 0 bis 999999 sein.'; return }
-            $a += @('-Seed', $seedText)
+        if ($seedText -and $seedText -notmatch '^\d{1,6}$') { $rollResult.Text = Txt 'The number must be a whole number from 0 to 999999.' 'Die Nummer muss eine ganze Zahl von 0 bis 999999 sein.'; return }
+        $a = @('-Difficulty', $DifficultyKeys[$rollDifficulty.SelectedIndex])
+        if ($seedText) { $a += @('-Seed', $seedText) }
+        Invoke-Generator $a $buttonRoll
+    })
+# The daily adventure always has the difficulty Average, so that it is the same for everyone.
+$buttonDaily.Add_Click({ Invoke-Generator @('-Daily') $buttonDaily })
+
+# The scenario designer opens as a dialog of this window; afterwards the list shows the new scenario.
+$buttonDesigner.Add_Click({
+        $designerArgs = @{ Owner = $form; AppDataFolder = $AppDataFolder; DocumentsFolder = $DocumentsFolder }
+        if ($TestClicks) {
+            # Click test: a fixed design, "Create" clicked in code; into Own Scenarios only of a test documents folder.
+            $spec = Join-Path $TestOutFolder 'designer-test.json'
+            New-Item -ItemType Directory -Force -Path $TestOutFolder | Out-Null
+            @{ Name = 'Testinsel'; MapKind = 'Classic'; MapNumber = 4711; Difficulty = 1; StorySeed = 7; Towns = @(@{ Residents = 400; Stage = 1; OfWhich = 200 }); Balance = 0; Ships = @(23) } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $spec -Encoding UTF8
+            $designerArgs.SpecFile = $spec; $designerArgs.TestCreate = $true
+            if (-not $DocumentsGiven) { $designerArgs.OutFolder = $TestOutFolder }
         }
+        $result = $null
         $form.Cursor = [Windows.Forms.Cursors]::WaitCursor
-        $buttonRoll.Enabled = $false
-        try {
-            $output = @(& powershell @a 2>&1 | ForEach-Object { "$_" })
-            # First line "Abenteuer 4711 (Fordernd): <path>", then a technical summary, then the goals as "  - ...".
-            $titleLine = @($output | Where-Object { $_ -match '^\S.*\.szs$' } | Select-Object -First 1)
-            $goals = @($output | Where-Object { $_ -match '^\s+- ' } | ForEach-Object { $_.Trim() })
-            if ($LASTEXITCODE -eq 0 -and $titleLine.Count -and $goals.Count) {
-                $name = ($titleLine[0] -replace ':\s+\S:\\.*$', '')
-                $rollResult.Text = ((Txt '“{0}” is ready – in the game under “New Game” → “Own Scenarios”. Your mission:' '„{0}“ ist bereit – im Spiel unter „Neues Spiel“ → „Eigene Szenarien“. Dein Auftrag:') -f $name) + [Environment]::NewLine + ($goals -join [Environment]::NewLine)
+        try { $result = @(& $Designer @designerArgs) | Where-Object { $_ -is [hashtable] } | Select-Object -Last 1 }
+        catch { $rollResult.Text = (Txt 'The scenario designer stopped: {0}' 'Der Szenario-Baukasten wurde beendet: {0}') -f $_.Exception.Message }
+        finally { $form.Cursor = [Windows.Forms.Cursors]::Default }
+        Update-ScenarioList
+        if ($result -and @($result.Created).Count) {
+            $name = @($result.Created)[-1]
+            $rollResult.Text = (Txt '“{0}” is ready – in the game under “New Game” → “Own Scenarios”.' '„{0}“ ist bereit – im Spiel unter „Neues Spiel“ → „Eigene Szenarien“.') -f $name
+            if ($result.ShowList) {
+                $tabs.SelectedIndex = 2
+                foreach ($item in $scenarioList.Items) { if ($item.Text -eq $name) { $item.Selected = $true; $item.Focused = $true; $item.EnsureVisible() } }
             }
-            else { $rollResult.Text = (@($output) | Where-Object { $_ } | Select-Object -Last 12) -join [Environment]::NewLine }
         }
-        catch { $rollResult.Text = $_.Exception.Message }
-        finally { $form.Cursor = [Windows.Forms.Cursors]::Default; $buttonRoll.Enabled = $true }
+    })
+$checkUnlock.Add_CheckedChanged({
+        try { $script:NewlyUnlocked = @(Sync-Chapters $checkUnlock.Checked) } catch { $rollResult.Text = $_.Exception.Message }
+        Save-Choice
         Update-ScenarioList
     })
 Update-ScenarioList
@@ -746,6 +907,8 @@ function Save-Choice {
         New-Item -ItemType Directory -Force -Path (Split-Path $SettingsFile) | Out-Null
         $sel = Get-Selection
         $sel['LogbookWithGame'] = if ($checkLogbook.Checked) { '1' } else { '0' }
+        # Without a chapter set the check box is disabled: keep the saved value.
+        $sel['UnlockChapters'] = if (-not $checkUnlock.Enabled) { if ($saved['UnlockChapters'] -eq '1') { '1' } else { '0' } } elseif ($checkUnlock.Checked) { '1' } else { '0' }
         $sel | ConvertTo-Json | Set-Content -LiteralPath $SettingsFile -Encoding UTF8
     }
     catch { }
@@ -832,6 +995,24 @@ if ($TestClicks) {
             $script:Started.Add('RESULT ' + ($rollResult.Text -replace "`r?`n", ' | '))
             Write-Step 'Roll with an invalid number'; $rollSeed.Text = '12345678'; Invoke-Click $buttonRoll
             $script:Started.Add('RESULT ' + $rollResult.Text)
+            Write-Step 'Daily adventure'; $rollSeed.Text = ''; Invoke-Click $buttonDaily
+            $script:Started.Add('RESULT ' + ($rollResult.Text -replace "`r?`n", ' | '))
+            # The designer opens as a dialog of this window: a fixed test design, "Create" clicked in code, "show it" = yes.
+            Write-Step 'Build your own scenario'; $tabs.SelectedIndex = 0; Invoke-Click $buttonDesigner
+            $script:Started.Add('RESULT ' + ($rollResult.Text -replace "`r?`n", ' | '))
+            $script:Started.Add(('LIST tab {0}, selected: {1}' -f $tabs.SelectedIndex, (@($scenarioList.SelectedItems | ForEach-Object { $_.Text }) -join ', ')))
+            # Chapters one by one: on (locked chapters leave Own Scenarios and show a lock), then off (all back).
+            $listState = { '{0} entries, {1} locked; Own Scenarios: {2} files' -f $scenarioList.Items.Count, @($scenarioList.Items | Where-Object { $_.Tag.Locked }).Count, @(Get-ChildItem -LiteralPath $OwnScenarios -Filter '*.szs' -ErrorAction SilentlyContinue).Count }
+            # Only with a test documents folder: the check box copies and removes files in Own Scenarios.
+            Write-Step ('Unlock chapters one by one: enabled {0}, test documents folder {1}, before: {2}' -f $checkUnlock.Enabled, $DocumentsGiven, (& $listState))
+            if ($checkUnlock.Enabled -and $DocumentsGiven) {
+                $checkUnlock.Checked = $false
+                $checkUnlock.Checked = $true
+                $script:Started.Add('ON  ' + (& $listState) + '; SETTINGS UnlockChapters=' + (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).UnlockChapters)
+                foreach ($item in $scenarioList.Items) { if ($item.Text -match '\s\d+\s+-\s') { $script:Started.Add(('  {0} | {1}' -f $item.Text, $item.SubItems[2].Text)) } }
+                $checkUnlock.Checked = $false
+                $script:Started.Add('OFF ' + (& $listState) + '; SETTINGS UnlockChapters=' + (Get-Content -LiteralPath $SettingsFile -Raw | ConvertFrom-Json).UnlockChapters)
+            }
             $form.Close()
         })
     [void]$form.ShowDialog()
@@ -851,4 +1032,5 @@ if ($PreviewImage) {
             $form.Close()
         })
 }
+elseif ($StartTab -gt 0 -and $StartTab -lt $tabs.TabCount) { $tabs.SelectedIndex = $StartTab }
 [void]$form.ShowDialog()

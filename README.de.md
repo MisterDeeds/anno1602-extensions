@@ -3,8 +3,10 @@
 *[English version](README.md)*
 
 Ein Fan-Projekt für **Anno 1602 History Edition** (Ubisoft Connect): grössere Welt, mehr Inseln,
-stärkere Gegner, günstigeres Bauen und reichere Städte, Turbo bis 16-fach, 23 eigene Szenarien mit
-Geschichte und Auftrag, Zufallsabenteuer und ein Logbuch-Fenster neben dem Spiel.
+stärkere Gegner, günstigeres Bauen und reichere Städte, Turbo bis 16-fach, zufällige Ereignisse
+während des Spiels, 41 eigene Szenarien mit Geschichte und Auftrag (fünf Kampagnen und 13
+Herausforderungen, einige gegen die Uhr), ein Szenario-Baukasten, Zufalls- und Tagesabenteuer und
+ein Logbuch-Fenster mit Verlaufskurven neben dem Spiel.
 
 Das Werkzeug ändert **keine Datei des Spiels**. Es passt nur den Arbeitsspeicher des laufenden
 Spiels an. Wird das Spiel beendet, ist alles wieder wie im Original. Nur für das Einzelspiel.
@@ -41,6 +43,7 @@ auf einem englischen.
 | Steuereinnahmen | ×1,5 bis ×3 |
 | Einflussradius | ×1,5 oder ×2 für Kontor, Markt und öffentliche Bauten (Kapelle, Kirche, Wirtshaus, Arzt, Schule …) |
 | Erz- und Goldminen | unerschöpflich |
+| Ereignisse | zufällige Ereignisse während des Spiels, selten oder häufig (siehe [Ereignisse](#ereignisse)) |
 | Turbo (F7) | 8-, 12- oder 16-fache Geschwindigkeit |
 
 ## Das Startfenster
@@ -53,7 +56,7 @@ Das Startfenster hat drei Registerkarten:
 </p>
 
 - **Neues Spiel**: alle Optionen zum Anklicken, in vier Gruppen (Welt, Wirtschaft, Gegner und
-  Gefahren, Schiffe und Tempo), dazu fünf Vorlagen:
+  Gefahren – mit den Ereignissen –, Schiffe und Tempo), dazu fünf Vorlagen:
 
   | Vorlage | Einstellungen |
   |---|---|
@@ -69,22 +72,74 @@ Das Startfenster hat drei Registerkarten:
   Version der Erweiterungen gespeichert wird; bei älteren Autosaves einer grossen Welt kommt die
   Grösse aus dem Dateinamen.)
 - **Abenteuer**: alle Kampagnen und Herausforderungen mit deinem Fortschritt (gewonnen, verloren,
-  nächstes Kapitel) und der **Zufallsabenteuer**-Generator: Schwierigkeit wählen, freiwillig eine
-  Nummer eingeben, *Abenteuer würfeln* klicken. Jede Nummer ergibt eine eigene Inselwelt mit eigenem
-  Auftrag (eine von drei Kartenarten, und Städte, ein Inselreich, Handel, ein Monopol oder Eroberung
-  als Hauptziel); dieselbe Nummer ergibt immer dasselbe Abenteuer.
+  nächstes Kapitel), dazu
+  - der **Zufallsabenteuer**-Generator: Schwierigkeit wählen, freiwillig eine Nummer eingeben,
+    *Abenteuer würfeln* klicken. Jede Nummer ergibt eine eigene Inselwelt mit eigenem Auftrag (eine
+    von drei Kartenarten, und Städte, ein Inselreich, Handel, ein Monopol oder Eroberung als
+    Hauptziel); dieselbe Nummer ergibt immer dasselbe Abenteuer.
+  - das **Tagesabenteuer**: jeden Tag ein neues Abenteuer, an diesem Tag für alle dasselbe
+    („Tagesabenteuer 2026-11-15“).
+  - **Eigenes Szenario bauen**: der Szenario-Baukasten (unten).
+  - **Kapitel nacheinander freischalten** (zu Beginn aus): Die Liste im Spiel zeigt dann jede
+    Kampagne nur bis zum ersten noch nicht gewonnenen Kapitel; das nächste kommt nach einem Sieg dazu.
+    Gesperrte Kapitel tragen im Startfenster ein Schloss.
 
 Unter den Registerkarten: **Mit Erweiterungen spielen**, **Original starten** und **Logbuch öffnen**.
 
+## Szenario-Baukasten
+
+<p align="center">
+  <img src="docs/images/designer-de.png" alt="Szenario-Baukasten" width="70%">
+</p>
+
+Ein Szenario zum Zusammenklicken: Name, Karte (klassisch, Archipel oder Kontinente, jede
+Kartennummer eine eigene Welt), Schwierigkeit, dein Gold und Gold und Stärke der Gegner, Piraten,
+Ureinwohner, Rohstoffe, Startladung und bis zu drei weitere Schiffe, dazu der Auftrag – Städte mit
+einer Stufe, jede Siedlung mindestens, Zahl der Siedlungen, Einwohner insgesamt, Bilanz,
+Handelsbilanz, Waren im Lager, Monopole, bestimmte Gegner besiegen und auf Wunsch ein Zeitlimit. Den
+Auftragstext schreibt der Baukasten (mit einer Geschichte, die du ändern kannst) und zeigt ihn genau
+so, wie ihn das Spiel zeigen wird. *Szenario erstellen* legt ihn als „Eigenes - &lt;Name&gt;“ zu deinen
+eigenen Szenarien. Die Karten folgen denselben Regeln wie die Kampagnen, so finden die Gegner immer
+Platz.
+
+## Ereignisse
+
+Mit **Ereignisse** auf *Selten* (etwa alle drei Spielstunden) oder *Häufig* (etwa jede Spielstunde)
+passiert ab und zu etwas, sobald du eine Stadt hast:
+
+| Ereignis | Wirkung |
+|---|---|
+| Ein Gönner | Gold für deine Kolonie (2000 bis 10 000, mehr, je weiter deine Städte sind) |
+| Brand im Kontor | die Reparatur kostet 5 % deines Golds |
+| Geschenk eines Händlers | 10 bis 30 t Werkzeug, Holz, Ziegel oder Nahrung in deiner grössten Stadt |
+| Steuersegen / Steuerflaute | Steuern +50 % / −25 % für eine Spielstunde (auch bei den Gegnern) |
+| Erntesegen / Sumpffieber | alle Felder und Betriebe 50 % schneller / 25 % langsamer für eine Spielstunde (auch bei den Gegnern) |
+
+Das Fenster des Werkzeugs muss während des Spiels offen bleiben; es stellt Steuern und Produktion
+nach der Stunde wieder her, ebenso beim Laden oder Starten eines anderen Spiels und beim Spielende.
+Spielstände enthalten die vorübergehenden Werte nie. Jedes Ereignis erscheint auch im Logbuch.
+
 ## Logbuch
 
-Ein kleines Fenster neben dem Spiel. Es *liest* nur den Arbeitsspeicher des Spiels und zeigt deine
-Auftragsziele mit laufenden Fortschrittsbalken, Gold, Bilanz und Handelsbilanz, deine Städte und
-Einwohner je Stufe, Schiffe, die besten Städte der Gegner (und ihren Stand im Wettlauf) und 24 Erfolge –
-von „Land in Sicht“ (erste Stadt) bis „Millionär“. Erfolge und beendete Aufträge stehen in
-`%APPDATA%\Anno1602-Extensions\logbook.json`; daraus zeigt die Registerkarte „Abenteuer“, welche
-Kapitel du gewonnen hast. Das Spiel im Fenstermodus oder einen zweiten Bildschirm nutzen, um beides
-zu sehen.
+<p align="center">
+  <img src="docs/images/logbook-de.png" alt="Logbuch: das laufende Spiel" width="30%">
+  <img src="docs/images/logbook-history-de.png" alt="Logbuch: Verlauf und gespielte Partien" width="30%">
+</p>
+
+Ein Fenster neben dem Spiel. Es *liest* nur den Arbeitsspeicher des Spiels.
+- **Spiel**: deine Auftragsziele mit laufenden Fortschrittsbalken (und der verbleibenden Zeit, wenn
+  der Auftrag ein Zeitlimit hat), Gold, Bilanz und Handelsbilanz, deine Städte und Einwohner je
+  Stufe, Schiffe, die besten Städte der Gegner (und ihr Stand im Wettlauf), die Ereignisse dieser
+  Partie und 53 Erfolge – von „Land in Sicht“ (erste Stadt) über „Saga vollendet“ (eine ganze
+  Kampagne) bis „Stammgast“ (zehn Partien).
+- **Verlauf**: Kurven von Gold, Einwohnern je Stufe, Bilanz, Städten und Schiffen über die Partie
+  (ein Punkt je Spielminute) und die Liste deiner gespielten Partien mit Dauer, Ergebnis und den
+  meisten Einwohnern. Am Ende jeder Partie zeigt eine Karte, was du erreicht hast.
+
+Erfolge, beendete Aufträge und gespielte Partien stehen in
+`%APPDATA%\Anno1602-Extensions\logbook.json`, die Kurven in `history\`; daraus zeigt die
+Registerkarte „Abenteuer“, welche Kapitel du gewonnen hast. Das Spiel im Fenstermodus oder einen
+zweiten Bildschirm nutzen, um beides zu sehen.
 
 Im laufenden Spiel geprüft am 12. November 2026: Alle sieben neuen Optionen werden genau wie geplant
 gesetzt (alle 50 Inseln tragen alle sechs Pflanzen; bei 16-fach über 1,5 Spielstunden blieben die
@@ -96,11 +151,20 @@ Tag: Das Baumenü zeigt die halbierten Kosten, ein Wegstück kostete wirklich 3 
 Bauvorschau des Marktplatzes zeigt den doppelten Radius; mit demselben Spielstand über 2,9 Spielstunden
 ergaben die Katastrophen 0 / 34 / 89 neue Brände und Pestfälle für aus / normal / häufiger; ein
 englisches Szenario erscheint mit englischem Text; alle Knöpfe des Startfensters wurden im Code
-geklickt. Noch nicht durchgespielt: die Balance der zehn neuen Szenarien.
+geklickt.
+
+Im laufenden Spiel geprüft am 15. November 2026 (Version 3.0.0): „Gegen die Uhr“ startet mit seinem
+Zeitlimit von 3 Stunden, das Spiel zeigt seine eigene Uhr, nach dem Laden des Spielstands ist das
+Limit wieder da, und läuft die Zeit ab, ist der Auftrag verloren; Ereignisse (Gönner, Brand,
+Händlergeschenk, Erntesegen, Sumpffieber) ändern Gold, Waren und Produktion genau wie angekündigt und
+stellen sie am Ende oder mit dem Spielende wieder her; in „Neue Welt 3“ siedeln alle drei Gegner
+zwischen den 14 Dörfern der Ureinwohner; ein Szenario aus dem Baukasten lädt mit Zeitlimit, weiteren
+Schiffen und dem genannten Gegner. Noch nicht durchgespielt: die Balance der mit † markierten
+Szenarien.
 
 ## Kampagnen und Herausforderungen
 
-23 eigene Szenarien, im Spiel unter *Einzelspieler → Neues Spiel → Eigene Szenarien*. Jedes hat
+41 eigene Szenarien, im Spiel unter *Einzelspieler → Neues Spiel → Eigene Szenarien*. Jedes hat
 eine klassische Karte (500 × 350) und eine grosse Fassung (1000 × 700, bis 50 Inseln).
 
 | Deutscher Titel | Englischer Titel | Auftrag |
@@ -121,6 +185,18 @@ eine klassische Karte (500 × 350) und eine grosse Fassung (1000 × 700, bis 50 
 | 4 Die Rote Flagge † | 4 The Red Flag † | mindestens 3 Siedlungen, jede mit 300 Einw. (100 Bürger), Piraten |
 | 5 Verrat † | 5 Betrayal † | das Haus Valcourt besiegen (nur diesen Rivalen), 1000 Einw. (400 Kaufleute) |
 | 6 Das Goldene Zeitalter † | 6 The Golden Age † | 2000 Einw. (800 Aristokraten) und 1200 (500 Kaufleute), zusammen 4000, 40 t Schmuck, Bilanz +800, Piraten |
+| **Die Neue Welt** 1 Die Überfahrt † | **The New World** 1 The Crossing † | Stadt mit 300 Einw. (150 Siedler), 3 Siedlungen, Bilanz im Plus |
+| 2 Zucker und Rum † | 2 Sugar and Rum † | Zuckermonopol, 40 t Alkohol im Lager, 500 Einw. (200 Bürger) |
+| 3 Land der vielen Völker † | 3 Land of Many Peoples † | 800 Einw. (300 Kaufleute), 4 Siedlungen, jede mit 200 Einw. (80 Siedler) – auf grossen Inseln voller Dörfer der Ureinwohner |
+| 4 Die Schatzflotte † | 4 The Treasure Fleet † | 60 t Gewürze und 40 t Gold im Lager, Handelsbilanz +300, Piraten |
+| 5 Der Konquistador † | 5 The Conquistador † | das Haus Valdoro besiegen (nur diesen Rivalen), 4 Siedlungen, zusammen 2500 Einw. |
+| 6 Der Vizekönig † | 6 The Viceroy † | 2000 Einw. (800 Aristokraten), 1200 (500 Kaufleute) und 600 (250 Bürger), 6 Siedlungen, Bilanz +800, Piraten |
+| **Die Handelsliga** 1 Das erste Kontor † | **The Trade League** 1 The First Warehouse † | 250 Einw. (120 Siedler), 30 t Stoffe im Lager, Handelsbilanz +100 – kein Krieg in dieser Kampagne |
+| 2 Markttag † | 2 Market Day † | 500 Einw. (200 Bürger), 40 t Tabakwaren und 40 t Gewürze im Lager |
+| 3 Das Kontornetz † | 3 The Warehouse Network † | 6 Siedlungen, jede mit 150 Einw. (60 Siedler), Handelsbilanz +200 |
+| 4 Das Baumwollkartell † | 4 The Cotton Cartel † | Baumwollmonopol, 50 t Kleidung im Lager, Handelsbilanz +300, Piraten |
+| 5 Die Bank der Liga † | 5 The League Bank † | 1200 Einw. (600 Kaufleute), Bilanz +500, Handelsbilanz +400 |
+| 6 Der Fürst der Kaufleute † | 6 The Merchant Prince † | 2000 Einw. (700 Aristokraten), 50 t Schmuck im Lager, Handelsbilanz +500, Bilanz +800, Piraten |
 | **Herausforderung** Inselreich | **Challenge** Island Realm | 8 eigene Siedlungen mit zusammen 3000 Einwohnern |
 | Handelsimperium | Trade Empire | 50 t Schmuck und 80 t Kleidung im Lager, Handelsbilanz +300 |
 | Goldrausch | Gold Rush | 60 t Gold und 40 t Schmuck im Lager, Piraten |
@@ -128,9 +204,20 @@ eine klassische Karte (500 × 350) und eine grosse Fassung (1000 × 700, bis 50 
 | Kontinente † | Continents † | 1500 Einw. (400 Aristokraten), zusammen 3000, Bilanz +300 – auf wenigen riesigen Inseln |
 | Handelsflotte † | Merchant Fleet † | 4 Siedlungen, 60 t Gewürze und 60 t Kakao im Lager – vier Schiffe, wenig Gold |
 | Seemacht † | Sea Power † | alle drei Rivalen besiegen – sie sind arm, du startest mit drei Kriegsschiffen |
+| Kolonialherr † | Colonial Lord † | Weinmonopol (Norden) und Kakaomonopol (Süden), 4 Siedlungen, jede mit 250 Einw. (80 Bürger) |
+| Monopolist † | Monopolist † | Gewürz- und Tabakmonopol, Handelsbilanz +400 – gegen drei reiche, rücksichtslose Rivalen |
+| Ruhige See † | Calm Seas † | 1200 Einw. (500 Kaufleute), zusammen 2500, Bilanz +300 – keine Piraten, aber karge Inseln und reiche Rivalen |
+| Habenichts † | Shoestring † | 600 Einw. (250 Bürger), Bilanz +200 – mit 8000 Gold und fast leerem Schiff |
+| Gegen die Uhr † ⏱ | Against the Clock † ⏱ | 500 Einw. (250 Siedler) in 3 Stunden |
+| Die Frist des Königs † ⏱ | The Royal Deadline † ⏱ | 1000 Einw. (400 Bürger) und Bilanz +300 in 6 Stunden, Piraten |
 
 † Neu im November 2026 und noch nicht im Spiel auf die Balance geprüft: Die Schwierigkeit ist in
 Anlehnung an die gemessenen Kapitel ausgelegt.
+
+⏱ Mit Zeitlimit: Es zählt in Stunden der spieleigenen Uhr, die das Spiel unten links zeigt, sobald
+ein Limit gesetzt ist (bei 180:00 sind drei Stunden um); Pause hält sie an, der Turbo beschleunigt
+sie. Das Limit gilt nur, wenn das Spiel mit den Erweiterungen läuft (sie setzen es bei jedem Start
+und jedem Laden); ohne sie hat das Szenario kein Limit.
 
 Im Wettlauf gewinnt, wer den Auftrag zuerst erfüllt. Gemessen ohne Zutun des Spielers: Die Rivalen
 schaffen Kapitel 1 nach rund 5, Kapitel 2 nach rund 7½, Kapitel 3 nach rund 8 und Kapitel 4 nach
@@ -162,7 +249,8 @@ Entfernen: im selben Ordner `uninstall.cmd` doppelklicken. Spiel und Spielständ
   sich etwas geändert hat). Es behält die allererste und die fünf neuesten Sicherungen; ältere wandern in den
   Papierkorb.
 - Über das Startfenster gestartet, schliesst sich das Fenster des Werkzeugs nach dem Spiel von selbst; offen
-  bleibt es nur, wenn etwas schiefging, damit du die Meldung lesen kannst.
+  bleibt es nur, wenn etwas schiefging, damit du die Meldung lesen kannst. Lass es während des Spiels
+  offen: Es führt die Ereignisse aus und schützt den automatischen Spielstand einer grossen Welt.
 - Getestet mit genau einer Spielversion (SHA-256 von `Anno1602.exe` beginnt mit `7731972f`).
   Nach einem Update des Spiels bricht das Werkzeug ab, ohne etwas zu ändern.
 
@@ -175,15 +263,16 @@ anno1602-extensions/
 │   ├── anno-patcher.ps1           das Werkzeug: prüft die Spielversion und patcht den Speicher
 │   ├── launcher.ps1               das Startfenster (deutsch oder englisch, je nach Windows)
 │   ├── logbook.ps1                das Logbuch-Fenster (liest den Speicher des Spiels nur)
-│   ├── build-scenarios.ps1        baut die 23 Szenarien deutsch oder englisch
+│   ├── build-scenarios.ps1        baut die 41 Szenarien deutsch oder englisch
 │   ├── scenario-lib.ps1           Dateiformat .szs und Aufträge AUFTRAG4 (entschlüsselt)
-│   ├── random-adventure.ps1       Zufallsabenteuer-Generator (Nummer + Schwierigkeit)
+│   ├── random-adventure.ps1       Generator für Zufalls- und Tagesabenteuer (Nummer + Schwierigkeit)
+│   ├── scenario-designer.ps1      das Fenster des Szenario-Baukastens
 │   ├── install.ps1                Installer hinter install.cmd / uninstall.cmd
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
-│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle (556 Prüfungen)
-│   ├── check-scenarios.ps1        prüft gebaute Szenarien und Zufallsabenteuer (-Reproduce)
-│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung (17 Prüfungen)
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (640 Prüfungen)
+│   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
+│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung (27 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung
 │   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
 │   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel
@@ -197,8 +286,8 @@ anno1602-extensions/
 ```
 
 Offline-Test starten: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (braucht das installierte
-Spiel; es wird nicht gestartet), Installer-Test: `tests\test-install.ps1`. Änderungen je Version:
-[CHANGELOG.md](CHANGELOG.md).
+Spiel; es wird nicht gestartet), Installer-Test: `tests\test-install.ps1`, Logbuch-Test:
+`src\logbook.ps1 -SelfTest`. Änderungen je Version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Rechtliches
 

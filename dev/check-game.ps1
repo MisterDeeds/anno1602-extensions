@@ -2,8 +2,16 @@
 .SYNOPSIS
   Reads from the running Anno1602.exe (read only) the values that anno-patcher.ps1 sets,
   plus gold, game speed, island count and camera position. For tests in the game.
+  Events (anno-patcher.ps1 -Events): the event state that the tool keeps in the game process (marker 'EVNT' at
+  RVA 0xE5BD0 -> page): which temporary event is active until which game clock, the values now and the originals,
+  and the newest events of this game process from %APPDATA%\Anno1602-Extensions\events.json.
 #>
-param([switch]$Short)
+param(
+    [switch]$Short,
+    # Only for tests\test-patcher.ps1: another process (the helper with the mapped exe) and its load address.
+    [Parameter(DontShow)][int]$TestProcessId = 0,
+    [Parameter(DontShow)][long]$TestBase = 0
+)
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @'
 using System;
@@ -17,9 +25,12 @@ public static class CheckMem {
     public static extern bool CloseHandle(IntPtr h);
 }
 '@
-$p = Get-Process -Name 'Anno1602' -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $p) { 'Game is not running.'; return }
-$base = $p.MainModule.BaseAddress.ToInt64()
+if ($TestProcessId) { $p = Get-Process -Id $TestProcessId; $base = $TestBase }
+else {
+    $p = Get-Process -Name 'Anno1602' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $p) { 'Game is not running.'; return }
+    $base = $p.MainModule.BaseAddress.ToInt64()
+}
 $h = [CheckMem]::OpenProcess(0x0010 -bor 0x0400, $false, $p.Id)
 function Read-Memory([long]$adr, [int]$n) { $b = New-Object byte[] $n; $d = [IntPtr]::Zero; [void][CheckMem]::ReadProcessMemory($h, [IntPtr]$adr, $b, [IntPtr]$n, [ref]$d); , $b }
 function Read-Rva([long]$rva, [int]$n) { Read-Memory ($base + $rva) $n }
@@ -39,6 +50,11 @@ try {
     $iv = foreach ($i in 0..499) { U16 (0x6BA1C0 + $i * 0x90 + 0x3A) }
     $res['Intervals (first 8 > 0)'] = (($iv | Where-Object { $_ -gt 0 } | Select-Object -First 8) -join ', ')
     $res['Game clock'] = I32 0x5EC0F8
+    # Mission time limit: game value 0x5EC1A8 (set by the TIMERS hook) and the scenario's deadline (mission +0x20 of the
+    # local player's slot, from AUFTRAG4 +0x58).
+    $tl = I32 0x5EC1A8; $lp = I32 0x5F1D60
+    $dl = if ($lp -ge 0 -and $lp -le 3) { I32 (0x5EC720 + $lp * 0x108C + 0x20) } else { 0 }
+    $res['Time limit'] = if ($tl -gt 0) { 'clock {0} = {1}:00 on the display ({2:0.#} h), {3:0.##} game hours left; scenario deadline {4}' -f $tl, ($tl / 600), ($tl / 36000), (($tl - (I32 0x5EC0F8)) / 36000), $dl } else { 'none (scenario deadline {0})' -f $dl }
     $res['Flags (bit 0 = pirates sightings only)'] = '0x{0:X}' -f (I32 0x5EC188)
     $res['Difficulty'] = I32 0x5EC1C0
     $res['Gold slot 0-4'] = ((0..4 | ForEach-Object { I32 (0x5F0964 + $_ * 0x280) }) -join ' / ')
@@ -92,6 +108,42 @@ try {
     $res['Mines (0xBA429 / 0xBA495) / ore, gold t in deposits'] = '{0} / {1} / {2}, {3}' -f (& $hx 0xBA429 4), (& $hx 0xBA495 5), [math]::Round($ore / 32), [math]::Round($gold / 32)
     $dis = if ((& $hx 0xBCAC3 5) -eq '0F 1F 44 00 00') { 'Off' } elseif ((& $hx 0xBCABB 3) -eq '83 FA 19') { 'More' } else { 'Default' }
     $res['Disasters (plague call 0xBCAC3, limit 0xBCABB)'] = '{0} ({1}, {2}); drought on island 0-49: {3}' -f $dis, (& $hx 0xBCAC3 5), (& $hx 0xBCABB 3), (@(0..49 | Where-Object { (Read-Rva (0x62DDC0 + $_ * 0x2CC8 + 0x45) 1)[0] -ne 0 }).Count)
+    # Events (-Events): marker 'EVNT' (version, page address) -> page: 'EVST', version, tool PID, last clock; taxes at
+    # +0x10 (active, code, factor x 1000, end clock, 5 originals, 5 written); production at +0x48 (the same, entries
+    # changed +0x58, 500 originals from +0x60, 500 written from +0x450). Layout: class AnnoEvents in anno-patcher.ps1.
+    $evNames = @{ 1 = 'Patron'; 2 = 'Fire in the warehouse'; 3 = 'Tax windfall'; 4 = 'Tax slump'; 5 = 'Bumper harvest'; 6 = 'Marsh fever'; 7 = "Trader's gift" }
+    $em = Read-Rva 0xE5BD0 16
+    if ([Text.Encoding]::ASCII.GetString($em, 0, 4) -ne 'EVNT') { $res['Events (marker 0xE5BD0)'] = 'none (no event record in this game process)'; $res['Event taxes'] = 'none'; $res['Event production'] = 'none' }
+    else {
+        $pa = [BitConverter]::ToInt64($em, 8); $pg = Read-Memory $pa 0x860
+        $owner = [BitConverter]::ToInt32($pg, 8)
+        $alive = if ($owner -and (Get-Process -Id $owner -ErrorAction SilentlyContinue)) { 'running' } elseif ($owner) { 'gone' } else { 'none' }
+        $res['Events (marker 0xE5BD0)'] = 'page 0x{0:X} ({1}), tool PID {2} ({3}), last game clock {4}' -f $pa, [Text.Encoding]::ASCII.GetString($pg, 0, 4), $owner, $alive, [BitConverter]::ToInt32($pg, 0xC)
+        if ([BitConverter]::ToInt32($pg, 0x10) -eq 0) { $res['Event taxes'] = 'none' }
+        else {
+            $now = (0..4 | ForEach-Object { I32 (0x6BA030 + $_ * 0x50) }) -join '/'
+            $wrote = (0..4 | ForEach-Object { [BitConverter]::ToInt32($pg, 0x34 + 4 * $_) }) -join '/'
+            $res['Event taxes'] = '{0} x{1} until clock {2}: now {3}, originals {4}{5}' -f $evNames[[BitConverter]::ToInt32($pg, 0x14)], ([BitConverter]::ToInt32($pg, 0x18) / 1000).ToString([Globalization.CultureInfo]::InvariantCulture),[BitConverter]::ToInt32($pg, 0x1C), $now,
+                ((0..4 | ForEach-Object { [BitConverter]::ToInt32($pg, 0x20 + 4 * $_) }) -join '/'), $(if ($now -eq $wrote) { '' } else { " (NOT as written: $wrote)" })
+        }
+        if ([BitConverter]::ToInt32($pg, 0x48) -eq 0) { $res['Event production'] = 'none' }
+        else {
+            $tb = Read-Rva (0x6BA1C0 + 0x3A) (499 * 0x90 + 2); $differ = 0; $first = @()
+            for ($i = 0; $i -lt 500; $i++) {
+                $o = [BitConverter]::ToUInt16($pg, 0x60 + 2 * $i); $w = [BitConverter]::ToUInt16($pg, 0x450 + 2 * $i)
+                if ([BitConverter]::ToUInt16($tb, $i * 0x90) -ne $w) { $differ++ }
+                if ($o -ne $w -and $first.Count -lt 4) { $first += "no. $i $o -> $w" }
+            }
+            $res['Event production'] = '{0} x{1} until clock {2}: {3} work intervals changed, {4} ({5})' -f $evNames[[BitConverter]::ToInt32($pg, 0x4C)], ([BitConverter]::ToInt32($pg, 0x50) / 1000).ToString([Globalization.CultureInfo]::InvariantCulture),[BitConverter]::ToInt32($pg, 0x54),
+                [BitConverter]::ToInt32($pg, 0x58), $(if ($differ) { "$differ NOT as written" } else { 'as written' }), ($first -join ', ')
+        }
+    }
+    # The newest events of this game process in events.json (read only; written by the tool, shown by the logbook).
+    $evFile = Join-Path $env:APPDATA 'Anno1602-Extensions\events.json'
+    if (-not $TestProcessId -and (Test-Path -LiteralPath $evFile)) {
+        $mine = @(try { @((Get-Content -LiteralPath $evFile -Raw -Encoding UTF8 | ConvertFrom-Json).events) | Where-Object { $_.pid -eq $p.Id } } catch { })
+        $res['Events in events.json (this game)'] = '{0}{1}' -f $mine.Count, $(if ($mine.Count) { ': ' + ((@($mine | Select-Object -Last 3 | ForEach-Object { '{0} at {1} ({2})' -f $_.id, $_.clock, $_.effect.en })) -join '; ') } else { '' })
+    }
     $cam = [BitConverter]::ToInt64((Read-Rva 0xF9A00 8), 0)
     if ($cam) { $k = Read-Memory $cam 0x4C; $res['Camera world x/y, scroll s/t, rotation'] = '{0}/{1}, {2}/{3}, {4}' -f [BitConverter]::ToInt32($k, 0x1C), [BitConverter]::ToInt32($k, 0x20), [BitConverter]::ToInt32($k, 0x24), [BitConverter]::ToInt32($k, 0x28), [BitConverter]::ToInt32($k, 0x48) }
     if ($Short) { $res.GetEnumerator() | ForEach-Object { "$($_.Key): $($_.Value)" } } else { [pscustomobject]$res | Format-List }

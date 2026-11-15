@@ -3,6 +3,33 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.0.0 – 2026-11-15
+
+- Two new campaigns with six chapters each: "Die Neue Welt / The New World" (exploration, native
+  villages, monopolies of southern and northern crops, a conquistador) and "Die Handelsliga / The Trade
+  League" (goods, trade balance and banking, no war) – plus six new challenges: Colonial Lord,
+  Monopolist, Calm Seas, Shoestring, and two against the clock. 41 scenarios per language in total.
+- Mission time limits: the game had a time limit that nothing ever set. The tool now sets it from the
+  scenario at every start and every load; the game shows its own clock and ends the mission as lost
+  when the time is up. Scenario key `TimeLimitHours`; only with the extensions.
+- Events (option "Ereignisse / Events": Rare or Often): a patron, a fire in the warehouse, a trader's
+  gift, a tax windfall or slump and a bumper harvest or marsh fever for one game hour. Temporary values
+  are restored after the hour, when another game is loaded or started, with the game's end and when
+  the tool stops; savegames never contain them.
+- Scenario designer: click a scenario together – map, world, rivals, ships and any combination of
+  mission goals, with an optional time limit and an editable story – and see the mission text as the
+  game will show it.
+- Daily adventure: a new random adventure every day, the same for everyone on that date.
+- Campaign chapters can be unlocked one by one (launcher check box, off by default).
+- Logbook 2.0: a History tab with charts (gold, residents per class, balance, towns and ships), a
+  summary card at the end of every game, the list of played games, an events section, 53 achievements
+  instead of 24, sections that fold; the time limit shown in the game's own clock units.
+- The launcher fits the new option and buttons; the installer installs the designer and keeps a full
+  set of chapters for the unlocking; the uninstaller knows every new scenario name.
+- Tests: `tests/test-patcher.ps1` 640 checks (events, time limit), `tests/test-install.ps1` 27 checks,
+  `src/logbook.ps1 -SelfTest` 147 checks, `tests/check-scenarios.ps1` checks time limits, crop climates,
+  goods that can be produced, title lines and daily adventures.
+
 ## 2.2.0 – 2026-11-13
 
 - Random adventures carry the difficulty in their name ("Abenteuer 4711 Fordernd" / "Adventure 4711 Demanding"):

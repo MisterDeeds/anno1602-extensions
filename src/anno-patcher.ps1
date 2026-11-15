@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   EXPERIMENT: sets the map size of Anno 1602 History Edition in memory (default 1000 x 700).
 
@@ -18,7 +18,8 @@
     6. Stays open until the game exits. If the game wrote lastgame.gam during that time
        (automatic savegame for "Continue game"), the file is renamed to
        lastgame-<width>x<height>-<time>.gam. That way "Continue game" without the tool
-       does not load a big world. Switch off with -NoLastgameProtection.
+       does not load a big world. Switch off with -NoLastgameProtection. With -Events Rare|Often the
+       window also runs the random events during this time.
   After the game exits everything is as before.
   Convenient start of tool and game together: the launcher (src\launcher.ps1, shortcut "Anno 1602 - Erweiterungen").
 
@@ -137,6 +138,21 @@
     Disasters (-Disasters)        Off: no new fire, plague, drought or volcanic eruption (5 calls in
                                   FUN_1400bc030 and FUN_14009e390 become NOPs). More: fire and plague
                                   twice as likely, the drought check (Demanding/Hard only) twice as often.
+    Events (-Events)              Rare / Often: while the game runs, this window triggers random events for
+                                  you, on average every 3 game hours (Rare) or every game hour (Often),
+                                  measured by the game clock (turbo speeds them up, a paused game has none),
+                                  only once you have a town and never after the game has ended:
+                                    patron (+2,000 to +10,000 gold by your highest population level),
+                                    fire in the warehouse (-5 % of your gold, at most 1,000 per level),
+                                    trader's gift (10-30 t tools, wood, bricks or food in your largest town),
+                                    tax windfall / tax slump (taxes x1.5 / x0.75 for one game hour),
+                                    bumper harvest / marsh fever (production x1.5 / x0.75 for one game hour).
+                                  Taxes and production are game-wide values (the rivals share them), they
+                                  are combined with -Taxes/-Production and restored exactly when the event
+                                  ends, when a game is loaded or ends, and when this window is closed. Gold
+                                  and goods are real changes and are saved with the game. Every event goes to
+                                  %APPDATA%\Anno1602-Extensions\events.json (shown by the logbook).
+                                  State in memory: marker 'EVNT' at RVA 0xE5BD0 -> page with the originals.
 
   Single player only. Load savegames from the big world only with the tool active
   (the savegame does not store the size). This also applies to "Continue game"
@@ -210,6 +226,8 @@ param(
     [ValidateSet('Default', 'Infinite')][string]$Mines = 'Default',
     # Fire, plague, drought, volcano: Default, Off, More (fire and plague twice as likely).
     [ValidateSet('Default', 'Off', 'More')][string]$Disasters = 'Default',
+    # Random events while you play: Off, Rare (on average every 3 game hours), Often (every game hour).
+    [ValidateSet('Off', 'Rare', 'Often')][string]$Events = 'Off',
     # Started from the launcher in its own window: after the game the window closes by itself; on an error it stays
     # open until Enter is pressed, so that the message can be read.
     [switch]$PauseOnError,
@@ -217,7 +235,17 @@ param(
     [string]$GamePath,
     # Only for tests\test-patcher.ps1: other process and load address, no backup.
     [Parameter(DontShow)][int]$TestProcessId = 0,
-    [Parameter(DontShow)][long]$TestBase = 0
+    [Parameter(DontShow)][long]$TestBase = 0,
+    # Only for tests: events reproducible (random seed >= 0; comma-separated event ids that come first, in this
+    # order), events.json at another place, poll interval, mean interval and duration in game clock units, and in
+    # test mode the game clock at which the event loop stops (as if the tool window was closed).
+    [Parameter(DontShow)][int]$EventSeed = -1,
+    [Parameter(DontShow)][string]$EventScript = '',
+    [Parameter(DontShow)][string]$EventFile = '',
+    [Parameter(DontShow)][int]$EventPollMs = 0,
+    [Parameter(DontShow)][int]$EventIntervalClock = 0,
+    [Parameter(DontShow)][int]$EventDurationClock = 0,
+    [Parameter(DontShow)][int]$EventTestUntilClock = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -226,7 +254,7 @@ $ErrorActionPreference = 'Stop'
 $UiGerman = if ($env:ANNO_EXTENSIONS_LANG) { $env:ANNO_EXTENSIONS_LANG -eq 'de' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'de' }
 function Txt([string]$en, [string]$de) { if ($UiGerman) { $de } else { $en } }
 # German names of the option values (the values themselves are English), for the German messages.
-$GermanValueNames = @{ Default = 'Standard'; Active = 'Aktiv'; Strong = 'Stark'; Off = 'Aus'; Normal = 'Normal'; Large = 'Gross'; Huge = 'Riesig'; More = 'Mehr'; Lots = 'Viele'; Hard = 'Schwer'; Everywhere = 'Ueberall'; Infinite = 'Unendlich' }
+$GermanValueNames = @{ Default = 'Standard'; Active = 'Aktiv'; Strong = 'Stark'; Off = 'Aus'; Normal = 'Normal'; Large = 'Gross'; Huge = 'Riesig'; More = 'Mehr'; Lots = 'Viele'; Hard = 'Schwer'; Everywhere = 'Ueberall'; Infinite = 'Unendlich'; Rare = 'Selten'; Often = 'Haeufig' }
 function Get-ValueName([string]$value) { if ($UiGerman) { $GermanValueNames[$value] } else { $value } }
 
 # Every error stops the tool as before; started from the launcher the window then waits for Enter.
@@ -764,15 +792,34 @@ elseif ($FertilityAll) { Write-Host (Txt 'Fertility: only works with the island 
 # (templates 10-24, savegames > 20'000; the clock runs about 10 per second). Then the gold
 # of the player in slot 0 (player table 0x1405f0960, gold +4) is set. PLAYER4 (start gold of the
 # template) is loaded before TIMERS, so the template's value gets overwritten.
+# Mission time limit: the game ends a mission as lost when the int 0x1405ec1a8 is not 0 and the clock reaches it
+# (FUN_1400af980; while it is set the screen shows the elapsed time mm:ss), but nothing in the History Edition
+# sets it: command 0x36 (new game, loading) clears it, no scenario or savegame section carries it. Own scenarios
+# put the deadline (clock units, 36,000 per displayed hour) into AUFTRAG4 +0x58, which the loader copies to the
+# mission table +0x20 (0x1405ec740 + slot x 0x108C) and the saver writes back; the game never reads it. The same
+# code cave copies it at the end of every TIMERS load (scenarios and savegames load AUFTRAG4 before TIMERS, and
+# command 0x36 runs before both): if the local player (0x1405f1d60, 0-3) has a mission (goal bits +0 not 0), the
+# deadline +0x20 goes to 0x1405ec1a8. Original scenarios have 0 there, so nothing changes for them. Only volatile
+# registers (rcx, rdx) are used: the loader returns right after the hook (rax = its result stays untouched).
 $PirateCaveRva = 0xE5F80; $TimersHookRva = 0xC3232; $TimersContinue = 0xC3239
 $FlagsRva = 0x5EC188; $TimersMovapsTarget = 0x5BE5F0; $ClockRva = 0x5EC0F8; $Gold0Rva = 0x5F0964
 $PlayerSize = 0x280   # player table: 7 slots of 640 bytes (FUN_1400a87f0); 1-3 = computer rivals
+$TimeLimitRva = 0x5EC1A8; $MissionRva = 0x5EC720; $MissionSize = 0x108C; $LocalPlayerRva = 0x5F1D60
 $CannonRva = 0x3B94B; $CannonOrig = '8B 05 6F 08 5B 00 83'; $CannonTarget = 'BE 00 01 00 00 EB 3B'
-function Build-PirateCode([string]$mode, [int]$gold = 0, [int]$rivalGold = 0) {
+function Build-PirateCode([string]$mode, [int]$gold = 0, [int]$rivalGold = 0, [bool]$timeLimit = $true) {
     $c = New-Object System.Collections.Generic.List[byte]
     # RIP-relative: rel32 refers to the end of the instruction (after a possible immediate $after).
     $Rip = { param([byte[]]$op, [long]$targetRva, [byte[]]$after) foreach ($x in $op) { $c.Add($x) }; foreach ($x in (Rel32 $targetRva ($PirateCaveRva + $c.Count + 4 + $after.Length))) { $c.Add($x) }; foreach ($x in $after) { $c.Add($x) } }
     & $Rip ([byte[]](0x0F, 0x29, 0x05)) $TimersMovapsTarget ([byte[]]@())      # movaps [0x1405be5f0],xmm0 (replaced instruction)
+    if ($timeLimit) {
+        & $Rip ([byte[]](0x8B, 0x0D)) $LocalPlayerRva ([byte[]]@())             # mov ecx,[local player]
+        foreach ($x in 0x83, 0xF9, 0x03, 0x77, 30) { $c.Add($x) }                # cmp ecx,3 / ja skip (+30)
+        foreach ($x in @(0x69, 0xC9) + [BitConverter]::GetBytes([int32]$MissionSize)) { $c.Add($x) }   # imul ecx,ecx,0x108C
+        & $Rip ([byte[]](0x48, 0x8D, 0x15)) $MissionRva ([byte[]]@())          # lea rdx,[mission table]
+        foreach ($x in 0x48, 0x01, 0xCA, 0x83, 0x3A, 0x00, 0x74, 9) { $c.Add($x) }   # add rdx,rcx / cmp dword [rdx],0 / je skip (+9)
+        foreach ($x in 0x8B, 0x52, 0x20) { $c.Add($x) }                          # mov edx,[rdx+0x20]
+        & $Rip ([byte[]](0x89, 0x15)) $TimeLimitRva ([byte[]]@())              # mov [time limit],edx
+    }                                                                            # skip:
     if ($mode -eq 'Off') { & $Rip ([byte[]](0x83, 0x0D)) $FlagsRva ([byte[]](0x01)) }   # or  dword [0x1405ec188],1
     elseif ($mode -ne 'Default') { & $Rip ([byte[]](0x83, 0x25)) $FlagsRva ([byte[]](0xFE)) }   # and dword [0x1405ec188],~1
     if ($gold -gt 0) {
@@ -791,7 +838,8 @@ function Build-PirateCode([string]$mode, [int]$gold = 0, [int]$rivalGold = 0) {
     if ($PirateCaveRva + $c.Count -gt 0xE6000) { throw (Txt 'Internal error: pirate code cave too long.' 'Interner Fehler: Piraten-Codestueck zu lang.') }
     , $c.ToArray()
 }
-if ($Pirates -ne 'Default' -or $StartGold -gt 0 -or $RivalGold -gt 0) {
+# Always installed: the mission time limit of own scenarios needs the hook even without the other options.
+if ($true) {
     $PirateCode = Build-PirateCode $Pirates $StartGold $RivalGold
     $PirateHook = [byte[]](@(0xE9) + (Rel32 $PirateCaveRva ($TimersHookRva + 5)) + @(0x66, 0x90))
     # Order: first the code cave, then the jump.
@@ -1027,6 +1075,58 @@ $RadiusOffset = 0x20; $RadiusMax = 48
 $RadiusOrig = @{ 270 = 16; 271 = 16; 272 = 16; 273 = 16; 461 = 24; 462 = 8; 463 = 21; 464 = 12; 465 = 20; 466 = 20; 467 = 16; 468 = 16; 469 = 16; 470 = 15; 471 = 12; 472 = 15; 474 = 16 }
 function Get-ScaledRadius([int]$r, [double]$factor) { [math]::Min($RadiusMax, [int][math]::Round($r * $factor, [MidpointRounding]::AwayFromZero)) }
 if ($Radius -ne 1.0) { Write-Host ((Txt 'Radius: x{0:0.##} (trading post and market {1} instead of 16)' 'Radius: x{0:0.##} (Kontor und Markt {1} statt 16)') -f $Radius, (Get-ScaledRadius 16 $Radius)) }
+
+# --- Events (-Events) ----------------------------------------------------------------------------
+# Derivation: docs\FINDINGS.md, sections "Ships, money" (game clock, gold = player +4), "Logbook" (lock 0x5EBF68,
+# local player 0x5F1D60, settlements), "Gameplay options" (taxes, intervals). The tool window polls the game every
+# second. An event is due when the game clock has advanced by a random interval (0.5 to 1.5 x the mean) while a game
+# runs (clock > 0, lock 0, human kind 0) and the human owns at least one settlement; a clock that stands still adds
+# nothing. Temporary events change game-wide values (taxes of the 5 population groups, the 500 work intervals):
+# the originals and the values written go to a page that the tool allocates in the game process (marker 'EVNT' at
+# RVA 0xE5BD0: version, address of the page). They are restored when the event ends, when the clock jumps
+# (new game, savegame loaded: command 0x36 resets the clock), when the game ends and when the tool stops; a tool
+# that is killed leaves them to the next tool run in the same game process (and to the game's exit). Neither
+# value is in a savegame (they come from haeuser.cod at program start). Gold and goods changes are permanent.
+$EventMarkerRva = 0xE5BD0                       # 16 bytes up to 0xE5BE0 (free; markers end at 0xE5BD0)
+$EventLockRva = 0x5EBF68                        # end-of-game lock (1 = game over), reset by command 0x36
+$EventLocalPlayerRva = 0x5F1D60                 # number of the local (human) player (0 in single player)
+$EventPlayersRva = 0x5F0960                     # 7 players x 0x280: +0 kind (0 human, 9 out), +4 gold
+$EventSettlementRva = 0x622DC0; $EventSettlementSize = 600; $EventSettlementCount = 75
+$EventClockPerHour = 32700                      # game clock units per game hour at normal speed (measured)
+$EventMaxClockPerSecond = 200                   # 16x turbo = 160 per second, plus a margin
+$EventClockSlack = 200
+$EventMean = @{ Rare = 3 * $EventClockPerHour; Often = $EventClockPerHour }
+$EventDuration = $EventClockPerHour
+# Goods of the trader's gift (good code = index in the goods list, stock at settlement +0x2A + good x 12).
+$EventGiftGoods = @(@{ Good = 22; De = 'Werkzeug'; En = 'tools' }, @{ Good = 23; De = 'Holz'; En = 'wood' }, @{ Good = 24; De = 'Ziegel'; En = 'bricks' }, @{ Good = 14; De = 'Nahrung'; En = 'food' })
+# Events: id (stable, events.json), code (state page), weight, kind, factor (taxes, production speed). German with
+# umlauts for events.json (the logbook shows them); the console gets the same text without umlauts.
+$EventDefs = [ordered]@{
+    patron         = @{ Code = 1; Weight = 3; Kind = 'Gold'
+        Title = @{ de = 'Ein Gönner'; en = 'A patron' }
+        Text = @{ de = 'Ein wohlhabender Kaufmann aus der alten Heimat glaubt an deine Kolonie und schickt dir Gold für den Aufbau.'; en = 'A wealthy merchant from the old country believes in your colony and sends you gold to help it grow.' } }
+    warehouse_fire = @{ Code = 2; Weight = 2; Kind = 'Gold'
+        Title = @{ de = 'Brand im Kontor'; en = 'Fire in the warehouse' }
+        Text = @{ de = 'Funkenflug setzt das Dach deines Kontors in Brand. Die Löschmannschaft ist schnell zur Stelle, doch die Reparatur kostet.'; en = 'Flying sparks set the roof of your warehouse alight. The fire crew is quick, but the repairs are costly.' } }
+    tax_windfall   = @{ Code = 3; Weight = 2; Kind = 'Tax'; Factor = 1.5
+        Title = @{ de = 'Steuersegen'; en = 'Tax windfall' }
+        Text = @{ de = 'Ein gutes Jahr auf allen Inseln: Die Bürger zahlen gern und reichlich. Eine Spielstunde lang bringen die Steuern die Hälfte mehr ein, auch deinen Konkurrenten.'; en = 'A good year on every island: citizens pay gladly and generously. For one game hour taxes bring in half as much again, for your rivals too.' } }
+    tax_slump      = @{ Code = 4; Weight = 2; Kind = 'Tax'; Factor = 0.75
+        Title = @{ de = 'Steuerflaute'; en = 'Tax slump' }
+        Text = @{ de = 'Eine Flaute im Handel: Überall halten die Leute ihr Geld zusammen. Eine Spielstunde lang bringen die Steuern ein Viertel weniger ein, auch bei deinen Konkurrenten.'; en = 'Trade is slack: everywhere people are holding on to their money. For one game hour taxes bring in a quarter less, for your rivals too.' } }
+    harvest_boom   = @{ Code = 5; Weight = 2; Kind = 'Production'; Factor = 1.5
+        Title = @{ de = 'Erntesegen'; en = 'Bumper harvest' }
+        Text = @{ de = 'Sonne und Regen zur rechten Zeit: Eine Spielstunde lang arbeiten alle Felder und Betriebe anderthalbmal so schnell, auch die deiner Konkurrenten.'; en = 'Sun and rain at just the right time: for one game hour all farms and workshops work half as fast again, your rivals'' too.' } }
+    marsh_fever    = @{ Code = 6; Weight = 2; Kind = 'Production'; Factor = 0.75
+        Title = @{ de = 'Sumpffieber'; en = 'Marsh fever' }
+        Text = @{ de = 'Ein Fieber geht um, viele Arbeiter liegen krank darnieder. Eine Spielstunde lang arbeiten alle Felder und Betriebe ein Viertel langsamer, auch die deiner Konkurrenten.'; en = 'A fever is going round and many workers are laid up. For one game hour all farms and workshops work a quarter slower, your rivals'' too.' } }
+    trader_gift    = @{ Code = 7; Weight = 2; Kind = 'Goods'
+        Title = @{ de = 'Geschenk eines Händlers'; en = 'A trader''s gift' }
+        Text = @{ de = 'Ein freier Händler bedankt sich für gute Geschäfte und lässt {0} t {1} in deinem Kontor in {2} abladen.'; en = 'A free trader thanks you for good business and unloads {0} t of {1} at your warehouse in {2}.' } }
+}
+if ($Events -ne 'Off') {
+    Write-Host ((Txt 'Events: {0} (random events on average every {1} game hour(s) once you have a town; this window must stay open)' 'Ereignisse: {0} (zufaellige Ereignisse im Schnitt alle {1} Spielstunde(n), sobald du eine Stadt hast; dieses Fenster muss offen bleiben)') -f (Get-ValueName $Events), ($EventMean[$Events] / $EventClockPerHour))
+}
 foreach ($s in $Patches) { $s.Size = (Bytes $s.Original).Length }
 function Format-Patch($s, [byte[]]$b) {
     if ($s.Kind) { Format-Value $s.Kind $b[6..9] } else { Txt "set ($($b.Length) bytes)" "gesetzt ($($b.Length) Bytes)" }
@@ -1056,6 +1156,7 @@ function Get-SessionArgs($bound) {
     $list.AddRange([string[]]@('-Width', [string]$Width, '-Height', [string]$Height))
     foreach ($k in $bound.Keys) {
         if ($k -in 'Width', 'Height', 'CheckOnly', 'WaitMinutes', 'GameAlreadyRunning', 'GamePath', 'NoLastgameProtection', 'PauseOnError', 'TestProcessId', 'TestBase') { continue }
+        if ($k -in 'EventSeed', 'EventScript', 'EventFile', 'EventPollMs', 'EventIntervalClock', 'EventDurationClock', 'EventTestUntilClock') { continue }   # test switches; -Events is recorded
         $v = $bound[$k]
         if ($v -is [System.Management.Automation.SwitchParameter]) { if ($v.IsPresent) { $list.Add("-$k") }; continue }
         $list.Add("-$k")
@@ -1140,6 +1241,184 @@ public static class AnnoMem {
     public static extern bool GetExitCodeProcess(IntPtr h, out uint code);
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool CloseHandle(IntPtr h);
+}
+'@
+# Events: every write of an event into the game goes through this class, under one lock. The page in the game
+# process (allocated by the tool, see "Events" above) holds the originals and the values written; Restore() puts the
+# originals back wherever the game still holds the value the tool wrote. The console handler calls Stop() when the
+# window is closed or Ctrl+C is pressed (the main thread may be writing at that moment, hence the lock and the
+# Stopping flag: nothing is written after Stop()).
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class AnnoEvents {
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool ReadProcessMemory(IntPtr h, IntPtr addr, byte[] buf, IntPtr size, out IntPtr done);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool WriteProcessMemory(IntPtr h, IntPtr addr, byte[] buf, IntPtr size, out IntPtr done);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr VirtualAllocEx(IntPtr h, IntPtr addr, IntPtr size, uint type, uint prot);
+    public delegate bool CtrlHandler(uint ctrlType);
+    [DllImport("kernel32.dll", SetLastError = true)]
+    static extern bool SetConsoleCtrlHandler(CtrlHandler handler, bool add);
+
+    // Page layout (all little endian): 'EVST', version, owner tool PID (0 = none), last game clock,
+    // taxes: active, event code, factor x 1000, ends at clock, 5 originals, 5 written values,
+    // production: active, event code, factor x 1000, ends at clock, entries changed, 500 originals, 500 written values.
+    public const int PageSize = 0x860;
+    public const int OffOwner = 0x08, OffClock = 0x0C;
+    public const int OffTax = 0x10, OffTaxBase = 0x20, OffTaxApplied = 0x34;
+    public const int OffProd = 0x48, OffProdCount = 0x58, OffProdBase = 0x60, OffProdApplied = 0x450;
+
+    public static readonly object Sync = new object();
+    public static IntPtr Handle = IntPtr.Zero;
+    public static long Page, TaxAddr, IntervalAddr;
+    public static int TaxStride, IntervalStride, Count;
+    public static volatile bool Stopping;
+    public static int[] LastRestore = new int[4];
+    static CtrlHandler handler;
+
+    public static void Configure(IntPtr h, long page, long taxAddr, int taxStride, long intervalAddr, int intervalStride, int count) {
+        lock (Sync) { Handle = h; Page = page; TaxAddr = taxAddr; TaxStride = taxStride; IntervalAddr = intervalAddr; IntervalStride = intervalStride; Count = count; Stopping = false; }
+    }
+    static byte[] Read(long addr, int n) {
+        byte[] b = new byte[n]; IntPtr d;
+        if (!ReadProcessMemory(Handle, (IntPtr)addr, b, (IntPtr)n, out d) || d.ToInt64() != n) return null;
+        return b;
+    }
+    static bool Write(long addr, byte[] b) { IntPtr d; return WriteProcessMemory(Handle, (IntPtr)addr, b, (IntPtr)b.Length, out d) && d.ToInt64() == b.Length; }
+    static void Put(byte[] b, int off, int v) { Array.Copy(BitConverter.GetBytes(v), 0, b, off, 4); }
+    static void Put16(byte[] b, int off, int v) { Array.Copy(BitConverter.GetBytes((ushort)v), 0, b, off, 2); }
+    public static byte[] ReadPage() { lock (Sync) { return (Handle == IntPtr.Zero || Page == 0) ? null : Read(Page, PageSize); } }
+    public static bool SetOwner(int pid, int clock) {
+        lock (Sync) {
+            if (Stopping || Handle == IntPtr.Zero || Page == 0) return false;
+            byte[] b = new byte[8]; Put(b, 0, pid); Put(b, 4, clock);
+            return Write(Page + OffOwner, b);
+        }
+    }
+
+    // Starts a tax event. Result: 0 written, 1 stopping or no page, 2 the game does not hold the originals
+    // (or a tax event is active), 3 read/write error. The page is written first, then the values.
+    public static int ApplyTax(int[] orig, int[] target, int code, int factor, int ends) {
+        lock (Sync) {
+            if (Stopping || Handle == IntPtr.Zero || Page == 0) return 1;
+            byte[] page = Read(Page, PageSize); if (page == null) return 3;
+            if (BitConverter.ToInt32(page, OffTax) != 0) return 2;
+            for (int g = 0; g < 5; g++) {
+                byte[] c = Read(TaxAddr + (long)g * TaxStride, 4); if (c == null) return 3;
+                if (BitConverter.ToInt32(c, 0) != orig[g]) return 2;
+            }
+            byte[] blk = new byte[OffProd - OffTax];
+            Put(blk, 0, 1); Put(blk, 4, code); Put(blk, 8, factor); Put(blk, 12, ends);
+            for (int g = 0; g < 5; g++) { Put(blk, OffTaxBase - OffTax + 4 * g, orig[g]); Put(blk, OffTaxApplied - OffTax + 4 * g, target[g]); }
+            if (!Write(Page + OffTax, blk)) return 3;
+            for (int g = 0; g < 5; g++) if (!Write(TaxAddr + (long)g * TaxStride, BitConverter.GetBytes(target[g]))) return 3;
+            return 0;
+        }
+    }
+
+    // Starts a production event (500 work intervals, 16 bits); results as ApplyTax.
+    public static int ApplyProduction(int[] orig, int[] target, int code, int factor, int ends) {
+        lock (Sync) {
+            if (Stopping || Handle == IntPtr.Zero || Page == 0) return 1;
+            byte[] page = Read(Page, PageSize); if (page == null) return 3;
+            if (BitConverter.ToInt32(page, OffProd) != 0) return 2;
+            byte[] tab = Read(IntervalAddr, (Count - 1) * IntervalStride + 2); if (tab == null) return 3;
+            int changed = 0;
+            for (int i = 0; i < Count; i++) {
+                if (BitConverter.ToUInt16(tab, i * IntervalStride) != orig[i]) return 2;
+                if (target[i] != orig[i]) changed++;
+            }
+            byte[] blk = new byte[PageSize - OffProd];
+            Put(blk, 0, 1); Put(blk, 4, code); Put(blk, 8, factor); Put(blk, 12, ends); Put(blk, OffProdCount - OffProd, changed);
+            for (int i = 0; i < Count; i++) { Put16(blk, OffProdBase - OffProd + 2 * i, orig[i]); Put16(blk, OffProdApplied - OffProd + 2 * i, target[i]); }
+            if (!Write(Page + OffProd, blk)) return 3;
+            for (int i = 0; i < Count; i++) {
+                if (target[i] == orig[i]) continue;
+                if (!Write(IntervalAddr + (long)i * IntervalStride, BitConverter.GetBytes((ushort)target[i]))) return 3;
+            }
+            return 0;
+        }
+    }
+
+    // Restores taxes and/or production: every value that still holds what the tool wrote gets its original back.
+    // Returns { taxes restored, taxes left (changed by someone else), intervals restored, intervals left }.
+    public static int[] Restore(bool tax, bool prod) {
+        lock (Sync) { return RestoreLocked(tax, prod); }
+    }
+    static int[] RestoreLocked(bool tax, bool prod) {
+        int[] r = new int[4];
+        if (Handle == IntPtr.Zero || Page == 0) return r;
+        byte[] page = Read(Page, PageSize); if (page == null) return r;
+        if (tax && BitConverter.ToInt32(page, OffTax) != 0) {
+            for (int g = 0; g < 5; g++) {
+                long a = TaxAddr + (long)g * TaxStride;
+                int orig = BitConverter.ToInt32(page, OffTaxBase + 4 * g), done = BitConverter.ToInt32(page, OffTaxApplied + 4 * g);
+                byte[] c = Read(a, 4); if (c == null) { r[1]++; continue; }
+                int cur = BitConverter.ToInt32(c, 0);
+                if (cur == orig) continue;
+                if (cur == done && Write(a, BitConverter.GetBytes(orig))) r[0]++; else r[1]++;
+            }
+            Write(Page + OffTax, new byte[4]);
+        }
+        if (prod && BitConverter.ToInt32(page, OffProd) != 0) {
+            byte[] tab = Read(IntervalAddr, (Count - 1) * IntervalStride + 2);
+            for (int i = 0; i < Count; i++) {
+                int orig = BitConverter.ToUInt16(page, OffProdBase + 2 * i), done = BitConverter.ToUInt16(page, OffProdApplied + 2 * i);
+                if (orig == done) continue;
+                if (tab == null) { r[3]++; continue; }
+                int cur = BitConverter.ToUInt16(tab, i * IntervalStride);
+                if (cur == orig) continue;
+                if (cur == done && Write(IntervalAddr + (long)i * IntervalStride, BitConverter.GetBytes((ushort)orig))) r[2]++; else r[3]++;
+            }
+            Write(Page + OffProd, new byte[4]);
+        }
+        LastRestore = r;
+        return r;
+    }
+
+    // Gold: adds delta (int, at most int.MaxValue). Returns the new gold, or long.MinValue if nothing was written
+    // (stopping, read error, or the result would be below minimum).
+    public static long AddGold(long addr, int delta, int minimum) {
+        lock (Sync) {
+            if (Stopping || Handle == IntPtr.Zero) return long.MinValue;
+            byte[] c = Read(addr, 4); if (c == null) return long.MinValue;
+            long n = (long)BitConverter.ToInt32(c, 0) + delta;
+            if (n > int.MaxValue) n = int.MaxValue;
+            if (n < minimum) return long.MinValue;
+            return Write(addr, BitConverter.GetBytes((int)n)) ? n : long.MinValue;
+        }
+    }
+    // Goods: adds delta to a 16-bit stock, at most up to cap. Returns the amount added (0 = nothing written).
+    public static int AddStock(long addr, int delta, int cap) {
+        lock (Sync) {
+            if (Stopping || Handle == IntPtr.Zero) return 0;
+            byte[] c = Read(addr, 2); if (c == null) return 0;
+            int cur = BitConverter.ToUInt16(c, 0), n = Math.Min(Math.Min(cur + delta, cap), 65535);
+            if (n <= cur) return 0;
+            return Write(addr, BitConverter.GetBytes((ushort)n)) ? n - cur : 0;
+        }
+    }
+
+    // Stops all event writing for good and restores (window closed, Ctrl+C, tool ends).
+    public static int[] Stop() {
+        lock (Sync) {
+            Stopping = true;
+            int[] r = RestoreLocked(true, true);
+            if (Handle != IntPtr.Zero && Page != 0) Write(Page + OffOwner, new byte[4]);
+            return r;
+        }
+    }
+    static bool OnConsoleCtrl(uint ctrlType) {
+        try { Stop(); } catch { }
+        return false;
+    }
+    public static void InstallConsoleHandler() {
+        if (handler != null) return;
+        handler = new CtrlHandler(OnConsoleCtrl);
+        SetConsoleCtrlHandler(handler, true);
+    }
 }
 '@
 
@@ -1302,6 +1581,422 @@ function Set-BuildingFields([string]$what, $fields, [string]$hash, [long]$marker
     $true
 }
 
+# --- Events: engine ------------------------------------------------------------------------------
+# Reads at an absolute address of the game process (the event page lies outside the image).
+function Read-Abs([long]$address, [int]$n) { Read-Mem ($address - $script:base.ToInt64()) $n }
+# Thousands separators: German 5'000 (Swiss style, as in events.json), English 5,000.
+function Format-EventNumber([long]$n, [string]$lang) {
+    $s = [string]::Format([Globalization.CultureInfo]::InvariantCulture, '{0:N0}', [math]::Abs($n))
+    if ($lang -eq 'de') { $s.Replace(',', "'") } else { $s }
+}
+# The console keeps to plain ASCII like every other message of the tool.
+function ConvertTo-AsciiGerman([string]$s) {
+    $s.Replace([string][char]0xE4, 'ae').Replace([string][char]0xF6, 'oe').Replace([string][char]0xFC, 'ue').Replace([string][char]0xC4, 'Ae').Replace([string][char]0xD6, 'Oe').Replace([string][char]0xDC, 'Ue').Replace([string][char]0xDF, 'ss')
+}
+function Get-EventRoundHalfUp([double]$x) { [int][math]::Floor($x + 0.5) }
+# Taxes during an event: original (after -Taxes) x factor, at least 1.
+function Get-EventTaxTarget([int[]]$orig, [double]$factor) { , [int[]]@(foreach ($v in $orig) { [math]::Max(1, (Get-EventRoundHalfUp ($v * $factor))) }) }
+# Work intervals during an event: original (after -Production) / speed factor; 0 stays 0, at least 1; never above
+# 32767 (the production records count the interval down as a signed 16-bit value) unless the original already is.
+function Get-EventIntervalTarget([int[]]$orig, [double]$speed) {
+    , [int[]]@(foreach ($v in $orig) {
+            if ($v -eq 0) { 0; continue }
+            $t = [math]::Max(1, (Get-EventRoundHalfUp ($v / $speed)))
+            if ($t -gt 32767) { $t = [math]::Max($v, 32767) }
+            $t
+        })
+}
+# Current taxes (5 groups) and work intervals (500 buildings) of the game.
+function Get-EventTaxes { , [int[]]@(foreach ($g in 0..4) { [BitConverter]::ToInt32((Read-Mem ($TaxRva + $g * $ResidentSize) 4), 0) }) }
+function Get-EventIntervals {
+    $tab = Read-Mem ($BuildingRva + $IntervalOffset) (($BuildingCount - 1) * $BuildingSize + 2)
+    , [int[]]@(for ($i = 0; $i -lt $BuildingCount; $i++) { [int][BitConverter]::ToUInt16($tab, $i * $BuildingSize) })
+}
+
+# The marker 'EVNT' (RVA 0xE5BD0: 'EVNT', version 1, address of the page) and the page in the game process.
+# $create: allocate the page if there is none yet. Returns the page address (0 = none) and configures AnnoEvents.
+function Get-EventPage([bool]$create) {
+    $m = Read-Mem $EventMarkerRva 16
+    $magic = [Text.Encoding]::ASCII.GetString($m, 0, 4)
+    if ($magic -eq 'EVNT') { $page = [BitConverter]::ToInt64($m, 8) }
+    elseif (@($m | Where-Object { $_ -ne 0 }).Count -eq 0) {
+        if (-not $create) { return 0 }
+        $p = [AnnoEvents]::VirtualAllocEx($script:h, [IntPtr]::Zero, [IntPtr]4096, 0x3000, 0x04)   # MEM_COMMIT|MEM_RESERVE, PAGE_READWRITE
+        if ($p -eq [IntPtr]::Zero) { Write-Host ((Txt 'Events: no memory for the event state in the game (error {0}); events NOT started.' 'Ereignisse: kein Speicher fuer den Ereignis-Zustand im Spiel (Fehler {0}); Ereignisse NICHT gestartet.') -f [Runtime.InteropServices.Marshal]::GetLastWin32Error()) -ForegroundColor Yellow; return 0 }
+        $page = $p.ToInt64()
+        Write-Mem ($page - $script:base.ToInt64()) ([byte[]]([Text.Encoding]::ASCII.GetBytes('EVST') + [BitConverter]::GetBytes([int32]1))) $false
+        Write-Mem $EventMarkerRva ([byte[]]([Text.Encoding]::ASCII.GetBytes('EVNT') + [BitConverter]::GetBytes([int32]1) + [BitConverter]::GetBytes([long]$page))) $true
+    }
+    else { Write-Host ((Txt 'Events: unexpected bytes at RVA 0x{0:X} ({1}); events NOT started.' 'Ereignisse: unerwartete Bytes bei RVA 0x{0:X} ({1}); Ereignisse NICHT gestartet.') -f $EventMarkerRva, (Hex $m)) -ForegroundColor Yellow; return 0 }
+    [AnnoEvents]::Configure($script:h, $page, $script:base.ToInt64() + $TaxRva, $ResidentSize, $script:base.ToInt64() + $BuildingRva + $IntervalOffset, $BuildingSize, $BuildingCount)
+    $hdr = [AnnoEvents]::ReadPage()
+    if ($null -eq $hdr -or [Text.Encoding]::ASCII.GetString($hdr, 0, 4) -ne 'EVST') {
+        [AnnoEvents]::Configure([IntPtr]::Zero, 0, 0, 0, 0, 0, 0)
+        Write-Host ((Txt 'Events: the event state at 0x{0:X} cannot be read; events NOT started.' 'Ereignisse: Ereignis-Zustand bei 0x{0:X} nicht lesbar; Ereignisse NICHT gestartet.') -f $page) -ForegroundColor Yellow
+        return 0
+    }
+    $page
+}
+# Is the tool window that owns the event state still running?
+function Test-EventOwnerAlive([int]$ownerPid) {
+    if ($ownerPid -le 0 -or $ownerPid -eq $PID) { return $false }
+    $p = Get-Process -Id $ownerPid -ErrorAction SilentlyContinue
+    [bool]($p -and $p.ProcessName -match '^(powershell|pwsh)$')
+}
+# Event values left behind by a tool window that no longer runs (killed): restore them. Every run of the tool
+# does this, also with -Events Off. Returns $false if another running tool window owns the events.
+function Repair-EventLeftovers {
+    $page = Get-EventPage $false
+    if (-not $page) { return $true }
+    try {
+        $b = [AnnoEvents]::ReadPage()
+        $owner = [BitConverter]::ToInt32($b, [AnnoEvents]::OffOwner)
+        if (Test-EventOwnerAlive $owner) { return $false }
+        if ([BitConverter]::ToInt32($b, [AnnoEvents]::OffTax) -ne 0 -or [BitConverter]::ToInt32($b, [AnnoEvents]::OffProd) -ne 0) {
+            $r = [AnnoEvents]::Restore($true, $true)
+            Write-Host ((Txt 'Events: an earlier tool window left event values in the game; restored ({0} taxes, {1} work intervals; {2} left alone because the game holds other values).' 'Ereignisse: ein frueheres Werkzeugfenster hat Ereigniswerte im Spiel hinterlassen; zurueckgesetzt ({0} Steuern, {1} Arbeitsintervalle; {2} unberuehrt, weil das Spiel andere Werte hat).') -f $r[0], $r[2], ($r[1] + $r[3])) -ForegroundColor Yellow
+        }
+        [void][AnnoEvents]::SetOwner(0, [BitConverter]::ToInt32($b, [AnnoEvents]::OffClock))
+        $true
+    }
+    finally { [AnnoEvents]::Configure([IntPtr]::Zero, 0, 0, 0, 0, 0, 0) }
+}
+
+# State of the engine. $mean/$duration in game clock units; $seed < 0: random; $first: event ids that come first
+# (comma-separated).
+function Initialize-EventState([int]$gamePid, [int]$mean, [int]$duration, [int]$seed, [string]$first, [string]$file) {
+    $queue = New-Object System.Collections.Generic.Queue[string]
+    foreach ($id in ($first -split ',')) {
+        $id = $id.Trim()
+        if (-not $id) { continue }
+        if (-not $EventDefs.Contains($id)) { throw "Unknown event id '$id'." }
+        $queue.Enqueue($id)
+    }
+    $rng = if ($seed -ge 0) { New-Object System.Random $seed } else { New-Object System.Random }
+    $script:Ev = @{ Rng = $rng; Script = $queue; Mean = [math]::Max(1, $mean); Duration = [math]::Max(1, $duration); File = $file; GamePid = $gamePid
+        LastClock = -1; Progress = 0; Next = 0; Tax = $null; Production = $null; History = (New-Object System.Collections.Generic.List[object])
+    }
+    $script:Ev.Next = New-EventInterval
+}
+# Clock units until the next event: 0.5 to 1.5 x the mean.
+function New-EventInterval { [math]::Max(1, [int][math]::Round($script:Ev.Mean * (0.5 + $script:Ev.Rng.NextDouble()))) }
+
+# What the engine needs from the game: clock, lock, the human player (kind, gold) and his settlements.
+function Get-EventGameState {
+    $clock = [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0)
+    $lock = [BitConverter]::ToInt32((Read-Mem $EventLockRva 4), 0)
+    $local = [BitConverter]::ToInt32((Read-Mem $EventLocalPlayerRva 4), 0)
+    $slot = if ($local -ge 0 -and $local -le 3) { $local } else { 0 }
+    $pl = Read-Mem ($EventPlayersRva + $slot * $PlayerSize) 8
+    $sb = Read-Mem $EventSettlementRva ($EventSettlementCount * $EventSettlementSize)
+    $towns = New-Object System.Collections.Generic.List[object]
+    $stage = 0; $residents = 0
+    for ($i = 0; $i -lt $EventSettlementCount; $i++) {
+        $o = $i * $EventSettlementSize
+        # In use: island set (as the game checks) and a name (every new settlement gets one; an empty table is all 0).
+        if ($sb[$o + 0x18] -eq 0xFF -or $sb[$o] -eq 0 -or $sb[$o + 0x1A] -ne $slot) { continue }
+        $total = [BitConverter]::ToInt32($sb, $o + 0x218)
+        for ($k = 0; $k -lt 5; $k++) {
+            $n = [BitConverter]::ToInt32($sb, $o + 0x220 + 4 * $k)
+            if ($n -gt 0) { $residents += $n; $total += $n; if ($k -gt $stage) { $stage = $k } }
+        }
+        $len = 0; while ($len -lt 0x18 -and $sb[$o + $len] -ne 0) { $len++ }
+        # Storage limit per good as the game computes it (FUN_1400b64d0): +0x20 - 10 t + 10 t x (+0x1FA).
+        $limit = [BitConverter]::ToInt32($sb, $o + 0x20) - 0x140 + [BitConverter]::ToUInt16($sb, $o + 0x1FA) * 0x140
+        $towns.Add(@{ Offset = $o; Name = [Text.Encoding]::GetEncoding(1252).GetString($sb, $o, $len); Total = $total; Limit = $limit })
+    }
+    @{ Clock = $clock; Lock = $lock; Slot = $slot; Kind = [BitConverter]::ToInt32($pl, 0); Gold = [BitConverter]::ToInt32($pl, 4)
+        GoldAddress = $script:base.ToInt64() + $EventPlayersRva + $slot * $PlayerSize + 4; Towns = $towns; Stage = $stage; Residents = $residents; Settlements = $sb
+    }
+}
+
+# Trader's gift: the human's largest town and the goods with room for at least 5 t (no random numbers used here).
+function Get-EventGiftChoices($g) {
+    if (-not $g.Towns.Count) { return @() }
+    $town = $g.Towns | Sort-Object { $_.Total } -Descending | Select-Object -First 1
+    if ($town.Limit -le 0 -or $town.Limit -gt 65535) { return @() }
+    $want = (10 + 5 * $g.Stage) * 32
+    @(foreach ($gd in $EventGiftGoods) {
+            $stock = [int][BitConverter]::ToUInt16($g.Settlements, $town.Offset + 0x2A + $gd.Good * 12)
+            $room = $town.Limit - $stock
+            $give = [math]::Min($want, $room); $give -= $give % 32
+            if ($give -ge 5 * 32) { @{ Town = $town; Good = $gd; Give = $give } }
+        })
+}
+function Test-EventEligible([string]$id, $g) {
+    $d = $EventDefs[$id]
+    switch ($d.Kind) {
+        'Gold' { if ($id -eq 'warehouse_fire') { return $g.Gold -ge 2000 } else { return $g.Gold -lt 2000000000 } }
+        'Tax' {
+            if ($script:Ev.Tax -or $g.Residents -le 0) { return $false }
+            return @(Get-EventTaxes | Where-Object { $_ -lt 1 -or $_ -gt 1000 }).Count -eq 0
+        }
+        'Production' {
+            if ($script:Ev.Production) { return $false }
+            if ([BitConverter]::ToUInt16((Read-Mem ($BuildingRva + 270 * $BuildingSize + $StorageOffset) 2), 0) -eq 0) { return $false }   # haeuser.cod not read
+            return @(Get-EventIntervals | Where-Object { $_ -gt 0 }).Count -gt 0
+        }
+        'Goods' { return @(Get-EventGiftChoices $g).Count -gt 0 }
+    }
+    $false
+}
+
+# events.json (%APPDATA%\Anno1602-Extensions, read by the logbook): { version 1, events [ ... ] }, at most 200,
+# newest last, written through a temp file. A missing or broken file starts a new list.
+function Add-EventJson($record, [string]$file) {
+    if (-not $file) { return }
+    try {
+        $dir = Split-Path $file
+        if ($dir -and -not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Force -Path $dir | Out-Null }
+        $list = New-Object System.Collections.Generic.List[object]
+        if (Test-Path -LiteralPath $file) {
+            try {
+                $old = Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($old -and $old.events) { foreach ($e in @($old.events)) { if ($e) { $list.Add($e) } } }
+            }
+            catch { $list.Clear() }
+        }
+        $list.Add($record)
+        Write-EventJsonList $list $file
+    }
+    catch {
+        Write-Host ((Txt 'Events: events.json could not be written: {0}' 'Ereignisse: events.json konnte nicht geschrieben werden: {0}') -f $_.Exception.Message) -ForegroundColor Yellow
+    }
+}
+# Writes the list (the newest 200) through a temp file that replaces events.json.
+function Write-EventJsonList($list, [string]$file) {
+    $keep = @($list | Select-Object -Last 200)
+    $json = ConvertTo-Json -InputObject ([ordered]@{ version = 1; events = $keep }) -Depth 6
+    $tmp = "$file.tmp-$PID"
+    try {
+        [IO.File]::WriteAllText($tmp, $json, (New-Object Text.UTF8Encoding $false))
+        for ($try = 0; ; $try++) {
+            try {
+                # [NullString]: PowerShell would pass $null as "" (no backup file wanted).
+                if (Test-Path -LiteralPath $file) { [IO.File]::Replace($tmp, $file, [NullString]::Value) } else { [IO.File]::Move($tmp, $file) }
+                break
+            }
+            catch { if ($try -ge 9) { throw }; Start-Sleep -Milliseconds 100 }
+        }
+    }
+    finally { if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue } }
+}
+# A temporary event that ends before its time (game over, another game, the tool stops) gets "endedEarly": true in
+# events.json, so the logbook no longer shows it as running.
+function Set-EventEndedEarly([string]$id, [long]$ends) {
+    $file = $script:Ev.File
+    if (-not $file -or -not (Test-Path -LiteralPath $file)) { return }
+    try {
+        $j = Get-Content -LiteralPath $file -Raw -Encoding UTF8 | ConvertFrom-Json
+        $list = New-Object System.Collections.Generic.List[object]
+        foreach ($e in @($j.events)) { if ($e) { $list.Add($e) } }
+        for ($i = $list.Count - 1; $i -ge 0; $i--) {
+            $e = $list[$i]
+            if ([int]$e.pid -eq $script:Ev.GamePid -and [string]$e.id -eq $id -and [long]$e.endsClock -eq $ends) {
+                $e | Add-Member -NotePropertyName endedEarly -NotePropertyValue $true -Force
+                Write-EventJsonList $list $file
+                return
+            }
+        }
+    }
+    catch { Write-Host ((Txt 'Events: events.json could not be written: {0}' 'Ereignisse: events.json konnte nicht geschrieben werden: {0}') -f $_.Exception.Message) -ForegroundColor Yellow }
+}
+# One event happened: console (UI language) and events.json (both languages).
+function Write-EventRecord([string]$id, [int]$clock, [int]$endsClock, $title, $text, $effect, [string]$detail) {
+    $rec = [ordered]@{ time = (Get-Date).ToString('s'); pid = $script:Ev.GamePid; clock = $clock; id = $id
+        title = [ordered]@{ de = $title.de; en = $title.en }; text = [ordered]@{ de = $text.de; en = $text.en }; effect = [ordered]@{ de = $effect.de; en = $effect.en }
+        endsClock = $endsClock
+    }
+    $script:Ev.History.Add($rec)
+    Add-EventJson $rec $script:Ev.File
+    Write-Host ''
+    Write-Host ((Txt '*** Event: {0} - {1}' '*** Ereignis: {0} - {1}') -f (Txt $title.en (ConvertTo-AsciiGerman $title.de)), (Txt $effect.en (ConvertTo-AsciiGerman $effect.de))) -ForegroundColor Cyan
+    Write-Host ('    ' + (Txt $text.en (ConvertTo-AsciiGerman $text.de)))
+    if ($detail) { Write-Host ('    ' + $detail) }
+}
+
+# Carries out one event. Returns $true if it changed the game.
+function Invoke-GameEvent([string]$id, $g) {
+    $d = $EventDefs[$id]; $ev = $script:Ev
+    switch ($d.Kind) {
+        'Gold' {
+            if ($id -eq 'patron') { $delta = 2000 * ($g.Stage + 1) }
+            else { $delta = - [math]::Max(100, [math]::Min(1000 * ($g.Stage + 1), 10 * [int][math]::Round($g.Gold * 0.05 / 10))) }
+            $new = [AnnoEvents]::AddGold($g.GoldAddress, $delta, 0)
+            if ($new -eq [long]::MinValue) { return $false }
+            $sign = if ($delta -ge 0) { '+' } else { '-' }
+            $effect = @{ de = '{0}{1} Gold' -f $sign, (Format-EventNumber $delta 'de'); en = '{0}{1} gold' -f $sign, (Format-EventNumber $delta 'en') }
+            Write-EventRecord $id $g.Clock 0 $d.Title $d.Text $effect ((Txt 'Gold now: {0}' 'Gold jetzt: {0}') -f (Format-EventNumber $new $(if ($UiGerman) { 'de' } else { 'en' })))
+            return $true
+        }
+        'Tax' {
+            $orig = Get-EventTaxes
+            $target = Get-EventTaxTarget $orig $d.Factor
+            $ends = $g.Clock + $ev.Duration
+            $r = [AnnoEvents]::ApplyTax($orig, $target, $d.Code, [int]($d.Factor * 1000), $ends)
+            if ($r -ne 0) { if ($r -ne 1) { Write-Host ((Txt 'Events: taxes not changed ({0}).' 'Ereignisse: Steuern nicht geaendert ({0}).') -f $(if ($r -eq 2) { Txt 'unexpected values' 'unerwartete Werte' } else { Txt 'memory error' 'Speicherfehler' })) -ForegroundColor Yellow }; return $false }
+            $ev.Tax = @{ Id = $id; Ends = $ends; Orig = $orig; Target = $target }
+            $pct = [int][math]::Round(($d.Factor - 1) * 100); $p = if ($pct -ge 0) { "+$pct" } else { "$pct" }
+            $effect = @{ de = "Steuern $p % für 1 Spielstunde"; en = "Taxes $p% for 1 game hour" }
+            Write-EventRecord $id $g.Clock $ends $d.Title $d.Text $effect ((Txt 'Taxes per group now {0} instead of {1}, until game clock {2}.' 'Steuern je Gruppe jetzt {0} statt {1}, bis Spieluhr {2}.') -f ($target -join '/'), ($orig -join '/'), $ends)
+            return $true
+        }
+        'Production' {
+            $orig = Get-EventIntervals
+            $target = Get-EventIntervalTarget $orig $d.Factor
+            $ends = $g.Clock + $ev.Duration
+            $r = [AnnoEvents]::ApplyProduction($orig, $target, $d.Code, [int]($d.Factor * 1000), $ends)
+            if ($r -ne 0) { if ($r -ne 1) { Write-Host ((Txt 'Events: work intervals not changed ({0}).' 'Ereignisse: Arbeitsintervalle nicht geaendert ({0}).') -f $(if ($r -eq 2) { Txt 'unexpected values' 'unerwartete Werte' } else { Txt 'memory error' 'Speicherfehler' })) -ForegroundColor Yellow }; return $false }
+            $n = 0; for ($i = 0; $i -lt $orig.Count; $i++) { if ($orig[$i] -ne $target[$i]) { $n++ } }
+            $ev.Production = @{ Id = $id; Ends = $ends; Changed = $n }
+            $pct = [int][math]::Round(($d.Factor - 1) * 100); $p = if ($pct -ge 0) { "+$pct" } else { "$pct" }
+            $effect = @{ de = "Produktion $p % für 1 Spielstunde"; en = "Production $p% for 1 game hour" }
+            Write-EventRecord $id $g.Clock $ends $d.Title $d.Text $effect ((Txt '{0} work intervals changed until game clock {1}.' '{0} Arbeitsintervalle geaendert bis Spieluhr {1}.') -f $n, $ends)
+            return $true
+        }
+        'Goods' {
+            $choices = @(Get-EventGiftChoices $g)
+            if (-not $choices.Count) { return $false }
+            $c = $choices[$ev.Rng.Next($choices.Count)]
+            $address = $script:base.ToInt64() + $EventSettlementRva + $c.Town.Offset + 0x2A + $c.Good.Good * 12
+            $added = [AnnoEvents]::AddStock($address, $c.Give, $c.Town.Limit)
+            if ($added -le 0) { return $false }
+            $t = [math]::Floor($added / 32)
+            $text = @{ de = $d.Text.de -f $t, $c.Good.De, $c.Town.Name; en = $d.Text.en -f $t, $c.Good.En, $c.Town.Name }
+            $effect = @{ de = "+$t t $($c.Good.De)"; en = "+$t t $($c.Good.En)" }
+            Write-EventRecord $id $g.Clock 0 $d.Title $text $effect ''
+            return $true
+        }
+    }
+    $false
+}
+
+# The next event: first the ids of -EventScript (one that is not possible right now is skipped), then by weight
+# among the possible ones. Returns the id or $null.
+function Start-NextEvent($g) {
+    $ev = $script:Ev
+    while ($ev.Script.Count -gt 0) {
+        $id = $ev.Script.Dequeue()
+        if ((Test-EventEligible $id $g) -and (Invoke-GameEvent $id $g)) { return $id }
+        Write-Host ((Txt 'Events: {0} is not possible right now; skipped.' 'Ereignisse: {0} ist gerade nicht moeglich; uebersprungen.') -f $id)
+    }
+    $ids = @($EventDefs.Keys | Where-Object { Test-EventEligible $_ $g })
+    if (-not $ids.Count) { return $null }
+    $sum = 0; foreach ($id in $ids) { $sum += $EventDefs[$id].Weight }
+    $r = $ev.Rng.Next($sum)
+    foreach ($id in $ids) { $r -= $EventDefs[$id].Weight; if ($r -lt 0) { break } }
+    if (Invoke-GameEvent $id $g) { return $id }
+    $null
+}
+
+# Ends temporary events and restores the values. $why: Over (time is up), Session (other game loaded or started),
+# Ended (game over), Exit (the tool stops). $only: 'Tax' or 'Production' (default both).
+function Stop-TemporaryEvents([string]$why, [string]$only = '') {
+    $ev = $script:Ev
+    foreach ($kind in @(if ($only) { $only } else { 'Tax', 'Production' })) {
+        $t = $ev[$kind]
+        if (-not $t) { continue }
+        $r = [AnnoEvents]::Restore($kind -eq 'Tax', $kind -eq 'Production')
+        $ev[$kind] = $null
+        $d = $EventDefs[$t.Id]; $name = Txt $d.Title.en (ConvertTo-AsciiGerman $d.Title.de)
+        $what = if ($kind -eq 'Tax') { (Txt 'taxes back to {0}' 'Steuern wieder {0}') -f ($t.Orig -join '/') } else { (Txt '{0} work intervals back to normal' '{0} Arbeitsintervalle wieder normal') -f $r[2] }
+        $msg = switch ($why) {
+            'Over' { (Txt 'Event over: {0} - {1}.' 'Ereignis vorbei: {0} - {1}.') -f $name, $what }
+            'Session' { (Txt 'Event ended early (another game was started or loaded): {0} - {1}.' 'Ereignis vorzeitig beendet (anderes Spiel gestartet oder geladen): {0} - {1}.') -f $name, $what }
+            'Ended' { (Txt 'Event ended with the game: {0} - {1}.' 'Ereignis mit dem Spiel beendet: {0} - {1}.') -f $name, $what }
+            default { (Txt 'Event ended because this window closes: {0} - {1}.' 'Ereignis beendet, weil dieses Fenster schliesst: {0} - {1}.') -f $name, $what }
+        }
+        Write-Host $msg -ForegroundColor Cyan
+        if ($why -ne 'Over') { Set-EventEndedEarly $t.Id $t.Ends }
+        $left = $r[1] + $r[3]
+        if ($left) { Write-Host ((Txt 'Events: {0} value(s) had been changed by someone else meanwhile and were left alone.' 'Ereignisse: {0} Wert(e) wurden inzwischen anderweitig geaendert und blieben unberuehrt.') -f $left) -ForegroundColor Yellow }
+    }
+}
+
+# One poll of the engine. $elapsedMs: real time since the previous poll (bounds a plausible clock step).
+function Invoke-EventTick([double]$elapsedMs) {
+    $ev = $script:Ev
+    $g = Get-EventGameState
+    $prev = $ev.LastClock
+    $continuous = $false
+    if ($prev -ge 0) {
+        $maxStep = [math]::Ceiling($elapsedMs / 1000.0 * $EventMaxClockPerSecond) + $EventClockSlack
+        if ($g.Clock -lt $prev -or $g.Clock - $prev -gt $maxStep) {
+            # Command 0x36 (new game, loading a savegame) resets the clock; a big jump means another game as well.
+            Stop-TemporaryEvents 'Session'
+            $ev.Progress = 0; $ev.Next = New-EventInterval
+        }
+        else { $continuous = $true }
+    }
+    $ev.LastClock = $g.Clock
+    [void][AnnoEvents]::SetOwner($PID, $g.Clock)
+    if ($g.Clock -gt 0 -and ($g.Lock -ne 0 -or $g.Kind -eq 9)) {
+        Stop-TemporaryEvents 'Ended'
+        $ev.Progress = 0
+        return
+    }
+    foreach ($kind in 'Tax', 'Production') { if ($ev[$kind] -and $g.Clock -ge $ev[$kind].Ends) { Stop-TemporaryEvents 'Over' $kind } }
+    # Only a running game with an advancing clock and a town of the human counts towards the next event.
+    if (-not ($continuous -and $g.Clock -gt $prev -and $g.Lock -eq 0 -and $g.Kind -eq 0 -and $g.Towns.Count -gt 0)) { return }
+    $ev.Progress += $g.Clock - $prev
+    if ($ev.Progress -lt $ev.Next) { return }
+    $ev.Progress = 0
+    $ev.Next = New-EventInterval
+    [void](Start-NextEvent $g)
+}
+
+# Runs the events until the game exits (or, in tests, until the clock reaches -EventTestUntilClock). Restores
+# everything temporary before it returns.
+function Invoke-EventLoop($proc) {
+    $script:h = [AnnoMem]::OpenProcess(0x0008 -bor 0x0010 -bor 0x0020 -bor 0x0400, $false, $proc.Id)
+    if ($script:h -eq [IntPtr]::Zero) {
+        Write-Host ((Txt 'Events: access to the game denied (error {0}); no events.' 'Ereignisse: Zugriff auf das Spiel verweigert (Fehler {0}); keine Ereignisse.') -f [Runtime.InteropServices.Marshal]::GetLastWin32Error()) -ForegroundColor Yellow
+        if ($TestProcessId -eq 0) { while (-not $proc.HasExited) { Start-Sleep -Seconds 2; $proc.Refresh() } }
+        return
+    }
+    $on = $false
+    try {
+        if (-not (Repair-EventLeftovers)) {
+            Write-Host (Txt 'Events: another tool window already runs the events for this game; none from this window.' 'Ereignisse: ein anderes Werkzeugfenster fuehrt die Ereignisse fuer dieses Spiel schon; keine aus diesem Fenster.') -ForegroundColor Yellow
+        }
+        elseif (Get-EventPage $true) {
+            $mean = if ($EventIntervalClock -gt 0) { $EventIntervalClock } else { $EventMean[$Events] }
+            $duration = if ($EventDurationClock -gt 0) { $EventDurationClock } else { $EventDuration }
+            $file = if ($EventFile) { $EventFile } elseif ($TestProcessId -eq 0) { Join-Path $env:APPDATA 'Anno1602-Extensions\events.json' } else { '' }
+            Initialize-EventState $proc.Id $mean $duration $EventSeed $EventScript $file
+            [void][AnnoEvents]::SetOwner($PID, 0)
+            [AnnoEvents]::InstallConsoleHandler()
+            $on = $true
+            Write-Host ((Txt 'Events are on ({0}). The first one comes once you have a town; close this window only after the game.' 'Ereignisse sind an ({0}). Das erste kommt, sobald du eine Stadt hast; dieses Fenster erst nach dem Spiel schliessen.') -f (Get-ValueName $Events)) -ForegroundColor Green
+        }
+        $poll = if ($EventPollMs -gt 0) { $EventPollMs } else { 1000 }
+        $sw = [Diagnostics.Stopwatch]::StartNew(); $last = 0; $errors = 0
+        while (Test-Running) {
+            Start-Sleep -Milliseconds $poll
+            if (-not (Test-Running)) { break }
+            if ($TestProcessId -ne 0 -and ((Get-Date) -gt $script:deadline -or ($EventTestUntilClock -gt 0 -and [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0) -ge $EventTestUntilClock))) { break }
+            if (-not $on) { continue }
+            $now = $sw.ElapsedMilliseconds
+            try { Invoke-EventTick ($now - $last); $errors = 0 }
+            catch {
+                if (-not (Test-Running)) { break }
+                $errors++
+                Write-Host ((Txt 'Events: {0}' 'Ereignisse: {0}') -f $_.Exception.Message) -ForegroundColor Yellow
+                if ($errors -ge 10) { Stop-TemporaryEvents 'Exit'; [void][AnnoEvents]::Stop(); $on = $false; Write-Host (Txt 'Events: stopped after repeated errors.' 'Ereignisse: nach wiederholten Fehlern beendet.') -ForegroundColor Yellow }
+            }
+            $last = $now
+        }
+    }
+    finally {
+        if ($on) {
+            if (Test-Running) { Stop-TemporaryEvents 'Exit' }
+            [void][AnnoEvents]::Stop()
+        }
+        [AnnoEvents]::Configure([IntPtr]::Zero, 0, 0, 0, 0, 0, 0)
+        [void][AnnoMem]::CloseHandle($script:h)
+    }
+}
+
 # Patches the process behind $script:h. Returns $true = done, $false = the process exited before.
 function Invoke-Patch($proc) {
     # --- 4. First check all sites, then write (all or nothing) -------------------------------
@@ -1364,6 +2059,9 @@ function Invoke-Patch($proc) {
     Write-Host (Txt "Current map size in the game: $w x $hh" "Aktuelle Kartengroesse im Spiel: $w x $hh") -ForegroundColor Green
     Write-Host ((Txt 'Scroll range: {0}, minimap scale: {1} / {2}' 'Scrollbereich: {0}, Minikarten-Massstab: {1} / {2}') -f (Format-Value 'Range' (Read-Mem $Variables[2].Rva 4)),
         (Format-Value 'InvWidth' (Read-Mem $Variables[3].Rva 4)), (Format-Value 'InvHeight' (Read-Mem $Variables[4].Rva 4))) -ForegroundColor Green
+    # Event values that a killed tool window left in this game process (any -Events setting), before the table
+    # options below compare taxes and intervals with their originals.
+    [void](Repair-EventLeftovers)
 
     # --- Ship speed: wait until figuren.cod has been read, then set the ship values -------------
     if ($ShipSpeed -ne 1.0) {
@@ -1523,27 +2221,40 @@ while (-not $finished) {
 }
 Write-Host (Txt 'Done. Now start a NEW endless game in the game (do not load an old savegame).' 'Fertig. Jetzt im Spiel ein NEUES Endlosspiel starten (keinen alten Spielstand laden).') -ForegroundColor Green
 
-# --- 6. Protection for "Continue game" -----------------------------------------------------------
-if ($TestProcessId -eq 0 -and -not $NoLastgameProtection) {
-    Write-Host (Txt 'This window stays open until the game exits (protection for "Continue game").' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Schutz fuer "Spiel fortsetzen").') -ForegroundColor Yellow
+# --- 6. Protection for "Continue game", events ---------------------------------------------------
+$eventsOn = $Events -ne 'Off'
+if ($TestProcessId -eq 0 -and (-not $NoLastgameProtection -or $eventsOn)) {
+    if ($NoLastgameProtection) { Write-Host (Txt 'This window stays open until the game exits (events).' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Ereignisse).') -ForegroundColor Yellow }
+    else { Write-Host (Txt 'This window stays open until the game exits (protection for "Continue game").' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Schutz fuer "Spiel fortsetzen").') -ForegroundColor Yellow }
+    # The events run while the game runs; whatever happens to them, the protection below still follows.
+    if ($eventsOn) {
+        try { Invoke-EventLoop $proc }
+        catch { Write-Host ((Txt 'Events: stopped ({0}).' 'Ereignisse: beendet ({0}).') -f $_.Exception.Message) -ForegroundColor Yellow }
+    }
     while (-not $proc.HasExited) { Start-Sleep -Seconds 2; $proc.Refresh() }
     Start-Sleep -Seconds 2
-    $lg = Join-Path $saves 'lastgame.gam'
-    if ((Test-Path -LiteralPath $lg) -and (Get-Item -LiteralPath $lg).LastWriteTime -gt $toolStart) {
-        $name = 'lastgame-{0}x{1}-{2}.gam' -f $Width, $Height, (Get-Date -Format 'yyyyMMdd-HHmmss')
-        Move-Item -LiteralPath $lg -Destination (Join-Path $saves $name)
-        Write-Host (Txt "lastgame.gam from the big world renamed to $name." "lastgame.gam aus der grossen Welt umbenannt in $name.") -ForegroundColor Green
-        Write-Host (Txt '"Continue game" thus loads no big world without the tool. To play on: start the tool, then load this savegame.' '"Spiel fortsetzen" laedt so ohne Werkzeug keine grosse Welt. Weiterspielen: Werkzeug starten, dann diesen Spielstand laden.')
+    if (-not $NoLastgameProtection) {
+        $lg = Join-Path $saves 'lastgame.gam'
+        if ((Test-Path -LiteralPath $lg) -and (Get-Item -LiteralPath $lg).LastWriteTime -gt $toolStart) {
+            $name = 'lastgame-{0}x{1}-{2}.gam' -f $Width, $Height, (Get-Date -Format 'yyyyMMdd-HHmmss')
+            Move-Item -LiteralPath $lg -Destination (Join-Path $saves $name)
+            Write-Host (Txt "lastgame.gam from the big world renamed to $name." "lastgame.gam aus der grossen Welt umbenannt in $name.") -ForegroundColor Green
+            Write-Host (Txt '"Continue game" thus loads no big world without the tool. To play on: start the tool, then load this savegame.' '"Spiel fortsetzen" laedt so ohne Werkzeug keine grosse Welt. Weiterspielen: Werkzeug starten, dann diesen Spielstand laden.')
+        }
+        else { Write-Host (Txt 'Game exited; lastgame.gam was not written in this session.' 'Spiel beendet; lastgame.gam wurde in dieser Sitzung nicht geschrieben.') }
+        # Remember the options of every savegame written in this session (launcher tab "Continue").
+        try {
+            $n = Save-SessionRecord $saves $toolStart (Get-SessionArgs $PSBoundParameters) (Join-Path $env:APPDATA 'Anno1602-Extensions\saves.json')
+            if ($n) { Write-Host ((Txt 'Options noted for {0} savegame(s) - the launcher tab "Continue" starts them with the same settings.' 'Optionen fuer {0} Spielstand/Spielstaende gemerkt - die Registerkarte "Weiterspielen" startet sie mit denselben Einstellungen.') -f $n) -ForegroundColor Green }
+        }
+        catch { Write-Host ((Txt 'Could not note the options of the savegames: {0}' 'Optionen der Spielstaende konnten nicht gemerkt werden: {0}') -f $_.Exception.Message) -ForegroundColor Yellow }
     }
-    else { Write-Host (Txt 'Game exited; lastgame.gam was not written in this session.' 'Spiel beendet; lastgame.gam wurde in dieser Sitzung nicht geschrieben.') }
-    # Remember the options of every savegame written in this session (launcher tab "Continue").
-    try {
-        $n = Save-SessionRecord $saves $toolStart (Get-SessionArgs $PSBoundParameters) (Join-Path $env:APPDATA 'Anno1602-Extensions\saves.json')
-        if ($n) { Write-Host ((Txt 'Options noted for {0} savegame(s) - the launcher tab "Continue" starts them with the same settings.' 'Optionen fuer {0} Spielstand/Spielstaende gemerkt - die Registerkarte "Weiterspielen" startet sie mit denselben Einstellungen.') -f $n) -ForegroundColor Green }
-    }
-    catch { Write-Host ((Txt 'Could not note the options of the savegames: {0}' 'Optionen der Spielstaende konnten nicht gemerkt werden: {0}') -f $_.Exception.Message) -ForegroundColor Yellow }
     if ($PauseOnError) {
         Write-Host (Txt 'All done. This window closes in 10 seconds.' 'Alles erledigt. Dieses Fenster schliesst sich in 10 Sekunden.')
         Start-Sleep -Seconds 10
     }
+}
+elseif ($TestProcessId -ne 0 -and $eventsOn) {
+    # Tests: the event loop against the helper process, until -EventTestUntilClock or -WaitMinutes.
+    Invoke-EventLoop $proc
 }

@@ -1,8 +1,10 @@
 ﻿<#
 .SYNOPSIS
-  Builds the 23 custom scenarios for Anno 1602 History Edition: the campaigns "Die Smaragdinseln"
-  (The Emerald Isles, 6 chapters), "Wettlauf der Haeuser" (Race of the Houses, 4 chapters) and
-  "Die Sturmsee" (The Storm Sea, 6 chapters) and 7 single challenges - in German or English.
+  Builds the 41 custom scenarios for Anno 1602 History Edition: the campaigns "Die Smaragdinseln"
+  (The Emerald Isles, 6 chapters), "Wettlauf der Haeuser" (Race of the Houses, 4 chapters),
+  "Die Sturmsee" (The Storm Sea, 6 chapters), "Die Neue Welt" (The New World, 6 chapters) and
+  "Die Handelsliga" (The Trade League, 6 chapters) and 13 single challenges (two of them with a time
+  limit that needs the extensions) - in German or English.
 
 .DESCRIPTION
   Based on the endless-game templates Szenes\[[48]]<difficulty><layout>.szs (only read).
@@ -44,6 +46,14 @@
                      10 t food: @(@{ Good = 'Tools'; Tons = 20 }, ...), goods see $CargoHouse
     Fleet            extra ships: @(@{ Type = 23/25/27; Name = ...; Cargo = @(...) }), at most 3
     Mission          see New-Mission in scenario-lib.ps1
+  Crops by climate (fertility, FUN_1400d0ce0): Tobacco, Sugar and Wine grow only on northern islands (climate 0;
+  sugar and wine never on the same island), Spices, Cotton and Cocoa only on southern ones (climate 1).
+    TimeLimitHours   mission time limit in hours of the game's own clock display (1-50, whole or half hours; also
+                     allowed inside Mission). The game never loads its time limit (0x1405ec1a8, clock units) from a
+                     scenario or savegame, so it goes to AUFTRAG4 +0x58 (copied to mission +0x20 and kept in
+                     savegames) and the patcher's TIMERS hook copies it to 0x1405ec1a8 at every load. Without the
+                     extensions there is no limit, so the mission text must say so (docs\FINDINGS.md,
+                     "Mission time limits").
 #>
 param([switch]$Install, [string]$GamePath, [ValidateSet('', 'de', 'en')][string]$Language = '', [string]$OutFolder, [switch]$Library)
 $ErrorActionPreference = 'Stop'
@@ -311,6 +321,7 @@ function Build-Scenario($sc) {
 
     $mission = $sc.Mission.Clone(); $mission.Slot = 0; $mission.Text = Get-Localized $sc.Text
     if ($sc.Race) { $mission.AlsoAI = $true }
+    if ($sc.TimeLimitHours) { $mission.TimeLimitHours = $sc.TimeLimitHours }
     $gameId = if ($sc.GameId) { [int]$sc.GameId } else { 0x53D00000 + $sc.Number }
     $list = New-Object System.Collections.Generic.List[object]
     $list.Add(@{ Name = 'SZENE_PLAYERMIN'; Data = [BitConverter]::GetBytes([int32]1) })
@@ -330,6 +341,7 @@ function Build-Scenario($sc) {
     $path = Join-Path $OutputFolder ($title + '.szs')
     Write-Scenario $path $list
     $summary = '{0,-36} {1,2} islands (big {2}, {3}), start {9},{10} (template {11},{12}), difficulty {4}, pirates {5}, gold {6}/{7}, text {8}' -f $title, $islands.Count, $plan.Count, $sc.BigIslandSize, $(if ($sc.ContainsKey('AI')) { '{0} (rivals {1})' -f $sc.Difficulty, $sc.AI } else { $sc.Difficulty }), $(if ($sc.Pirates) { 'active' } else { 'sighted' }), $sc.Gold, $sc.RivalGold, $mission.Text.Length, $start[0], $start[1], $sx0, $sy0
+    if ($mission.TimeLimitHours) { $summary += ', time limit {0} h' -f $mission.TimeLimitHours }
     @{ Path = $path; Summary = $summary }
 }
 
@@ -981,6 +993,563 @@ Your orders:
 - A balance of at least +800 talers.
 
 This is the last chapter of the Storm Sea. May your name enter the chronicles!
+'@ }
+    }
+
+    # --- Campaign 4: Die Neue Welt (The New World), 2026-11-14 ------------------------------------
+    # Exploration and natives: many villages (up to 5 + 5, big version 7 + 7 as in the patcher's -Natives Lots),
+    # outposts on many islands, a monopoly of a crop that grows on few islands, huge islands shared with the
+    # natives, a treasure fleet under pirate threat, one named rival (player 3, rich) who must fall while the
+    # other two stay, finale with three towns in six settlements. Crop climates (FUN_1400d0ce0): tobacco,
+    # sugar cane and wine only on climate 0 (north) islands, spices, cotton and cocoa only on climate 1 (south).
+    @{ Number = 41; BigIslandSize = 'Normal'; BigVillages = 7; Title = @{ de = 'Neue Welt 1 - Die Ueberfahrt'; en = 'New World 1 - The Crossing' }; Difficulty = 0; AI = 0; Layout = 0; MirrorX = $true; MirrorY = $false; Enlarge = 2
+        Gold = 35000; RivalGold = 15000; Pirates = $false; VillagesNorth = 4; VillagesSouth = 4
+        ShipName = @{ de = 'Kompass'; en = 'Compass' }
+        Fleet = @(@{ Type = 21; Name = @{ de = 'Kundschafter'; en = 'Pathfinder' }; Cargo = @(@{ Good = 'Tools'; Tons = 20 }, @{ Good = 'Wood'; Tons = 30 }, @{ Good = 'Food'; Tons = 10 }) })
+        Mission = @{ Towns = @(@{ Residents = 300; Stage = 1; OfWhich = 150 }); TownCount = 3; Balance = 0 }
+        Text = @{ de = @'
+DIE NEUE WELT - Kapitel 1: Die Überfahrt
+
+Kommandant, vierzig Tage lang sahen wir nichts als Wasser. Nun liegt vor dem Bug eine Küste, die auf keiner Karte steht: die Neue Welt. Die Krone hat Euch an die Spitze dieser Expedition gestellt, mit der "Kompass" als Flaggschiff und dem kleinen "Kundschafter" für die Erkundung. Rauch steigt aus vielen Dörfern - dieses Land ist längst bewohnt.
+
+Euer Auftrag:
+- Gründet eine erste Stadt mit mindestens 300 Einwohnern, davon 150 Siedler oder höher.
+- Errichtet Stützpunkte auf weiteren Inseln, damit die Kartographen die Küsten vermessen können: insgesamt mindestens 3 eigene Siedlungen.
+- Haltet die Bilanz Eurer Kolonie im Plus.
+
+Rat des Steuermanns: Schickt den "Kundschafter" voraus, während die "Kompass" Euer erstes Kontor baut - er hat Werkzeug und Holz für einen zweiten Stützpunkt an Bord. Die Ureinwohner sind friedlich, solange Ihr ihre Dörfer in Ruhe lasst.
+'@; en = @'
+THE NEW WORLD - Chapter 1: The Crossing
+
+Commander, for forty days we saw nothing but water. Now a coast lies before the bow that is on no map: the New World. The Crown has placed you at the head of this expedition, with the "Compass" as flagship and the little "Pathfinder" for scouting. Smoke rises from many villages - this land has long been inhabited.
+
+Your orders:
+- Found a first town with at least 300 residents, 150 of them settlers or higher.
+- Set up outposts on further islands so that the cartographers can survey the coasts: at least 3 settlements of your own in total.
+- Keep the balance of your colony in the black.
+
+The helmsman's advice: Send the "Pathfinder" ahead while the "Compass" builds your first warehouse - it carries tools and wood for a second outpost. The natives are peaceful as long as you leave their villages alone.
+'@ }
+    }
+    @{ Number = 42; BigIslandSize = 'Normal'; BigVillages = 6; BigAmounts = @{ Sugar = 3 }; Title = @{ de = 'Neue Welt 2 - Zucker und Rum'; en = 'New World 2 - Sugar and Rum' }; Difficulty = 1; AI = 1; Layout = 1; MirrorX = $false; MirrorY = $true; Enlarge = 2
+        Gold = 30000; RivalGold = 25000; Pirates = $false; VillagesNorth = 3; VillagesSouth = 4
+        ShipName = @{ de = 'Kompass'; en = 'Compass' }
+        Amounts = @{ Sugar = 2 }   # monopoly = all sugar cane islands (the game counts them at start)
+        Mission = @{ Monopoly1 = @{ Resource = 0x30; Islands = 1 }; Goods1 = @{ Good = 18; Tons = 40 }; Towns = @(@{ Residents = 500; Stage = 2; OfWhich = 200 }) }
+        Text = @{ de = @'
+DIE NEUE WELT - Kapitel 2: Zucker und Rum
+
+Die Kolonie steht, doch die Expedition hat die Krone ein Vermögen gekostet, und der Schatzmeister will Erträge sehen. Die Seeleute schwören auf den Rum der Neuen Welt, und die Hafenschänken der Alten Welt zahlen jeden Preis dafür. Zuckerrohr wächst in diesem Land aber nur auf ganz wenigen Inseln - wer sie alle hält, bestimmt den Preis.
+
+Euer Auftrag:
+- Sichert Euch das Zuckermonopol: eine eigene Siedlung auf JEDER Insel, auf der Zuckerrohr wächst, und keine fremde dort.
+- Lagert mindestens 40 Tonnen Alkohol in Euren Kontoren.
+- Baut eine Stadt mit mindestens 500 Einwohnern, davon 200 Bürger oder höher.
+
+Rat des Steuermanns: Erkundet früh, welche Inseln Zuckerrohr tragen (Fruchtbarkeit im Inselinfo), und gründet dort Siedlungen, bevor es die Rivalen tun. Die Zuckerrohrplantage liefert Zucker, die Rumbrennerei macht daraus Alkohol - auch ein Weingut liefert Alkohol. Dörfer der Ureinwohner stören das Monopol nicht.
+'@; en = @'
+THE NEW WORLD - Chapter 2: Sugar and Rum
+
+The colony stands, but the expedition has cost the Crown a fortune, and the Treasurer wants to see returns. Sailors swear by the rum of the New World, and the harbour taverns of the Old World pay any price for it. In this land, however, sugar cane grows on only a very few islands - whoever holds them all sets the price.
+
+Your orders:
+- Secure the sugar monopoly: a settlement of your own on EVERY island where sugar cane grows, and no foreign one there.
+- Store at least 40 tons of liquor in your warehouses.
+- Build a town with at least 500 residents, 200 of them citizens or higher.
+
+The helmsman's advice: Find out early which islands bear sugar cane (fertility in the island info) and settle there before the rivals do. The sugarcane plantation yields sugar, the distillery turns it into liquor - a winery yields liquor as well. Native villages do not spoil the monopoly.
+'@ }
+    }
+    @{ Number = 43; BigIslandSize = 'Large'; BigVillages = 7; Title = @{ de = 'Neue Welt 3 - Land der vielen Voelker'; en = 'New World 3 - Land of Many Peoples' }; Difficulty = 1; AI = 2; Layout = 0; MirrorX = $true; MirrorY = $true; Continents = @{ Lar = 4; Big = 5; Small = 4 }
+        Gold = 35000; RivalGold = 30000; Pirates = $false; VillagesNorth = 5; VillagesSouth = 5
+        ShipName = @{ de = 'Kompass'; en = 'Compass' }
+        Mission = @{ Towns = @(@{ Residents = 800; Stage = 3; OfWhich = 300 }); TownCount = 4; AllTowns = @{ Residents = 200; Stage = 1; OfWhich = 80 } }
+        Text = @{ de = @'
+DIE NEUE WELT - Kapitel 3: Land der vielen Völker
+
+Hinter den Küsten liegen gewaltige Inseln, so gross, dass die Kundschafter tagelang marschieren - und überall stossen sie auf Dörfer. Die Krone hat entschieden: Die Völker dieses Landes sollen in Frieden leben. Die Kolonie soll zwischen ihren Dörfern wachsen, nicht auf ihren Trümmern. Auch die Rivalen haben auf den grossen Inseln Fuss gefasst.
+
+Euer Auftrag:
+- Eine Hauptstadt mit mindestens 800 Einwohnern, davon 300 Kaufleute oder höher.
+- Mindestens 4 eigene Siedlungen.
+- JEDE Eurer Siedlungen braucht mindestens 200 Einwohner, davon 80 Siedler oder höher. Auch ein Kontor ohne Häuser zählt als Siedlung!
+
+Rat des Steuermanns: Die riesigen Inseln bieten Platz für Euch und Eure Rivalen, doch die besten Buchten sind schnell vergeben. Setzt Eure Kontore mit Bedacht und baut jede Siedlung zu einer richtigen kleinen Stadt aus.
+'@; en = @'
+THE NEW WORLD - Chapter 3: Land of Many Peoples
+
+Beyond the coasts lie mighty islands, so vast that the scouts march for days - and everywhere they come upon villages. The Crown has decided: the peoples of this land shall live in peace. The colony is to grow between their villages, not on their ruins. The rivals, too, have gained a foothold on the great islands.
+
+Your orders:
+- A capital with at least 800 residents, 300 of them merchants or higher.
+- At least 4 settlements of your own.
+- EVERY one of your settlements needs at least 200 residents, 80 of them settlers or higher. Even a warehouse without houses counts as a settlement!
+
+The helmsman's advice: The giant islands offer room for you and your rivals alike, but the best bays are taken quickly. Place your warehouses with care and build every settlement into a proper little town.
+'@ }
+    }
+    @{ Number = 44; BigIslandSize = 'Large'; BigVillages = 6; Title = @{ de = 'Neue Welt 4 - Die Schatzflotte'; en = 'New World 4 - The Treasure Fleet' }; Difficulty = 2; AI = 2; Layout = 0; MirrorX = $false; MirrorY = $true; Enlarge = 3
+        Gold = 35000; RivalGold = 30000; Pirates = $true; VillagesNorth = 3; VillagesSouth = 3
+        ShipName = @{ de = 'Kompass'; en = 'Compass' }
+        Amounts = @{ Gold = 4; Spices = 3; OreSmall = 6; OreLarge = 9; Treasure = 12 }
+        Fleet = @(@{ Type = 23; Name = @{ de = 'Galeone'; en = 'Galleon' }; Cargo = @(@{ Good = 'Tools'; Tons = 40 }, @{ Good = 'Bricks'; Tons = 30 }, @{ Good = 'Wood'; Tons = 30 }) }, @{ Type = 25; Name = @{ de = 'Wache'; en = 'Sentinel' } })
+        Mission = @{ Goods1 = @{ Good = 16; Tons = 60 }; Goods2 = @{ Good = 3; Tons = 40 }; TradeBalance = 300 }
+        Text = @{ de = @'
+DIE NEUE WELT - Kapitel 4: Die Schatzflotte
+
+Die Krone ist hoch verschuldet, und ihre Gläubiger werden ungeduldig. Im Frühjahr soll eine Schatzflotte in die Alte Welt segeln, beladen mit Gold aus den Bergen und den Gewürzen des heissen Südens. Doch die Kunde von den Schätzen hat sich herumgesprochen: Piraten kreuzen vor den Inseln.
+
+Euer Auftrag:
+- Lagert mindestens 60 Tonnen Gewürze und 40 Tonnen Gold in Euren Kontoren.
+- Erreicht eine Handelsbilanz von mindestens +300 Talern: Eure Verkäufe müssen Eure Einkäufe deutlich übersteigen.
+
+Rat des Steuermanns: Goldminen gibt es nur an wenigen Bergen, und sie lassen sich erst bauen, wenn Eure Stadt Bürger hat. Die "Galeone" bringt Werkzeug, Ziegel und Holz für den Aufbau, die "Wache" schützt sie. Lasst Eure Schiffe nie unbegleitet fahren.
+'@; en = @'
+THE NEW WORLD - Chapter 4: The Treasure Fleet
+
+The Crown is deeply in debt, and its creditors are growing impatient. In spring a treasure fleet is to sail for the Old World, laden with gold from the mountains and the spices of the hot south. But word of the treasures has spread: pirates are cruising off the islands.
+
+Your orders:
+- Store at least 60 tons of spices and 40 tons of gold in your warehouses.
+- Reach a trade balance of at least +300 talers: your sales must clearly exceed your purchases.
+
+The helmsman's advice: Gold mines exist only at a few mountains, and you can build them only once your town has citizens. The "Galleon" brings tools, bricks and wood for the building work, the "Sentinel" protects it. Never let your ships sail unescorted.
+'@ }
+    }
+    @{ Number = 45; BigIslandSize = 'Large'; BigVillages = 6; Title = @{ de = 'Neue Welt 5 - Der Konquistador'; en = 'New World 5 - The Conquistador' }; Difficulty = 2; AI = 3; Layout = 2; MirrorX = $false; MirrorY = $true; Enlarge = 3
+        Gold = 40000; RivalGold = 20000; Pirates = $false; VillagesNorth = 3; VillagesSouth = 3
+        Rivals = @(@{ Player = 3; Gold = 70000; Name = @{ de = 'Haus Valdoro'; en = 'House Valdoro' }; Ship = @{ de = 'Valdoros Zorn'; en = 'Valdoro Wrath' } })
+        ShipName = @{ de = 'Kompass'; en = 'Compass' }
+        Amounts = @{ OreSmall = 6; OreLarge = 10; Gold = 2 }
+        Fleet = @(@{ Type = 27; Name = @{ de = 'Gerechtigkeit'; en = 'Justice' } }, @{ Type = 25; Name = @{ de = 'Sperber'; en = 'Sparrowhawk' } })
+        Mission = @{ Defeat = @(3); TownCount = 4; TotalResidents = 2500 }
+        Text = @{ de = @'
+DIE NEUE WELT - Kapitel 5: Der Konquistador
+
+Ein neues Haus ist in der Neuen Welt gelandet: das Haus Valdoro, reich, gierig und schwer bewaffnet. Seine Söldner brennen Dörfer nieder und vertreiben die Ureinwohner von ihren Inseln. Die Krone hat genug gesehen - sie stellt Euch die "Gerechtigkeit" zur Seite, ein schweres Kriegsschiff, und gibt Euch freie Hand.
+
+Euer Auftrag:
+- Besiegt das Haus Valdoro. Ihr erkennt es an seinem Flaggschiff, der "Valdoros Zorn". Ein Rivale gilt als besiegt, wenn er keine Siedlung und kein Schiff mehr besitzt.
+- Haltet mindestens 4 eigene Siedlungen.
+- Alle Eure Siedlungen zusammen sollen mindestens 2500 Einwohner haben.
+
+Die beiden anderen Rivalen müsst Ihr nicht besiegen.
+
+Rat des Steuermanns: Valdoro hat mehr Gold als Ihr und baut schnell Burgen. Sichert Euch zuerst Erz für Kanonen und Schwerter, dann greift seine Kontore an. Ein Krieg gegen alle drei Häuser zugleich wäre Euer Ende.
+'@; en = @'
+THE NEW WORLD - Chapter 5: The Conquistador
+
+A new house has landed in the New World: House Valdoro, rich, greedy and heavily armed. Its mercenaries burn villages and drive the natives from their islands. The Crown has seen enough - it places the "Justice", a heavy warship, at your side and gives you a free hand.
+
+Your orders:
+- Defeat House Valdoro. You will know it by its flagship, the "Valdoro Wrath". A rival counts as defeated when he owns no settlement and no ship any more.
+- Hold at least 4 settlements of your own.
+- All your settlements together shall have at least 2500 residents.
+
+You do not have to defeat the other two rivals.
+
+The helmsman's advice: Valdoro has more gold than you and builds castles quickly. First secure ore for cannons and swords, then attack his warehouses. A war against all three houses at once would be your end.
+'@ }
+    }
+    @{ Number = 46; BigIslandSize = 'Huge'; BigVillages = 7; Title = @{ de = 'Neue Welt 6 - Der Vizekoenig'; en = 'New World 6 - The Viceroy' }; Difficulty = 3; AI = 3; Layout = 1; MirrorX = $true; MirrorY = $false; Enlarge = 4
+        Gold = 50000; RivalGold = 50000; Pirates = $true; VillagesNorth = 4; VillagesSouth = 4
+        ShipName = @{ de = 'Kompass'; en = 'Compass' }
+        Amounts = @{ OreSmall = 6; OreLarge = 10; Gold = 3; Treasure = 10 }
+        Fleet = @(@{ Type = 23; Name = @{ de = 'Kompass II'; en = 'Compass II' }; Cargo = @(@{ Good = 'Tools'; Tons = 50 }, @{ Good = 'Bricks'; Tons = 50 }, @{ Good = 'Wood'; Tons = 40 }) }, @{ Type = 27; Name = @{ de = 'Krone'; en = 'Crown' } })
+        Mission = @{ Towns = @(@{ Residents = 2000; Stage = 4; OfWhich = 800 }, @{ Residents = 1200; Stage = 3; OfWhich = 500 }, @{ Residents = 600; Stage = 2; OfWhich = 250 }); TownCount = 6; Balance = 800 }
+        Text = @{ de = @'
+DIE NEUE WELT - Kapitel 6: Der Vizekönig
+
+Valdoro ist besiegt, und in der Neuen Welt herrscht Frieden - vorerst. Die Krone will das Land zu einem Vizekönigreich erheben, und Ihr sollt sein erster Vizekönig werden. Dafür braucht es eine Hauptstadt, die sich mit den Residenzen der Alten Welt messen kann, und Städte in allen Teilen des Landes. Doch die übrigen Häuser wollen sich nicht unterordnen, und Piraten lauern in den Meerengen.
+
+Euer Auftrag:
+- Eine Hauptstadt mit mindestens 2000 Einwohnern, davon 800 Aristokraten.
+- Eine zweite Stadt mit mindestens 1200 Einwohnern, davon 500 Kaufleute oder höher.
+- Eine dritte Stadt mit mindestens 600 Einwohnern, davon 250 Bürger oder höher.
+- Mindestens 6 eigene Siedlungen.
+- Eine Bilanz von mindestens +800 Talern.
+
+Rat des Steuermanns: Die "Kompass II" bringt Werkzeug, Ziegel und Holz für die neuen Städte, die "Krone" schützt Eure Küsten.
+
+Dies ist das letzte Kapitel der Neuen Welt. Möge Euer Name in die Chroniken eingehen!
+'@; en = @'
+THE NEW WORLD - Chapter 6: The Viceroy
+
+Valdoro is defeated, and peace reigns in the New World - for now. The Crown wants to raise the land to a viceroyalty, and you are to be its first viceroy. That takes a capital that can match the residences of the Old World, and towns in every part of the land. But the remaining houses will not submit, and pirates lurk in the straits.
+
+Your orders:
+- A capital with at least 2000 residents, 800 of them aristocrats.
+- A second town with at least 1200 residents, 500 of them merchants or higher.
+- A third town with at least 600 residents, 250 of them citizens or higher.
+- At least 6 settlements of your own.
+- A balance of at least +800 talers.
+
+The helmsman's advice: The "Compass II" brings tools, bricks and wood for the new towns, the "Crown" guards your coasts.
+
+This is the last chapter of the New World. May your name enter the chronicles!
+'@ }
+    }
+
+    # --- Campaign 5: Die Handelsliga (The Trade League), 2026-11-14 -------------------------------
+    # Economy without war: the rivals are weak-willed (AI 0-2), every chapter asks for goods, trade balance or
+    # profit: cloth and a first trade surplus, two goods from two climates, a network of settlements that all
+    # have to grow, a cotton monopoly with clothes, a balance chapter, finale with jewellery and both balances.
+    @{ Number = 51; BigIslandSize = 'Normal'; Title = @{ de = 'Handelsliga 1 - Das erste Kontor'; en = 'Trade League 1 - The First Warehouse' }; Difficulty = 0; AI = 0; Layout = 2; MirrorX = $false; MirrorY = $true; Enlarge = 2
+        Gold = 30000; RivalGold = 15000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        ShipName = @{ de = 'Kaufmannsglück'; en = "Merchant's Luck" }
+        Mission = @{ Towns = @(@{ Residents = 250; Stage = 1; OfWhich = 120 }); Goods1 = @{ Good = 19; Tons = 30 }; TradeBalance = 100 }
+        Text = @{ de = @'
+DIE HANDELSLIGA - Kapitel 1: Das erste Kontor
+
+Die Liga der Sieben Städte ist der mächtigste Kaufmannsbund der Alten Welt. Sie führt keine Kriege - sie führt Bücher. Nun schickt der Rat der Liga Euch, ihren jüngsten Faktor, über das Meer, um jenseits des Ozeans das erste Kontor der Liga zu gründen. Die Ratsherren wollen sehen, ob Ihr rechnen könnt.
+
+Euer Auftrag:
+- Gründet eine Stadt mit mindestens 250 Einwohnern, davon 120 Siedler oder höher.
+- Lagert mindestens 30 Tonnen Stoffe in Euren Kontoren - die Tuchhändler der Liga warten darauf.
+- Erreicht eine Handelsbilanz von mindestens +100 Talern: Verkauft mehr, als Ihr einkauft.
+
+Rat des Steuermanns: Stoffe webt die Webstube aus Wolle, und die Wolle liefert die Schaffarm - beides könnt Ihr von Anfang an bauen. Stellt im Kontor zum Verkauf ein, was Ihr im Überfluss habt, und lasst die freien Händler kaufen.
+'@; en = @'
+THE TRADE LEAGUE - Chapter 1: The First Warehouse
+
+The League of the Seven Cities is the mightiest merchant alliance of the Old World. It wages no wars - it keeps ledgers. Now the League's council sends you, its youngest factor, across the sea to found the League's first warehouse beyond the ocean. The councillors want to see whether you can count.
+
+Your orders:
+- Found a town with at least 250 residents, 120 of them settlers or higher.
+- Store at least 30 tons of cloth in your warehouses - the League's drapers are waiting for it.
+- Reach a trade balance of at least +100 talers: sell more than you buy.
+
+The helmsman's advice: The weaver's hut weaves cloth from wool, and the sheep farm supplies the wool - you can build both from the start. Put up for sale in the warehouse what you have in abundance, and let the free traders buy.
+'@ }
+    }
+    @{ Number = 52; BigIslandSize = 'Normal'; BigAmounts = @{ Tobacco = 6; Spices = 6 }; Title = @{ de = 'Handelsliga 2 - Markttag'; en = 'Trade League 2 - Market Day' }; Difficulty = 1; AI = 1; Layout = 0; MirrorX = $true; MirrorY = $true; Enlarge = 2
+        Gold = 30000; RivalGold = 25000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 3
+        ShipName = @{ de = 'Kaufmannsglück'; en = "Merchant's Luck" }
+        Amounts = @{ Tobacco = 3; Spices = 3 }
+        Fleet = @(@{ Type = 21; Name = @{ de = 'Bote'; en = 'Courier' } })
+        Mission = @{ Towns = @(@{ Residents = 500; Stage = 2; OfWhich = 200 }); Goods1 = @{ Good = 15; Tons = 40 }; Goods2 = @{ Good = 16; Tons = 40 } }
+        Text = @{ de = @'
+DIE HANDELSLIGA - Kapitel 2: Markttag
+
+Euer erstes Kontor hat den Rat überzeugt. Nun soll in der Neuen Welt ein Markt entstehen, auf dem die Schiffe der Liga alles finden, was in den Städten der Alten Welt Geld bringt: Tabakwaren für die Kontorstuben und Gewürze für die Tafeln der Reichen. Tabak und Gewürze wachsen aber in verschiedenen Klimazonen - eine einzige Insel genügt nicht.
+
+Euer Auftrag:
+- Baut eine Stadt mit mindestens 500 Einwohnern, davon 200 Bürger oder höher.
+- Lagert mindestens 40 Tonnen Tabakwaren und 40 Tonnen Gewürze in Euren Kontoren.
+
+Rat des Steuermanns: Prüft die Fruchtbarkeit im Inselinfo und gründet eine zweite Siedlung dort, wo wächst, was Eurer Hauptinsel fehlt. Die "Bote" kann auf einer Handelsroute die Ernte heimbringen.
+'@; en = @'
+THE TRADE LEAGUE - Chapter 2: Market Day
+
+Your first warehouse has convinced the council. Now a market is to arise in the New World where the League's ships find everything that brings money in the towns of the Old World: tobacco goods for the counting houses and spices for the tables of the rich. But tobacco and spices grow in different climates - a single island will not do.
+
+Your orders:
+- Build a town with at least 500 residents, 200 of them citizens or higher.
+- Store at least 40 tons of tobacco goods and 40 tons of spices in your warehouses.
+
+The helmsman's advice: Check the fertility in the island info and found a second settlement where the crops grow that your main island lacks. The "Courier" can bring the harvest home on a trade route.
+'@ }
+    }
+    @{ Number = 53; BigIslandSize = 'Normal'; Title = @{ de = 'Handelsliga 3 - Das Kontornetz'; en = 'Trade League 3 - The Warehouse Network' }; Difficulty = 1; AI = 1; Layout = 1; MirrorX = $false; MirrorY = $true; AddIslands = 30; AddClasses = @(1, 2)
+        Gold = 35000; RivalGold = 25000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        ShipName = @{ de = 'Kaufmannsglück'; en = "Merchant's Luck" }
+        Cargo = @(@{ Good = 'Tools'; Tons = 50 }, @{ Good = 'Wood'; Tons = 50 }, @{ Good = 'Food'; Tons = 20 }, @{ Good = 'Bricks'; Tons = 20 })
+        Fleet = @(@{ Type = 21; Name = @{ de = 'Möwe'; en = 'Gull' }; Cargo = @(@{ Good = 'Tools'; Tons = 40 }, @{ Good = 'Wood'; Tons = 50 }, @{ Good = 'Food'; Tons = 20 }) })
+        Mission = @{ TownCount = 6; AllTowns = @{ Residents = 150; Stage = 1; OfWhich = 60 }; TradeBalance = 200 }
+        Text = @{ de = @'
+DIE HANDELSLIGA - Kapitel 3: Das Kontornetz
+
+Ein Markt allein macht noch keinen Handel. Der Rat will ein Netz von Kontoren über diesen Archipel spannen, damit die Schiffe der Liga in jeder Bucht Ladung finden. Die Inseln sind zahlreich, aber die meisten sind klein - und jede Niederlassung soll eine Stadt sein, auf die die Liga stolz sein kann, kein verlassener Bretterverschlag.
+
+Euer Auftrag:
+- Gründet mindestens 6 eigene Siedlungen.
+- JEDE Eurer Siedlungen braucht mindestens 150 Einwohner, davon 60 Siedler oder höher. Auch ein Kontor ohne Häuser zählt als Siedlung!
+- Erreicht eine Handelsbilanz von mindestens +200 Talern.
+
+Rat des Steuermanns: Die "Möwe" bringt zusätzliches Werkzeug und Holz für die neuen Kontore. Jede kleine Stadt braucht ihren eigenen Marktplatz und ihre Waren - richtet Handelsrouten ein, damit keine Siedlung zurückbleibt.
+'@; en = @'
+THE TRADE LEAGUE - Chapter 3: The Warehouse Network
+
+A market alone does not make trade. The council wants to spread a network of warehouses across this archipelago, so that the League's ships find cargo in every bay. The islands are many, but most of them are small - and every branch is to be a town the League can be proud of, not an abandoned shack.
+
+Your orders:
+- Found at least 6 settlements of your own.
+- EVERY one of your settlements needs at least 150 residents, 60 of them settlers or higher. Even a warehouse without houses counts as a settlement!
+- Reach a trade balance of at least +200 talers.
+
+The helmsman's advice: The "Gull" brings extra tools and wood for the new warehouses. Every small town needs its own marketplace and its goods - set up trade routes so that no settlement falls behind.
+'@ }
+    }
+    @{ Number = 54; BigIslandSize = 'Large'; BigAmounts = @{ Cotton = 3 }; Title = @{ de = 'Handelsliga 4 - Das Baumwollkartell'; en = 'Trade League 4 - The Cotton Cartel' }; Difficulty = 2; AI = 2; Layout = 2; MirrorX = $true; MirrorY = $false; Enlarge = 3
+        Gold = 35000; RivalGold = 30000; Pirates = $true; VillagesNorth = 2; VillagesSouth = 2
+        ShipName = @{ de = 'Kaufmannsglück'; en = "Merchant's Luck" }
+        Amounts = @{ Cotton = 2 }   # monopoly = all cotton islands
+        Fleet = @(@{ Type = 25; Name = @{ de = 'Wächterin'; en = 'Warden' } })
+        Mission = @{ Monopoly1 = @{ Resource = 0x31; Islands = 1 }; Goods1 = @{ Good = 20; Tons = 50 }; TradeBalance = 300 }
+        Text = @{ de = @'
+DIE HANDELSLIGA - Kapitel 4: Das Baumwollkartell
+
+Die Tuchmacher der Sieben Städte verlangen nach Baumwolle, und die Liga will diesen Handel ganz in ihrer Hand. Baumwolle wächst nur auf wenigen Inseln des Südens. Wer sie alle besitzt, bestimmt den Preis jeder Elle Tuch - und jedes Gewandes, das daraus genäht wird. Die Gewinne locken allerdings auch Piraten an.
+
+Euer Auftrag:
+- Sichert Euch das Baumwollmonopol: eine eigene Siedlung auf JEDER Insel, auf der Baumwolle wächst, und keine fremde dort.
+- Lagert mindestens 50 Tonnen Kleidung in Euren Kontoren.
+- Erreicht eine Handelsbilanz von mindestens +300 Talern.
+
+Rat des Steuermanns: Baumwollplantagen und Schneidereien lassen sich erst bauen, wenn Eure Stadt Bürger hat. Die Baumwollplantage liefert Wolle, die Webstube webt daraus Stoffe, die Schneiderei näht Kleidung. Die "Wächterin" begleitet Eure Handelsschiffe.
+'@; en = @'
+THE TRADE LEAGUE - Chapter 4: The Cotton Cartel
+
+The clothmakers of the Seven Cities clamour for cotton, and the League wants this trade entirely in its own hands. Cotton grows on only a few islands of the south. Whoever owns them all sets the price of every yard of cloth - and of every garment sewn from it. But the profits lure pirates as well.
+
+Your orders:
+- Secure the cotton monopoly: a settlement of your own on EVERY island where cotton grows, and no foreign one there.
+- Store at least 50 tons of clothes in your warehouses.
+- Reach a trade balance of at least +300 talers.
+
+The helmsman's advice: Cotton plantations and tailor's shops can only be built once your town has citizens. The cotton plantation yields wool, the weaver's hut weaves it into cloth, the tailor's shop sews clothes. The "Warden" escorts your trading ships.
+'@ }
+    }
+    @{ Number = 55; BigIslandSize = 'Large'; Title = @{ de = 'Handelsliga 5 - Die Bank der Liga'; en = 'Trade League 5 - The League Bank' }; Difficulty = 2; AI = 2; Layout = 0; MirrorX = $false; MirrorY = $true; Enlarge = 3
+        Gold = 35000; RivalGold = 35000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        ShipName = @{ de = 'Kaufmannsglück'; en = "Merchant's Luck" }
+        Amounts = @{ Tobacco = 3; Spices = 3; Cocoa = 3 }
+        Mission = @{ Towns = @(@{ Residents = 1200; Stage = 3; OfWhich = 600 }); Balance = 500; TradeBalance = 400 }
+        Text = @{ de = @'
+DIE HANDELSLIGA - Kapitel 5: Die Bank der Liga
+
+Die Liga will in der Neuen Welt eine eigene Bank gründen, die Pflanzern und Kapitänen Geld leiht. Dafür braucht sie eine reiche Kaufmannsstadt und einen Faktor, dessen Bücher stets schwarze Zahlen zeigen. Der Rat wird jeden Taler prüfen.
+
+Euer Auftrag:
+- Eine Kaufmannsstadt mit mindestens 1200 Einwohnern, davon 600 Kaufleute oder höher.
+- Eine Bilanz von mindestens +500 Talern.
+- Eine Handelsbilanz von mindestens +400 Talern.
+
+Rat des Steuermanns: Kaufleute zahlen gute Steuern, aber sie verlangen Stoffe, Alkohol, Kakao, Tabakwaren und Gewürze. Baut nur, was Ihr braucht - jeder Betrieb kostet Unterhalt. Überschüsse verkauft Ihr im Kontor.
+'@; en = @'
+THE TRADE LEAGUE - Chapter 5: The League Bank
+
+The League wants to found a bank of its own in the New World that lends money to planters and captains. For that it needs a rich merchant city and a factor whose ledgers are always in the black. The council will check every taler.
+
+Your orders:
+- A merchant city with at least 1200 residents, 600 of them merchants or higher.
+- A balance of at least +500 talers.
+- A trade balance of at least +400 talers.
+
+The helmsman's advice: Merchants pay good taxes, but they demand cloth, liquor, cocoa, tobacco goods and spices. Build only what you need - every workshop costs upkeep. Sell your surpluses in the warehouse.
+'@ }
+    }
+    @{ Number = 56; BigIslandSize = 'Huge'; BigVillages = 6; Title = @{ de = 'Handelsliga 6 - Der Fuerst der Kaufleute'; en = 'Trade League 6 - The Merchant Prince' }; Difficulty = 3; AI = 2; Layout = 1; MirrorX = $true; MirrorY = $true; Enlarge = 4
+        Gold = 50000; RivalGold = 45000; Pirates = $true; VillagesNorth = 3; VillagesSouth = 3
+        ShipName = @{ de = 'Kaufmannsglück'; en = "Merchant's Luck" }
+        Amounts = @{ OreSmall = 6; OreLarge = 10; Gold = 3; Treasure = 8 }
+        Fleet = @(@{ Type = 23; Name = @{ de = 'Kaufmannsglück II'; en = "Merchant's Luck II" }; Cargo = @(@{ Good = 'Tools'; Tons = 50 }, @{ Good = 'Bricks'; Tons = 50 }, @{ Good = 'Wood'; Tons = 40 }) }, @{ Type = 27; Name = @{ de = 'Löwe'; en = 'Lion' } })
+        Mission = @{ Towns = @(@{ Residents = 2000; Stage = 4; OfWhich = 700 }); Goods1 = @{ Good = 21; Tons = 50 }; TradeBalance = 500; Balance = 800 }
+        Text = @{ de = @'
+DIE HANDELSLIGA - Kapitel 6: Der Fürst der Kaufleute
+
+Der alte Vorsteher der Liga legt sein Amt nieder, und der Rat wählt seinen Nachfolger nicht nach Herkunft, sondern nach Vermögen. Wer die prächtigste Stadt, die vollsten Schatzkammern und die besten Bücher vorweist, wird Fürst der Kaufleute. Die anderen Häuser neiden Euch den Erfolg - und die Piraten wollen Eure Ladung.
+
+Euer Auftrag:
+- Eine Residenzstadt mit mindestens 2000 Einwohnern, davon 700 Aristokraten.
+- Lagert mindestens 50 Tonnen Schmuck in Euren Kontoren.
+- Eine Handelsbilanz von mindestens +500 Talern.
+- Eine Bilanz von mindestens +800 Talern.
+
+Rat des Steuermanns: Schmuck verlangt Gold aus den Bergen und eine Goldschmiede, die erst Kaufleute bauen können. Die "Kaufmannsglück II" bringt Werkzeug, Ziegel und Holz, der "Löwe" schützt Eure Küsten.
+
+Dies ist das letzte Kapitel der Handelsliga. Möge Euer Name in die Chroniken eingehen!
+'@; en = @'
+THE TRADE LEAGUE - Chapter 6: The Merchant Prince
+
+The old head of the League is stepping down, and the council chooses his successor not by birth but by fortune. Whoever shows the most splendid city, the fullest treasuries and the best ledgers will become Merchant Prince. The other houses begrudge you your success - and the pirates want your cargo.
+
+Your orders:
+- A residence city with at least 2000 residents, 700 of them aristocrats.
+- Store at least 50 tons of jewellery in your warehouses.
+- A trade balance of at least +500 talers.
+- A balance of at least +800 talers.
+
+The helmsman's advice: Jewellery needs gold from the mountains and a goldsmith, which only merchants can build. The "Merchant's Luck II" brings tools, bricks and wood, the "Lion" guards your coasts.
+
+This is the last chapter of the Trade League. May your name enter the chronicles!
+'@ }
+    }
+
+    # --- Challenges 2026-11-14: two monopolies in two climates, two monopolies against strong rivals,
+    # a calm sea with poor islands and rich rivals, a start with almost nothing.
+    @{ Number = 61; BigIslandSize = 'Large'; BigAmounts = @{ Wine = 3; Cocoa = 3 }; Title = @{ de = 'Herausforderung - Kolonialherr'; en = 'Challenge - Colonial Lord' }; Difficulty = 2; AI = 2; Layout = 0; MirrorX = $true; MirrorY = $false; Enlarge = 3
+        Gold = 35000; RivalGold = 30000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        Amounts = @{ Wine = 2; Cocoa = 2 }   # wine only on northern, cocoa only on southern islands
+        Mission = @{ Monopoly1 = @{ Resource = 0x32; Islands = 1 }; Monopoly2 = @{ Resource = 0x33; Islands = 1 }; TownCount = 4; AllTowns = @{ Residents = 250; Stage = 2; OfWhich = 80 } }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Kolonialherr
+
+Ein wahrer Kolonialherr gebietet über den kühlen Norden ebenso wie über den heissen Süden. Die Krone verlangt von Euch beides: den Wein des Nordens und den Kakao des Südens - ganz in Eurer Hand, und jede Eurer Siedlungen eine blühende Stadt.
+
+Euer Auftrag:
+- Sichert Euch das Weinmonopol: eine eigene Siedlung auf JEDER Insel, auf der Wein wächst, und keine fremde dort.
+- Sichert Euch ebenso das Kakaomonopol.
+- Gründet mindestens 4 eigene Siedlungen.
+- JEDE Eurer Siedlungen braucht mindestens 250 Einwohner, davon 80 Bürger oder höher. Auch ein Kontor ohne Häuser zählt als Siedlung!
+
+Rat des Steuermanns: Wein und Kakao wachsen nie auf derselben Insel. Jede Monopolinsel muss zu einer Stadt mit Bürgern werden - gründet keine Siedlung, die Ihr nicht ausbauen wollt. Dörfer der Ureinwohner stören ein Monopol nicht.
+'@; en = @'
+CHALLENGE: Colonial Lord
+
+A true colonial lord commands the cool north as well as the hot south. The Crown demands both of you: the wine of the north and the cocoa of the south - entirely in your hands, and every one of your settlements a flourishing town.
+
+Your orders:
+- Secure the wine monopoly: a settlement of your own on EVERY island where wine grows, and no foreign one there.
+- Secure the cocoa monopoly in the same way.
+- Found at least 4 settlements of your own.
+- EVERY one of your settlements needs at least 250 residents, 80 of them citizens or higher. Even a warehouse without houses counts as a settlement!
+
+The helmsman's advice: Wine and cocoa never grow on the same island. Every monopoly island must become a town with citizens - found no settlement you do not intend to expand. Native villages do not spoil a monopoly.
+'@ }
+    }
+    @{ Number = 62; BigIslandSize = 'Large'; BigAmounts = @{ Spices = 3; Tobacco = 3 }; Title = @{ de = 'Herausforderung - Monopolist'; en = 'Challenge - Monopolist' }; Difficulty = 2; AI = 3; Layout = 1; MirrorX = $false; MirrorY = $true; Enlarge = 3
+        Gold = 40000; RivalGold = 50000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        Amounts = @{ Spices = 2; Tobacco = 2; OreSmall = 6; OreLarge = 9 }
+        Fleet = @(@{ Type = 27; Name = @{ de = 'Faust'; en = 'Iron Fist' } })
+        Mission = @{ Monopoly1 = @{ Resource = 0x2F; Islands = 1 }; Monopoly2 = @{ Resource = 0x2E; Islands = 1 }; TradeBalance = 400 }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Monopolist
+
+Wer alles besitzt, verkauft teuer. Auf diesen Inseln wachsen Gewürze und Tabak nur an wenigen Orten, und drei gierige Häuser wissen das so gut wie Ihr. Sie sind reich, schnell und rücksichtslos.
+
+Euer Auftrag:
+- Sichert Euch das Gewürzmonopol: eine eigene Siedlung auf JEDER Insel, auf der Gewürze wachsen, und keine fremde dort.
+- Sichert Euch ebenso das Tabakmonopol.
+- Erreicht eine Handelsbilanz von mindestens +400 Talern: Verkauft, was nur Ihr anbieten könnt.
+
+Rat des Steuermanns: Die Rivalen greifen ebenfalls nach den Monopolinseln. Erkundet sofort und setzt Eure Kontore, bevor sie es tun - sonst müsst Ihr eine fremde Siedlung auf einer solchen Insel erobern. Die "Faust" ist dafür gerüstet.
+'@; en = @'
+CHALLENGE: Monopolist
+
+Whoever owns everything sells dear. On these islands spices and tobacco grow in only a few places, and three greedy houses know that as well as you do. They are rich, quick and ruthless.
+
+Your orders:
+- Secure the spice monopoly: a settlement of your own on EVERY island where spices grow, and no foreign one there.
+- Secure the tobacco monopoly in the same way.
+- Reach a trade balance of at least +400 talers: sell what only you can offer.
+
+The helmsman's advice: The rivals reach for the monopoly islands too. Explore at once and place your warehouses before they do - otherwise you will have to conquer a foreign settlement on such an island. The "Iron Fist" is armed for that.
+'@ }
+    }
+    @{ Number = 63; BigIslandSize = 'Normal'; Title = @{ de = 'Herausforderung - Ruhige See'; en = 'Challenge - Calm Seas' }; Difficulty = 3; AI = 3; Layout = 2; MirrorX = $true; MirrorY = $true; Enlarge = 2
+        Gold = 25000; RivalGold = 60000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        Amounts = @{ OreSmall = 2; OreLarge = 3; Gold = 1; Treasure = 2; Tobacco = 2; Spices = 2; Sugar = 2; Cotton = 2; Wine = 2; Cocoa = 2 }
+        BigAmounts = @{ OreSmall = 4; OreLarge = 6; Gold = 2; Treasure = 4; Tobacco = 3; Spices = 3; Sugar = 3; Cotton = 3; Wine = 3; Cocoa = 3 }
+        Mission = @{ Towns = @(@{ Residents = 1200; Stage = 3; OfWhich = 500 }); TotalResidents = 2500; Balance = 300 }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Ruhige See
+
+Kein Pirat weit und breit, kein Sturm am Horizont - eine ruhige See. Doch die Ruhe täuscht: Die Inseln sind karg, Erz und Gold sind rar, und die drei Rivalen sind reich, erfahren und hungrig nach jedem Fleck Land.
+
+Euer Auftrag:
+- Eine Stadt mit mindestens 1200 Einwohnern, davon 500 Kaufleute oder höher.
+- Alle Eure Siedlungen zusammen sollen mindestens 2500 Einwohner haben.
+- Eine Bilanz von mindestens +300 Talern.
+
+Rat des Steuermanns: Sichert Euch früh eine Insel mit Erz - ohne Werkzeug wächst keine Stadt. Was Euch fehlt, kauft Ihr bei den freien Händlern, aber jeder Taler zählt.
+'@; en = @'
+CHALLENGE: Calm Seas
+
+Not a pirate far and wide, not a storm on the horizon - a calm sea. But the calm is deceptive: the islands are barren, ore and gold are scarce, and the three rivals are rich, experienced and hungry for every patch of land.
+
+Your orders:
+- A town with at least 1200 residents, 500 of them merchants or higher.
+- All your settlements together shall have at least 2500 residents.
+- A balance of at least +300 talers.
+
+The helmsman's advice: Secure an island with ore early - without tools no town grows. Whatever you lack you can buy from the free traders, but every taler counts.
+'@ }
+    }
+    @{ Number = 64; BigIslandSize = 'Normal'; Title = @{ de = 'Herausforderung - Habenichts'; en = 'Challenge - Shoestring' }; Difficulty = 1; AI = 2; Layout = 0; MirrorX = $true; MirrorY = $true; Enlarge = 2
+        Gold = 8000; RivalGold = 35000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        ShipName = @{ de = 'Letzter Taler'; en = 'Last Taler' }
+        Cargo = @(@{ Good = 'Tools'; Tons = 15 }, @{ Good = 'Wood'; Tons = 10 }, @{ Good = 'Food'; Tons = 5 })
+        Mission = @{ Towns = @(@{ Residents = 600; Stage = 2; OfWhich = 250 }); Balance = 200 }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Habenichts
+
+Die Kompanie ist bankrott, ihre Gläubiger haben alles gepfändet - nur nicht Euer kleines Schiff, die "Letzter Taler". Mit 8000 Talern, ein paar Tonnen Werkzeug und viel Mut wagt Ihr den Neuanfang. Die Rivalen haben volle Kassen und lachen über Euch.
+
+Euer Auftrag:
+- Baut eine Stadt mit mindestens 600 Einwohnern, davon 250 Bürger oder höher.
+- Eine Bilanz von mindestens +200 Talern.
+
+Rat des Steuermanns: An Bord sind nur 15 Tonnen Werkzeug, 10 Tonnen Holz und 5 Tonnen Proviant. Baut nach dem Kontor zuerst Forsthäuser - sie kosten kein Holz -, dann Fischerhütten, und keine Prachtbauten. Verkauft jeden Überschuss an die freien Händler und baut erst, wenn die Kasse es erlaubt.
+'@; en = @'
+CHALLENGE: Shoestring
+
+The company is bankrupt, its creditors have seized everything - except your little ship, the "Last Taler". With 8000 talers, a few tons of tools and plenty of courage you dare a fresh start. The rivals have full coffers and laugh at you.
+
+Your orders:
+- Build a town with at least 600 residents, 250 of them citizens or higher.
+- A balance of at least +200 talers.
+
+The helmsman's advice: On board are only 15 tons of tools, 10 tons of wood and 5 tons of provisions. After the warehouse build forester's huts first - they cost no wood -, then fisher's huts, and no grand buildings. Sell every surplus to the free traders and build only when the coffers allow it.
+'@ }
+    }
+
+    # --- Challenges with a time limit (3.0.0): only with the extensions (the patcher's TIMERS hook sets the limit).
+    @{ Number = 65; BigIslandSize = 'Normal'; Title = @{ de = 'Herausforderung - Gegen die Uhr'; en = 'Challenge - Against the Clock' }; Difficulty = 1; AI = 1; Layout = 0; MirrorX = $true; MirrorY = $false; Enlarge = 2
+        Gold = 30000; RivalGold = 20000; Pirates = $false; VillagesNorth = 2; VillagesSouth = 2
+        ShipName = @{ de = 'Sanduhr'; en = 'Hourglass' }
+        TimeLimitHours = 3
+        Mission = @{ Towns = @(@{ Residents = 500; Stage = 1; OfWhich = 250 }) }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Gegen die Uhr
+
+Der Gouverneur hat eine tollkühne Wette abgeschlossen: In nur drei Stunden, so prahlte er beim Bankett, baut Ihr auf diesen Inseln eine Stadt, die sich sehen lassen kann. Gewinnt Ihr, ist Euch seine Gunst sicher. Verliert Ihr, verliert er ein Vermögen - und Ihr Euer Amt.
+
+Euer Auftrag:
+- Eine Stadt mit mindestens 500 Einwohnern, davon 250 Siedler oder höher.
+- Zeitlimit: 3 Stunden. Die Uhr zeigt die verstrichene Spielzeit; bei 180:00 ist die Mission verloren.
+
+Rat des Steuermanns: Das Zeitlimit gilt nur, wenn Ihr mit den Anno 1602 Erweiterungen spielt; das Logbuch zeigt Euch die verbleibende Zeit. Gründet sofort, baut Fischerhütten, Schaffarmen und eine Webstube vor allem anderen und lasst Euch von keinem Prachtbau ablenken. Pausieren hält die Uhr an, der Turbo lässt sie schneller laufen.
+'@; en = @'
+CHALLENGE: Against the Clock
+
+The governor has made a reckless wager: in just three hours, he boasted at the banquet, you would build a town on these islands worth seeing. Win, and his favour is yours. Lose, and he loses a fortune - and you your post.
+
+Your orders:
+- A town with at least 500 residents, 250 of them settlers or higher.
+- Time limit: 3 hours. The clock shows the elapsed game time; at 180:00 the mission is lost.
+
+The helmsman's advice: The time limit only applies when you play with the Anno 1602 Extensions; the logbook shows you the time left. Found your town at once, build fisher's huts, sheep farms and a weaver's hut before anything else and let no grand building distract you. Pausing stops the clock, the turbo makes it run faster.
+'@ }
+    }
+    @{ Number = 66; BigIslandSize = 'Large'; Title = @{ de = 'Herausforderung - Die Frist des Koenigs'; en = 'Challenge - The Royal Deadline' }; Difficulty = 2; AI = 2; Layout = 2; MirrorX = $true; MirrorY = $true; Enlarge = 3
+        Gold = 30000; RivalGold = 30000; Pirates = $true; VillagesNorth = 2; VillagesSouth = 2
+        ShipName = @{ de = 'Königsbote'; en = 'Royal Courier' }
+        Fleet = @(@{ Type = 25; Name = @{ de = 'Siegel'; en = 'Royal Seal' } })
+        TimeLimitHours = 6
+        Mission = @{ Towns = @(@{ Residents = 1000; Stage = 2; OfWhich = 400 }); Balance = 300 }
+        Text = @{ de = @'
+HERAUSFORDERUNG: Die Frist des Königs
+
+Ein Brief mit dem königlichen Siegel: Seine Majestät wünscht, dass auf diesen Inseln binnen sechs Stunden eine wohlhabende Bürgerstadt entsteht, die ihre Steuern pünktlich zahlt. Drei Rivalen hoffen auf Euer Scheitern - und Piraten lauern auf jedes beladene Schiff.
+
+Euer Auftrag:
+- Eine Stadt mit mindestens 1000 Einwohnern, davon 400 Bürger oder höher.
+- Eine Bilanz von mindestens +300 Talern.
+- Zeitlimit: 6 Stunden. Die Uhr zeigt die verstrichene Spielzeit; bei 360:00 ist die Mission verloren.
+
+Rat des Steuermanns: Das Zeitlimit gilt nur, wenn Ihr mit den Anno 1602 Erweiterungen spielt; das Logbuch zeigt Euch die verbleibende Zeit. Eine zweite Insel mit anderem Klima liefert, was Eure Bürger verlangen. Das "Siegel" begleitet Eure Handelsschiffe - die Piraten warten nicht.
+'@; en = @'
+CHALLENGE: The Royal Deadline
+
+A letter bearing the royal seal: His Majesty wishes a prosperous town of citizens to rise on these islands within six hours, one that pays its taxes on time. Three rivals hope you will fail - and pirates lie in wait for every laden ship.
+
+Your orders:
+- A town with at least 1000 residents, 400 of them citizens or higher.
+- A balance of at least +300 talers.
+- Time limit: 6 hours. The clock shows the elapsed game time; at 360:00 the mission is lost.
+
+The helmsman's advice: The time limit only applies when you play with the Anno 1602 Extensions; the logbook shows you the time left. A second island with another climate supplies what your citizens demand. The "Royal Seal" escorts your trading ships - the pirates will not wait.
 '@ }
     }
 )
