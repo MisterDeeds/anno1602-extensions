@@ -1352,6 +1352,7 @@ Contents (sections above): mission time limits through the patcher, campaigns "D
 - **Measured, not guessed (O):** previews (`-PreviewImage`, now also `-PreviewUpdate updated|error|v9.9.9`) of all states in German and English; the control bounds printed and outlined in red, the text pixels found in the PNG. Labels and check boxes render with GDI+ by default (`UseCompatibleTextRendering` is true without `SetCompatibleTextRenderingDefault(false)`): their AutoSize width leaves about 15 px after the text, so the last check box ended 18 px before the edge. With GDI rendering (`UseCompatibleTextRendering = false`) for the bar's text and the two check boxes it is about 8 px (the font's own side bearing). The bar's text sat 2 px above the button text → top margin 4.
 - A preview never starts an update (`Start-Update` returns at once with `-PreviewImage`), so a preview with "Update automatically" on is safe.
 - Tests: `tests/test-install.ps1` **42 of 42**.
+- **Real run (O), 2026-11-16:** release 3.3.1 published; the open 3.3.0 launcher closed and the desktop shortcut started. The 3.3.0 launcher updated itself (version.txt 3.3.1 after 9 s) and the new launcher was open after 17 s; installed `launcher.ps1` equal to the repository, settings.json `LastVersion=3.3.1`, `UpdateTried=3.3.1 2026-11-16` (the green note was shown), Apps entry 3.3.1, nothing left in %TEMP%, `lastgame.gam` unchanged.
 
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
