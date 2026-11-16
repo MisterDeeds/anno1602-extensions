@@ -1345,6 +1345,14 @@ Contents (sections above): mission time limits through the patcher, campaigns "D
 - Tests: `tests/test-install.ps1` **42 of 42** (note after an update, notice and button with auto off, automatic start with auto on, not twice the same day), `tests/test-patcher.ps1` 655 of 655.
 - **Real run (O), 2026-11-15 20:58:** release 3.3.0 published, installed with the one-liner in the app's terminal panel, then `version.txt` set to `3.2.9` and the launcher started through the desktop shortcut (`Start-Process` of the .lnk, like a double click). The launcher found v3.3.0, started the update by itself (window of `anno1602-extensions-update.ps1` seen), the installer wrote version.txt 3.3.0 at 20:58:11 and the scenario set at 20:58:20 and opened the new launcher at 20:58:20; settings.json afterwards `LastVersion=3.3.0`, `AutoUpdate=1`, `UpdateTried=3.3.0 2026-11-15` (so the note "Aktualisiert auf Version 3.3.0." was shown and saved), Apps entry 3.3.0, no update script and no setup folder left in %TEMP%, `lastgame.gam` unchanged.
 
+### Tidier launcher bottom (2026-11-16, version 3.3.1)
+
+- The update notice is a `TableLayoutPanel` as wide as the tabs (columns 50 % | symbol | text | "Update now" | "What is new?" | 50 %, every control `Anchor = None`, so it sits in the middle horizontally and vertically), painted as a rounded bar in the style of its state: Done (green, ✔), New (blue, ⬇), Busy (blue, ↻), Error (red, ⚠). Hidden buttons take no width. Long error texts wrap at 640 px.
+- The button row is a `TableLayoutPanel` too: three buttons, a stretching column, the two check boxes; the first button starts at the tabs' left edge, the last check box ends at their right edge.
+- **Measured, not guessed (O):** previews (`-PreviewImage`, now also `-PreviewUpdate updated|error|v9.9.9`) of all states in German and English; the control bounds printed and outlined in red, the text pixels found in the PNG. Labels and check boxes render with GDI+ by default (`UseCompatibleTextRendering` is true without `SetCompatibleTextRenderingDefault(false)`): their AutoSize width leaves about 15 px after the text, so the last check box ended 18 px before the edge. With GDI rendering (`UseCompatibleTextRendering = false`) for the bar's text and the two check boxes it is about 8 px (the font's own side bearing). The bar's text sat 2 px above the button text → top margin 4.
+- A preview never starts an update (`Start-Update` returns at once with `-PreviewImage`), so a preview with "Update automatically" on is safe.
+- Tests: `tests/test-install.ps1` **42 of 42**.
+
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
 - Tool with `-Pirates Strong -ShipSpeed 2 -StartGold 50000 -Storage 3`, 1000 × 700, layout 0 (43 islands). The test session then broke off with a connection error of the Claude app; the tool ended with exit 4 without renaming `lastgame.gam`.

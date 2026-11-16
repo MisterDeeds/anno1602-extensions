@@ -31,7 +31,8 @@ param(
     [string]$PreviewImage,
     # For testing only: tab shown in the preview (0 = new game, 1 = continue, 2 = adventures).
     [Parameter(DontShow)][int]$PreviewTab = 0,
-    # For testing only: newest release ("v9.9.9") as if GitHub had reported it, so that the preview shows the update notice.
+    # For testing only: newest release ("v9.9.9") as if GitHub had reported it, so that the preview shows the update notice
+    # (an update is never started from a preview); "updated" shows the note after an update, "error" a failed download.
     [Parameter(DontShow)][string]$PreviewUpdate = '',
     # Tab shown at the start (the scenario designer opens the adventure list with 2).
     [Parameter(DontShow)][int]$StartTab = 0,
@@ -907,8 +908,29 @@ $checkUnlock.Add_CheckedChanged({
 Update-ScenarioList
 
 # --- Buttons below the tabs ----------------------------------------------------------------------------------
-$buttons = New-ButtonRow $outer
+# One row as wide as the tabs: the buttons flush left, the check boxes flush right, all centred vertically.
+function New-WideRow([int]$columns, [int[]]$stretch) {
+    $row = New-Object Windows.Forms.TableLayoutPanel
+    $row.AutoSize = $true
+    $row.Dock = 'Fill'
+    $row.Margin = New-Object Windows.Forms.Padding(0)
+    $row.RowCount = 1
+    $row.ColumnCount = $columns
+    foreach ($i in 0..($columns - 1)) {
+        $style = if ($stretch -contains $i) { New-Object Windows.Forms.ColumnStyle('Percent', 50) } else { New-Object Windows.Forms.ColumnStyle('AutoSize') }
+        [void]$row.ColumnStyles.Add($style)
+    }
+    [void]$row.RowStyles.Add((New-Object Windows.Forms.RowStyle('AutoSize')))
+    $outer.Controls.Add($row)
+    $row
+}
+function Set-Cell($row, $control, [int]$column) {
+    if ($control.Parent -ne $row) { $row.Controls.Add($control) }
+    $row.SetCellPosition($control, (New-Object Windows.Forms.TableLayoutPanelCellPosition($column, 0)))
+}
+$buttons = New-WideRow 6 @(3)
 $buttonStart = New-Button (Txt 'Play with extensions' 'Mit Erweiterungen spielen') $buttons
+$buttonStart.Margin = New-Object Windows.Forms.Padding(0, 3, 8, 3)
 $buttonOriginal = New-Button (Txt 'Start original' 'Original starten') $buttons
 # The logbook: a small window next to the game with mission progress, statistics and milestones.
 $buttonLogbook = New-Button (Txt 'Open logbook' 'Logbuch öffnen') $buttons
@@ -919,35 +941,94 @@ $buttonLogbook.Add_Click({ Start-Logbook })
 $checkLogbook = New-Object Windows.Forms.CheckBox
 $checkLogbook.Text = Txt 'Open the logbook with the game' 'Logbuch mit dem Spiel öffnen'
 $checkLogbook.AutoSize = $true
-$checkLogbook.Margin = New-Object Windows.Forms.Padding(8, 10, 3, 3)
+$checkLogbook.Anchor = 'None'
+# GDI text (as measured) leaves no gap after the text, so that the last check box ends flush with the tabs; the margins
+# put the text on the line of the button texts.
+$checkLogbook.UseCompatibleTextRendering = $false
+$checkLogbook.Margin = New-Object Windows.Forms.Padding(12, 6, 0, 2)
 $checkLogbook.Checked = ($saved['LogbookWithGame'] -eq '1')
 $checkLogbook.Visible = (Test-Path -LiteralPath $Logbook)
-$buttons.Controls.Add($checkLogbook)
+Set-Cell $buttons $buttonStart 0
+Set-Cell $buttons $buttonOriginal 1
+Set-Cell $buttons $buttonLogbook 2
+Set-Cell $buttons $checkLogbook 4
 function Start-LogbookIfWanted { if ($checkLogbook.Checked -and $checkLogbook.Visible) { Start-Logbook } }
 # Install new versions by themselves (settings.json AutoUpdate, on unless switched off; only for an installed copy).
 $checkAutoUpdate = New-Object Windows.Forms.CheckBox
 $checkAutoUpdate.Text = Txt 'Update automatically' 'Automatisch aktualisieren'
 $checkAutoUpdate.AutoSize = $true
-$checkAutoUpdate.Margin = New-Object Windows.Forms.Padding(8, 10, 3, 3)
+$checkAutoUpdate.Anchor = 'None'
+$checkAutoUpdate.UseCompatibleTextRendering = $false
+$checkAutoUpdate.Margin = New-Object Windows.Forms.Padding(18, 6, 0, 2)
 $checkAutoUpdate.Checked = ($saved['AutoUpdate'] -ne '0')
 $checkAutoUpdate.Visible = [bool]$InstalledVersion
-$buttons.Controls.Add($checkAutoUpdate)
+Set-Cell $buttons $checkAutoUpdate 5
 $buttonTips = New-Object Windows.Forms.ToolTip
 $buttonTips.AutoPopDelay = 20000
 $buttonTips.SetToolTip($checkAutoUpdate, (Txt 'At every start the launcher asks GitHub for the newest version. A newer one is installed at once (settings, logbook and saves stay) and the launcher opens again.' 'Bei jedem Start fragt der Starter GitHub nach der neusten Version. Eine neuere wird gleich installiert (Einstellungen, Logbuch und Spielstände bleiben) und der Starter öffnet sich wieder.'))
 $form.AcceptButton = $buttonStart
 
 # --- Updates ----------------------------------------------------------------------------------------------------
-# A row below the buttons, hidden until there is something to say: a newer release on GitHub (installed at once with
-# "Update automatically", otherwise with the button) or, after an update, the new version with its release notes.
-$updateRow = New-ButtonRow $outer
+# A bar below the buttons, as wide as the tabs and hidden until there is something to say: a newer release on GitHub
+# (installed at once with "Update automatically", otherwise with the button), after an update the new version with its
+# release notes, or why the download failed. Symbol, text and button sit in the middle of a rounded, coloured bar.
+$UpdateStyles = @{
+    Done  = @{ Back = [Drawing.Color]::FromArgb(232, 245, 233); Line = [Drawing.Color]::FromArgb(129, 199, 132); Fore = [Drawing.Color]::FromArgb(27, 94, 32); Symbol = [string][char]0x2714 }
+    New   = @{ Back = [Drawing.Color]::FromArgb(227, 242, 253); Line = [Drawing.Color]::FromArgb(100, 181, 246); Fore = [Drawing.Color]::FromArgb(13, 71, 161); Symbol = [string][char]0x2B07 }
+    Busy  = @{ Back = [Drawing.Color]::FromArgb(227, 242, 253); Line = [Drawing.Color]::FromArgb(100, 181, 246); Fore = [Drawing.Color]::FromArgb(13, 71, 161); Symbol = [string][char]0x21BB }
+    Error = @{ Back = [Drawing.Color]::FromArgb(255, 235, 238); Line = [Drawing.Color]::FromArgb(229, 115, 115); Fore = [Drawing.Color]::FromArgb(183, 28, 28); Symbol = [string][char]0x26A0 }
+}
+$script:UpdateStyle = $UpdateStyles.Done
+$updateRow = New-WideRow 6 @(0, 5)
+$updateRow.Margin = New-Object Windows.Forms.Padding(0, 10, 0, 0)
+$updateRow.Padding = New-Object Windows.Forms.Padding(12, 6, 12, 6)
 $updateRow.Visible = $false
-$updateLabel = New-Label '' $false 9 3
-$updateLabel.ForeColor = [Drawing.Color]::DarkGreen
-$updateRow.Controls.Add($updateLabel)
+$updateRow.Add_Paint({
+        param($bar, $e)
+        $g = $e.Graphics
+        $g.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $w = $bar.ClientSize.Width - 1; $h = $bar.ClientSize.Height - 1; $d = [Math]::Min(12, $h)
+        $path = New-Object Drawing.Drawing2D.GraphicsPath
+        $path.AddArc(0, 0, $d, $d, 180, 90); $path.AddArc($w - $d, 0, $d, $d, 270, 90)
+        $path.AddArc($w - $d, $h - $d, $d, $d, 0, 90); $path.AddArc(0, $h - $d, $d, $d, 90, 90); $path.CloseFigure()
+        $brush = New-Object Drawing.SolidBrush($script:UpdateStyle.Back); $pen = New-Object Drawing.Pen($script:UpdateStyle.Line)
+        $g.FillPath($brush, $path); $g.DrawPath($pen, $path)
+        $brush.Dispose(); $pen.Dispose(); $path.Dispose()
+    })
+$updateRow.Add_SizeChanged({ $this.Invalidate() })
+$updateSymbol = New-Object Windows.Forms.Label
+$updateSymbol.AutoSize = $true
+$updateSymbol.Anchor = 'None'
+$updateSymbol.BackColor = [Drawing.Color]::Transparent
+$updateSymbol.Font = New-Object Drawing.Font('Segoe UI Symbol', 12)
+$updateSymbol.UseCompatibleTextRendering = $false
+$updateSymbol.Margin = New-Object Windows.Forms.Padding(0, 4, 6, 0)
+Set-Cell $updateRow $updateSymbol 1
+$updateLabel = New-Object Windows.Forms.Label
+$updateLabel.AutoSize = $true
+$updateLabel.Anchor = 'None'
+$updateLabel.BackColor = [Drawing.Color]::Transparent
+$updateLabel.Font = New-Object Drawing.Font('Segoe UI Semibold', 10)
+$updateLabel.MaximumSize = New-Object Drawing.Size(640, 0)
+$updateLabel.UseCompatibleTextRendering = $false
+$updateLabel.Margin = New-Object Windows.Forms.Padding(0, 4, 0, 0)
+Set-Cell $updateRow $updateLabel 2
 $buttonUpdate = New-Button (Txt 'Update now' 'Jetzt aktualisieren') $updateRow
 $buttonNews = New-Button (Txt 'What is new?' 'Was ist neu?') $updateRow
+foreach ($b in $buttonUpdate, $buttonNews) { $b.Anchor = 'None'; $b.UseVisualStyleBackColor = $true; $b.Margin = New-Object Windows.Forms.Padding(14, 0, 0, 0) }
+Set-Cell $updateRow $buttonUpdate 3
+Set-Cell $updateRow $buttonNews 4
 $buttonNews.Visible = $false
+# Shows the bar in a style (Done, New, Busy, Error) with a text; the buttons are set by the caller.
+function Set-UpdateBar([string]$kind, [string]$text) {
+    $script:UpdateStyle = $UpdateStyles[$kind]
+    $updateSymbol.Text = $script:UpdateStyle.Symbol
+    $updateSymbol.ForeColor = $script:UpdateStyle.Fore
+    $updateLabel.Text = $text
+    $updateLabel.ForeColor = $script:UpdateStyle.Fore
+    $updateRow.Visible = $true
+    $updateRow.Invalidate($true)
+}
 $GetScriptUrl = 'https://raw.githubusercontent.com/MisterDeeds/anno1602-extensions/main/get.ps1'
 $UpdateFile = Join-Path ([IO.Path]::GetTempPath()) 'anno1602-extensions-update.ps1'
 # Version and day of the last automatic update ("3.3.0 2026-11-15"): at most one try per version and day, so that a
@@ -957,6 +1038,7 @@ $script:UpdateTried = [string]$saved['UpdateTried']
 # Downloads get.ps1 and runs it as a file in a window of its own (it waits for Enter only after an error), then closes
 # the launcher; the installer opens the new one.
 function Start-Update {
+    if ($PreviewImage) { return }
     Save-Choice
     try {
         if ($TestClicks) { $script:Started.Add("DOWNLOAD $GetScriptUrl") }
@@ -967,8 +1049,9 @@ function Start-Update {
         }
     }
     catch {
-        $updateLabel.Text = (Txt 'The update could not be downloaded: {0}' 'Das Update konnte nicht geladen werden: {0}') -f $_.Exception.Message
+        Set-UpdateBar 'Error' ((Txt 'The update could not be downloaded: {0}' 'Das Update konnte nicht geladen werden: {0}') -f $_.Exception.Message)
         $buttonUpdate.Visible = $true
+        $buttonNews.Visible = $false
         return
     }
     $env:ANNO_EXTENSIONS_PAUSE_ON_ERROR = '1'
@@ -981,14 +1064,13 @@ function Show-UpdateNotice([string]$tag) {
     if (-not $InstalledVersion -or $tag -notmatch '^v?(\d+\.\d+\.\d+)$') { return }
     $newest = [version]$Matches[1]
     if ($newest -le $InstalledVersion) { return }
-    $updateLabel.Text = (Txt 'Version {0} is out.' 'Version {0} ist da.') -f $newest
+    Set-UpdateBar 'New' ((Txt 'Version {0} is out.' 'Version {0} ist da.') -f $newest)
     $buttonUpdate.Visible = $true
     $buttonNews.Visible = $false
-    $updateRow.Visible = $true
     $attempt = '{0} {1}' -f $newest, (Get-Date -Format 'yyyy-MM-dd')
     if ($checkAutoUpdate.Checked -and $script:UpdateTried -ne $attempt -and -not (Get-Process -Name 'Anno1602' -ErrorAction SilentlyContinue)) {
         $script:UpdateTried = $attempt
-        $updateLabel.Text = (Txt 'Version {0} is out and is being installed – the launcher opens again in a moment.' 'Version {0} ist da und wird installiert – der Starter öffnet sich gleich wieder.') -f $newest
+        Set-UpdateBar 'Busy' ((Txt 'Version {0} is out and is being installed – the launcher opens again in a moment.' 'Version {0} ist da und wird installiert – der Starter öffnet sich gleich wieder.') -f $newest)
         $buttonUpdate.Visible = $false
         $form.Refresh()
         Start-Update
@@ -997,12 +1079,12 @@ function Show-UpdateNotice([string]$tag) {
 $buttonUpdate.Add_Click({ Start-Update })
 $checkAutoUpdate.Add_CheckedChanged({ Save-Choice })
 # After an update (the version saved at the last start is older): say so once, with a button for the release notes.
-if ($InstalledVersion -and -not $PreviewImage -and $saved['LastVersion'] -match '^\d+\.\d+\.\d+$' -and [version]$saved['LastVersion'] -lt $InstalledVersion) {
-    $updateLabel.Text = (Txt 'Updated to version {0}.' 'Aktualisiert auf Version {0}.') -f $InstalledVersion
+function Show-UpdatedNote {
+    Set-UpdateBar 'Done' ((Txt 'Updated to version {0}.' 'Aktualisiert auf Version {0}.') -f $InstalledVersion)
     $buttonUpdate.Visible = $false
     $buttonNews.Visible = $true
-    $updateRow.Visible = $true
 }
+if ($InstalledVersion -and -not $PreviewImage -and $saved['LastVersion'] -match '^\d+\.\d+\.\d+$' -and [version]$saved['LastVersion'] -lt $InstalledVersion) { Show-UpdatedNote }
 $buttonNews.Add_Click({ Start-Process "https://github.com/MisterDeeds/anno1602-extensions/releases/tag/v$InstalledVersion" })
 # The downloaded copy of get.ps1 of the last update is no longer needed.
 if (-not $TestClicks -and -not $PreviewImage) { try { if (Test-Path -LiteralPath $UpdateFile) { Remove-Item -LiteralPath $UpdateFile -Force } } catch { } }
@@ -1148,7 +1230,9 @@ if ($PreviewImage) {
     $form.ShowInTaskbar = $false
     $form.Add_Shown({
             $tabs.SelectedIndex = $PreviewTab
-            if ($PreviewUpdate) { Show-UpdateNotice $PreviewUpdate }
+            if ($PreviewUpdate -eq 'updated') { Show-UpdatedNote }
+            elseif ($PreviewUpdate -eq 'error') { Set-UpdateBar 'Error' ((Txt 'The update could not be downloaded: {0}' 'Das Update konnte nicht geladen werden: {0}') -f 'Der Remotename konnte nicht aufgelöst werden: "raw.githubusercontent.com"'); $buttonNews.Visible = $false }
+            elseif ($PreviewUpdate) { Show-UpdateNotice $PreviewUpdate }
             $form.Refresh()
             $image = New-Object Drawing.Bitmap($form.Width, $form.Height)
             $form.DrawToBitmap($image, (New-Object Drawing.Rectangle(0, 0, $form.Width, $form.Height)))

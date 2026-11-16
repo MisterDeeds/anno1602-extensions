@@ -3,8 +3,11 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
-## Unreleased
+## 3.3.1 – 2026-11-16
 
+- Launcher: the update notice is a coloured bar as wide as the tabs, with symbol, text and button in the middle –
+  green after an update, blue for a new version, red when the download failed.
+- The buttons below the tabs start flush with the tabs, the check boxes end flush on the right, all on one line.
 - The installer's closing lines say that updates come by themselves.
 
 ## 3.3.0 – 2026-11-15
