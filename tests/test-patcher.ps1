@@ -89,6 +89,10 @@
        once per 2000 clock steps, nothing after the end of the game.
     AW -Explored All (3.5): the tool marks every existing island as known to the local player (island +0x43), only those
        bytes change, nothing before the clock runs or for an invalid player.
+    AX -HomeIsland Perfect (3.6): island folder with Nord\lar28, ship loader jump, code cave and table as planned, the island
+       code cave sets the flag; plans at 2000 x 1400 and 1000 x 700: the home island once, north, inside, no overlap, far from
+       the start ships, the human's ship moved onto open sea in front of its coast.
+    AY Home island in the running game: deposits, count, crops, explored bit; once per island, not in loaded games.
     AV -Ultra (3.5): the key filter in front of TranslateAcceleratorA lets F8 through; the "ja" of the key switch goes to the code cave, which compares F8 (0x77 - 0x10), sets the level
        with FUN_1400c8be0 and returns like the other keys; F7 untouched; same run again, other level, with -Turbo.
     AH Everything together: all options, code caves and markers do not overlap, production x2 shortens
@@ -175,11 +179,11 @@ $CodeKind = @{ 'Width start' = 'Width'; 'Height start' = 'Height'; 'Range start'
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$null, [ref]$null)
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
-    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode|Build-UltraCode|Get-CargoHolds|Build-UltraAccelCode)\b') -or
-        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|CargoMaxHolds|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock|UltraCaveRva|UltraHookRva|UltraHookOrig|KeyEndRva|SetSpeedRva|UltraAccelCaveRva|UltraAccelCallRva|UltraAccelCallOrig|AccelIatRva|ModifierFlagsRva)\b') { . ([scriptblock]::Create($txt)) }
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode|Build-UltraCode|Get-CargoHolds|Build-UltraAccelCode|Get-HomeInfo|Build-HomeShipCode|Build-HomeShipTable)\b') -or
+        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|CargoMaxHolds|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock|UltraCaveRva|UltraHookRva|UltraHookOrig|KeyEndRva|SetSpeedRva|UltraAccelCaveRva|UltraAccelCallRva|UltraAccelCallOrig|AccelIatRva|ModifierFlagsRva|HomeFileNumber|HomeFlagRva|HomeShipTableRva|HomeShipCaveRva|ShipLoaderRva|ShipLoaderOrig|HomeClockMax|HomeDepositKinds|HomeDepositAmounts|HomeCropBits)\b') { . ([scriptblock]::Create($txt)) }
     # Event engine (cases AI-AO): its constants, functions and the two C# types run here in the test process, against
     # the helper process ($script:h / $script:base as in the tool).
-    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Invoke-RivalSupply|Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs|Invoke-Explore)\b') -or
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Invoke-RivalSupply|Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs|Invoke-Explore|Invoke-Home)\b') -or
         $txt -cmatch '^\$(Event|Explore)[A-Z]\w*\s*=' -or ($txt -match '^Add-Type -TypeDefinition' -and $txt -match 'public static class (AnnoMem|AnnoEvents) ')) { . ([scriptblock]::Create($txt)) }
 }
 $PirateHookOrig = '0F 29 05 B7 B3 4F 00'
@@ -1841,7 +1845,7 @@ try {
         if ($r.Code -ne 0) { Write-Host $r.Text }
         $dirs = @(Get-ChildItem -LiteralPath $islandsRoot -Directory -ErrorAction SilentlyContinue)
         $built = if ($dirs.Count -eq 1) { $dirs[0] } else { $null }
-        Assert-Check ("AS one island folder built ({0}) with log and changed islands" -f (($dirs | ForEach-Object Name) -join ', ')) ($built -and $built.Name -match '^[0-9a-f]{8}-r1-m1-v0-g0$' -and (Test-Path -LiteralPath (Join-Path $built.FullName 'forge.log')) -and @(Get-ChildItem -LiteralPath $built.FullName -Recurse -Filter *.scp).Count -gt 300)
+        Assert-Check ("AS one island folder built ({0}) with log and changed islands" -f (($dirs | ForEach-Object Name) -join ', ')) ($built -and $built.Name -match '^[0-9a-f]{8}-r1-m1-v0-g0-h0$' -and (Test-Path -LiteralPath (Join-Path $built.FullName 'forge.log')) -and @(Get-ChildItem -LiteralPath $built.FullName -Recurse -Filter *.scp).Count -gt 300)
         $want = [byte[]]([Text.Encoding]::Default.GetBytes($built.FullName + '\') + [byte]0)
         Assert-Check "AS folder path in memory (ANSI, $($want.Length) bytes with the end zero)" ((Hex (Read-Image $a $IslandPathRva $want.Length)) -eq (Hex $want))
         foreach ($s in $IslandPathSites) {
@@ -1857,7 +1861,7 @@ try {
         Invoke-SimulatedStart $a
         $r = Invoke-Tool $a @('-IslandSize', 'Giant')
         $dirs = @(Get-ChildItem -LiteralPath $islandsRoot -Directory)
-        Assert-Check ("AS other options: exit code {0}, new folder, the old one removed ({1})" -f $r.Code, (($dirs | ForEach-Object Name) -join ', ')) ($r.Code -eq 0 -and $dirs.Count -eq 1 -and $dirs[0].Name -match '-r0-m0-v0-g8$' -and $r.Text -match '8 giant islands')
+        Assert-Check ("AS other options: exit code {0}, new folder, the old one removed ({1})" -f $r.Code, (($dirs | ForEach-Object Name) -join ', ')) ($r.Code -eq 0 -and $dirs.Count -eq 1 -and $dirs[0].Name -match '-r0-m0-v0-g8-h0$' -and $r.Text -match '8 giant islands')
         Stop-ImageProcess $a
 
         Write-Host 'AT IslandSize Giant: plans with the real giant islands'
@@ -1883,6 +1887,90 @@ try {
                 Assert-Check ("AT {0}x{1} layout {2}: {3} islands, {4} giant, {5} of class lar in total, no overlap ({6}), inside ({7})" -f $geo[0], $geo[1], $lay, $rects.Count, $giants.Count, $class4, $overlap, $outside) ($overlap -eq 0 -and $outside -eq 0 -and $giants.Count -ge $minGiants -and $giants.Count -le $GiantMaxPerMap -and $class4 -le 10 -and $unique)
             }
         }
+
+        Write-Host 'AX -HomeIsland Perfect: island file, plans, the start ship, the tool window'
+        $a = Start-ImageProcess
+        Invoke-SimulatedStart $a
+        Assert-Check "AX before: ship loader 0x$('{0:X}' -f $ShipLoaderRva) = $(Hex (Read-Image $a $ShipLoaderRva 7)), flag/table/cave empty" ((Hex (Read-Image $a $ShipLoaderRva 7)) -eq $ShipLoaderOrig -and (Hex (Read-Image $a $HomeFlagRva 0xD0)) -eq ((@('00') * 0xD0) -join ' '))
+        $r = Invoke-Tool $a @('-Width', '2000', '-Height', '1400', '-IslandSize', 'Giant', '-HomeIsland', 'Perfect') 'de'
+        Assert-Check "AX exit code $($r.Code), German messages (island forge, home island in the plans)" ($r.Code -eq 0 -and $r.Text -cmatch 'perfekte Heimatinsel' -and $r.Text -cmatch 'Heimatinsel beim Start-Schiff')
+        if ($r.Code -ne 0) { Write-Host $r.Text }
+        $hdirs = @(Get-ChildItem -LiteralPath $islandsRoot -Directory)
+        $hfile = if ($hdirs.Count -eq 1) { Join-Path $hdirs[0].FullName "Nord\lar$HomeFileNumber.scp" } else { '' }
+        Assert-Check ("AX island folder {0} with Nord\lar28.scp" -f (($hdirs | ForEach-Object Name) -join ', ')) ($hdirs.Count -eq 1 -and $hdirs[0].Name -match '-g8-h1$' -and (Test-Path -LiteralPath $hfile))
+        if (-not ('AnnoIslands.Home' -as [type])) { Add-Type -Path (Join-Path $root 'src\island-forge.cs') -ReferencedAssemblies System.Core }
+        $script:HomeInfo = Get-HomeInfo $hfile
+        $HomeInfo = $script:HomeInfo
+        $script:GiantDims = @{}
+        for ($n = 20; $n -lt 20 + $GiantPerClimate; $n++) { $f = [IO.File]::ReadAllBytes((Join-Path $hdirs[0].FullName "Nord\lar$n.scp")); $script:GiantDims[$n] = @([int]$f[21], [int]$f[22]) }
+        Assert-Check ("AX home info: {0} x {1}, ore {2}, ship places {3}" -f $HomeInfo.W, $HomeInfo.H, (($HomeInfo.Ore | ForEach-Object { $_ -join '/' }) -join ' '), (($HomeInfo.Harbours | ForEach-Object { $_ -join '/' }) -join ' ')) ($HomeInfo -and $HomeInfo.W -eq 160 -and $HomeInfo.H -eq 140 -and $HomeInfo.Ore.Count -eq 4 -and $HomeInfo.Harbours.Count -eq 4)
+        # The plans of the tool run (2000 x 1400, Giant) once more here, to compare the table in memory.
+        [void](Build-IslandTable 2000 1400 $false 'Giant')
+        $tabWant = Build-HomeShipTable $script:HomeAt
+        Assert-Check "AX ship table in memory = plans ($(Hex (Read-Image $a $HomeShipTableRva 24)))" ((Hex (Read-Image $a $HomeShipTableRva 24)) -eq (Hex $tabWant))
+        $hc = Build-HomeShipCode
+        $jmp = Read-Image $a $ShipLoaderRva 7
+        Assert-Check ("AX ship loader jump {0} -> 0x{1:X} (cave), code cave as built ({2} bytes)" -f (Hex $jmp), ($ShipLoaderRva + 5 + [BitConverter]::ToInt32($jmp, 1)), $hc.Length) ($jmp[0] -eq 0xE9 -and ($ShipLoaderRva + 5 + [BitConverter]::ToInt32($jmp, 1)) -eq $HomeShipCaveRva -and $jmp[5] -eq 0x90 -and $jmp[6] -eq 0x90 -and (Hex (Read-Image $a $HomeShipCaveRva $hc.Length)) -eq (Hex $hc))
+        $flagT = $HomeShipCaveRva + 7 + [BitConverter]::ToInt32($hc, 2); $back = $HomeShipCaveRva + $hc.Length + [BitConverter]::ToInt32($hc, $hc.Length - 4)
+        Assert-Check ("AX ship code: flag 0x{0:X}, 'SHIP4' compare, the three moved instructions ({1}) and back to 0x{2:X}" -f $flagT, (Hex $hc[($hc.Length - 12)..($hc.Length - 6)]), $back) ($flagT -eq $HomeFlagRva -and (Hex $hc[9..14]) -eq '81 39 53 48 49 50' -and (Hex $hc[($hc.Length - 12)..($hc.Length - 6)]) -eq $ShipLoaderOrig -and $back -eq $ShipLoaderRva + 7 -and $HomeShipCaveRva + $hc.Length -le 0xE5E00)
+        $ic = Read-Image $a $CaveRva 256; $flagSet = $false
+        for ($i = 0; $i -lt 240; $i++) { if ($ic[$i] -eq 0xC6 -and $ic[$i + 1] -eq 0x05 -and $ic[$i + 6] -eq 1 -and ($CaveRva + $i + 7 + [BitConverter]::ToInt32($ic, $i + 2)) -eq $HomeFlagRva) { $flagSet = $true } }
+        Assert-Check "AX island code cave sets the flag ('mov byte [0x$('{0:X}' -f $HomeFlagRva)],1' after copying a plan)" $flagSet
+        Stop-ImageProcess $a
+        foreach ($geo in @(2000, 1400, 'Giant'), @(1000, 700, 'Large'), @(1000, 700, 'Normal')) {
+            [void](Build-IslandTable $geo[0] $geo[1] $false $geo[2])
+            foreach ($lay in ($script:IslandPlans.Keys | Sort-Object)) {
+                $plan = $script:IslandPlans[$lay]; $hp = $script:HomeAt[$lay]
+                $ships = Read-Ships (Join-Path $GameFolder "Szenes\[[48]]1$lay.szs")
+                $homeE = @($plan | Where-Object { $_[1] -eq 4 -and [BitConverter]::ToUInt16($_, 4) -eq $HomeFileNumber })
+                $rects = @(foreach ($p in $plan) {
+                    $n = [int][BitConverter]::ToUInt16($p, 4)
+                    $wh = if ($p[1] -eq 4 -and $n -eq $HomeFileNumber) { @($HomeInfo.W, $HomeInfo.H) } elseif ($p[1] -eq 4 -and $script:GiantDims.ContainsKey($n)) { $script:GiantDims[$n] } else { @($ClassW[$p[1]], $ClassH[$p[1]]) }
+                    , @([BitConverter]::ToInt32($p, 8), [BitConverter]::ToInt32($p, 12), $wh[0], $wh[1]) })
+                $overlap = 0; for ($i = 0; $i -lt $rects.Count; $i++) { for ($j = $i + 1; $j -lt $rects.Count; $j++) { $p = $rects[$i]; $q = $rects[$j]; if ($p[0] -lt $q[0] + $q[2] -and $q[0] -lt $p[0] + $p[2] -and $p[1] -lt $q[1] + $q[3] -and $q[1] -lt $p[1] + $p[3]) { $overlap++ } } }
+                $hx = [BitConverter]::ToInt32($homeE[0], 8); $hy = [BitConverter]::ToInt32($homeE[0], 12)
+                $inside = $hx -ge 0 -and $hy -ge 0 -and $hx + $HomeInfo.W -le $geo[0] -and $hy + $HomeInfo.H -le $geo[1]
+                $shipsIn = @($ships | Where-Object { $_[0] -ge $hx - 2 -and $_[0] -lt $hx + $HomeInfo.W + 2 -and $_[1] -ge $hy - 2 -and $_[1] -lt $hy + $HomeInfo.H + 2 }).Count
+                $human = @($ships | Where-Object { $_[2] -eq 0 })[0]
+                $hg = $null; $shipKind = ''
+                if ($hp) { $hi = [AnnoIslands.Island]::Load($hfile); $hg = $hi.Cover($false); $gi = $hg.GetValue([int]($hp.ShipX - $hx), [int]($hp.ShipY - $hy)); $shipKind = [AnnoIslands.Houses]::Kind($hi.E[$gi].Id) }
+                $sx = 0; $sy = 0; foreach ($s in $ships) { $sx += $s[0]; $sy += $s[1] }; $sx /= $ships.Count; $sy /= $ships.Count
+                $dist = [math]::Sqrt([math]::Pow($hx + 80 - $sx, 2) + [math]::Pow($hy + 70 - $sy, 2))
+                Assert-Check ("AX {0}x{1} {2} layout {3}: home island 1x at {4}/{5} (first entry, north {6}, distance {7:N0} from the start ships), {8} islands, no overlap ({9}), inside, no start ship on it ({10}); the human's ship {11}/{12} -> {13}/{14} on '{15}'" -f $geo[0], $geo[1], $geo[2], $lay, $hx, $hy, $homeE[0][0], $dist, $plan.Count, $overlap, $shipsIn, $human[0], $human[1], $hp.ShipX, $hp.ShipY, $shipKind) (
+                    $homeE.Count -eq 1 -and [object]::ReferenceEquals($plan[0], $homeE[0]) -and $homeE[0][0] -eq 0 -and $overlap -eq 0 -and $inside -and $shipsIn -eq 0 -and $hp -and $hp.FromX -eq $human[0] -and $hp.FromY -eq $human[1] -and $shipKind -eq 'MEER' -and $hp.ShipX -ge $hx -and $hp.ShipX -lt $hx + 160 -and $hp.ShipY -ge $hy -and $hp.ShipY -lt $hy + 140 -and $dist -gt 300)
+            }
+        }
+        $script:HomeInfo = $null
+
+        Write-Host 'AY Home island in the running game (Invoke-Home against the helper process)'
+        $script:HomeInfo = Get-HomeInfo $hfile; $HomeInfo = $script:HomeInfo
+        $a = Start-ImageProcess
+        Connect-EventEngine $a
+        $script:HomeDone = @{}
+        $slot = 7; $rec = $ExploreIslandRva + $slot * $ExploreIslandSize
+        $setIsland = { param([long]$tiles, [int]$file) Write-Image $a ($rec + $ExploreTilesOffset) ([BitConverter]::GetBytes([int64]$tiles)); Write-Image $a ($rec + 0xC) (I32 160); Write-Image $a ($rec + 0x10) (I32 140); Write-Image $a ($rec + 0x18) ([BitConverter]::GetBytes([uint16]4)); Write-Image $a ($rec + 0x1A) ([BitConverter]::GetBytes([uint16]$file)); Write-Image $a ($rec + 0x1C) ([byte[]]@(0)); Write-Image $a ($rec + 0x20) ([byte[]](@(2, 5, 5, 0, 0, 0, 0, 0x1E) + @(2, 9, 9, 0, 1, 0, 0, 0x0A) + @(0) * 16)); Write-Image $a ($rec + 0x41) ([byte[]]@(2)); Write-Image $a ($rec + 0x43) ([byte[]]@(0x06)); Write-Image $a ($rec + 0x5C) (I32 0x02) }
+        & $setIsland 0x5000 $HomeFileNumber
+        Write-Image $a $ClockRva (I32 100); Write-Image $a $EventLocalPlayerRva ([byte[]]@(0))
+        $before = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
+        $n1 = Invoke-Home
+        $after = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
+        $o = $slot * $ExploreIslandSize
+        $deps = @(for ($k = 0; $k -lt 4; $k++) { '{0}:{1}/{2} kind {3} {4} t' -f $after[$o + 0x20 + 8 * $k], $after[$o + 0x21 + 8 * $k], $after[$o + 0x22 + 8 * $k], $after[$o + 0x24 + 8 * $k], ([BitConverter]::ToUInt16($after, $o + 0x26 + 8 * $k) / 32) })
+        $wantDeps = @(for ($k = 0; $k -lt 4; $k++) { '2:{0}/{1} kind {2} {3} t' -f $HomeInfo.Ore[$k][0], $HomeInfo.Ore[$k][1], $HomeDepositKinds[$k], ($HomeDepositAmounts[$k] / 32) })
+        Assert-Check ("AY new game (clock 100): set ({0}); deposits {1}" -f $n1, ($deps -join ', ')) ($n1 -eq 1 -and ($deps -join ',') -eq ($wantDeps -join ','))
+        Assert-Check ("AY count +0x41 = {0}, crops +0x5C = 0x{1:X} (all six), explored +0x43 = 0x{2:X} (rivals' bits kept)" -f $after[$o + 0x41], [BitConverter]::ToUInt32($after, $o + 0x5C), $after[$o + 0x43]) ($after[$o + 0x41] -eq 4 -and [BitConverter]::ToUInt32($after, $o + 0x5C) -eq 0x7E -and $after[$o + 0x43] -eq 0x07)
+        $diff = @(for ($j = 0; $j -lt $before.Length; $j++) { if ($before[$j] -ne $after[$j]) { $j } })
+        Assert-Check "AY only the home island's deposits, count, crops and explored bit changed ($($diff.Count) bytes)" (@($diff | Where-Object { $_ -lt $o + 0x20 -or ($_ -ge $o + 0x40 -and $_ -notin ($o + 0x41), ($o + 0x43), ($o + 0x5C)) -or $_ -ge $o + 0x60 }).Count -eq 0)
+        $n2 = Invoke-Home
+        & $setIsland 0x6000 $HomeFileNumber
+        $n3 = Invoke-Home
+        & $setIsland 0x7000 $HomeFileNumber; Write-Image $a $ClockRva (I32 5000)
+        $n4 = Invoke-Home
+        & $setIsland 0x8000 27; Write-Image $a $ClockRva (I32 100)
+        $n5 = Invoke-Home
+        Assert-Check "AY once per island ($n2), again for a new game ($n3), not in a loaded game with a later clock ($n4), not on another island ($n5)" ($n2 -eq 0 -and $n3 -eq 1 -and $n4 -eq 0 -and $n5 -eq 0)
+        Stop-ImageProcess $a
+        $script:HomeInfo = $null; $HomeInfo = $null
         $script:GiantDims = @{}
     }
     finally { $env:LOCALAPPDATA = $localBefore }

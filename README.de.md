@@ -67,6 +67,7 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 | Berge | am Rand: Berge, die mitten auf der Insel stehen, rücken an die Küste – lange Gebirgszüge als einzelne Berge; die Inselmitte bleibt frei |
 | Vulkan | keiner: der einzige Vulkan des Spiels wird ein normaler Berg, es gibt keine Ausbrüche |
 | Erkundet | alle Inseln von Anfang an: ihre Erz- und Goldvorkommen sind sichtbar und die Ureinwohner bekannt, ohne hinzufahren |
+| Heimatinsel | perfekt, beim Start-Schiff: eine riesige flache Nordinsel (160 × 140) nur für dich – kein Fluss, vier grosse Erzberge in den Ecken mit 2 Erz- und 2 Goldvorkommen, jede Pflanze zu 100 %; dein Start-Schiff beginnt direkt an ihrer Küste, weit weg von den Gegnern |
 | Rohstoffe | Mehr: Erz, Gold, Fruchtbarkeit und Schätze passend zur Inselzahl; Viele: doppelt |
 | Ureinwohner | 4 + 4 oder 7 + 7 Dörfer statt 2 + 2 |
 | Fruchtbarkeit | jede Pflanze auf jeder Insel (neue Endlosspiele) |
@@ -106,7 +107,7 @@ Das Startfenster hat drei Registerkarten:
   | **Alles gross** | 1000 × 700, gigantische Inseln, viele Rohstoffe, 7 + 7 Dörfer, dreimal so viele Händler, Gegner wie „Schwer“ und ehrgeizig mit 60 000 Gold, Piraten greifen an mit bis zu 8 Schiffen, Einwohner ×5, Lager ×5, 8 Laderäume je Schiff, Produktion und Schiffe ×2, Turbo 16-fach und F8 32-fach, alle Inseln erkundet, dein Gold 50 000 |
   | **Für Kampagnen** | grosse Karte und Turbo 16-fach, F8 32-fach, alles andere wie im Szenario vorgesehen |
   | **Riesenwelt** | 2000 × 1400 für die Karten der [Riesenwelt](#riesenwelt), Schiffe ×2 für die langen Seewege, Turbo 16-fach und F8 32-fach, alles andere wie im Szenario vorgesehen |
-  | **Gemütlich** | Bau- und Betriebskosten halbiert, Steuern ×2, Radius ×1,5, jede Pflanze überall, unerschöpfliche Minen, keine Piraten, keine Katastrophen, keine Flüsse, Berge am Rand, kein Vulkan, alle Inseln erkundet, 100 000 Gold, Einwohner ×2, Produktion ×2, Lager ×3, grosse Inseln, viele Rohstoffe, Turbo 16-fach und F8 32-fach |
+  | **Gemütlich** | Bau- und Betriebskosten halbiert, Steuern ×2, Radius ×1,5, jede Pflanze überall, unerschöpfliche Minen, keine Piraten, keine Katastrophen, keine Flüsse, Berge am Rand, kein Vulkan, alle Inseln erkundet, die perfekte Heimatinsel, 100 000 Gold, Einwohner ×2, Produktion ×2, Lager ×3, grosse Inseln, viele Rohstoffe, Turbo 16-fach und F8 32-fach |
   | **Harte Probe** | Gegner wie „Schwer“ und ehrgeizig mit 100 000 Gold, starke Piraten mit bis zu 12 Schiffen, mehr Katastrophen, 4 + 4 Dörfer, Turbo 16-fach und F8 32-fach |
   | **Alles auf Standard** | 1000 × 700 mit mehr Inseln und mehr Rohstoffen, sonst wie im Original |
 
@@ -348,8 +349,8 @@ anno1602-extensions/
 │   ├── install.ps1                Installer hinter get.ps1, install.cmd, uninstall.cmd und der Apps-Liste
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
-│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (727 Prüfungen)
-│   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln (21 Prüfungen)
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (748 Prüfungen)
+│   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln, Heimatinsel (30 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
 │   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (43 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung

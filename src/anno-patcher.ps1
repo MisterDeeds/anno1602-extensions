@@ -118,6 +118,15 @@
                                   reaches it; FUN_1400c6c50 then draws the explored tiles of +0x2CB0
                                   instead of +0x2CC0). While the game runs, this window sets the bit of
                                   the local player (RVA 0x5F1D60) on every island (new and loaded games).
+    Home island (-HomeIsland Perfect)
+                                  New endless games get a perfect home island right at your start ship:
+                                  the island forge builds Nord\lar28 (160 x 140, flat, no river, four
+                                  large ore mountains 1110 in the corners at the coast); the planner puts
+                                  it as a northern island (climate 0) so that the human's start ship
+                                  (SHIP4 owner 0) lies on open sea just in front of its coast; at the
+                                  start the tool window gives it 2 ore and 2 gold deposits on the four
+                                  mountains (island +0x20 slots, +0x41 count), all six crops at 100 %
+                                  (+0x5C) and marks it explored.
     Ultra (-Ultra)                New key F8: 32x, with -UltraLevel 48, 64, 96 or 128 correspondingly.
                                   The key switch of FUN_1400e2d60 ends at F7 (keys 0x10-0x76);
                                   its "ja" to the end (RVA 0xE2D7E) goes to a code cave (RVA
@@ -250,6 +259,9 @@ param(
     # Islands explored from the start: Default (as in the game, a ship has to visit them) or All (the resources of every
     # island are known at once).
     [ValidateSet('Default', 'All')][string]$Explored = 'Default',
+    # Home island: Default (find one yourself) or Perfect (a giant flat northern island with ore and gold and every crop,
+    # right at the start ship).
+    [ValidateSet('Default', 'Perfect')][string]$HomeIsland = 'Default',
     # New key F8 for ultra speed (the game has no F8 speed).
     [switch]$Ultra,
     # Speed of F8 with -Ultra: 32, 48, 64, 96 or 128x (measured in the game at 2000 x 1400 with giant islands: all exact).
@@ -495,7 +507,7 @@ function Build-BigMapCode {
 # Small assembler with jump labels for the code cave. With $withResources it calls the resource
 # code cave after copying the island list (call; the registers are already saved then). With
 # $withBigMap it first calls the big map code cave (eax = 1: already done).
-function Build-IslandCode([bool]$withResources = $false, [bool]$withBigMap = $false) {
+function Build-IslandCode([bool]$withResources = $false, [bool]$withBigMap = $false, [bool]$withHomeFlag = $false) {
     $c = New-Object System.Collections.Generic.List[byte]
     $label = @{}; $fixups = New-Object System.Collections.Generic.List[object]
     $E = { param([byte[]]$b) foreach ($x in $b) { $c.Add($x) } }
@@ -531,6 +543,9 @@ function Build-IslandCode([bool]$withResources = $false, [bool]$withBigMap = $fa
     & $E 0x49, 0x8D, 0xBF, 0x74, 0x01, 0x00, 0x00                # lea rdi,[r15+0x174]
     & $E 0xB9, 0x20, 0x03, 0x00, 0x00                            # mov ecx,800
     & $E 0xF3, 0xA4                                              # rep movsb
+    if ($withHomeFlag) {                                         # mov byte [home flag],1 (an endless template: move the human's ship)
+        $c.Add(0xC6); $c.Add(0x05); foreach ($x in (Rel32 $HomeFlagRva ($CaveRva + $c.Count + 5))) { $c.Add($x) }; $c.Add(1)
+    }
     if ($withResources) { & $Rip ([byte[]](0xE8)) $ResourceCaveRva }   # call resource code cave
     & $J8 0xEB 'finish'                                          # jmp finish
     $label.next = $c.Count
@@ -697,8 +712,8 @@ function Read-Template([string]$path) {
     $null
 }
 
-# Start positions of the ships (SHIP4: entries of 0x1B4 bytes, x/y as int16 at +0x1C/+0x1E).
-# The ships are not stretched; the island planner keeps these spots free.
+# Start positions of the ships (SHIP4: entries of 0x1B4 bytes, x/y as int16 at +0x1C/+0x1E, owner +0x4B).
+# The ships are not stretched; the island planner keeps these spots free. Each: x, y, owner.
 function Read-Ships([string]$path) {
     if (-not (Test-Path -LiteralPath $path)) { return , @() }
     $d = [IO.File]::ReadAllBytes($path); $o = 0
@@ -706,7 +721,7 @@ function Read-Ships([string]$path) {
         $name = [Text.Encoding]::ASCII.GetString($d, $o, 16).Split([char]0)[0]
         $len = [BitConverter]::ToInt32($d, $o + 16)
         if ($len -lt 0) { break }
-        if ($name -eq 'SHIP4') { return , @(for ($i = 0; $i -lt [math]::Floor($len / 0x1B4); $i++) { , @([BitConverter]::ToInt16($d, $o + 20 + $i * 0x1B4 + 0x1C), [BitConverter]::ToInt16($d, $o + 20 + $i * 0x1B4 + 0x1E)) }) }
+        if ($name -eq 'SHIP4') { return , @(for ($i = 0; $i -lt [math]::Floor($len / 0x1B4); $i++) { $e = $o + 20 + $i * 0x1B4; , @([BitConverter]::ToInt16($d, $e + 0x1C), [BitConverter]::ToInt16($d, $e + 0x1E), [int]$d[$e + 0x4B]) }) }
         $o += 20 + $len
     }
     , @()
@@ -728,8 +743,9 @@ function Get-IslandPlan($template, [int]$mapW, [int]$mapH, [bool]$stretchOnly, [
     $giantDims = if ($script:GiantDims) { $script:GiantDims } else { @{} }
     $giantMax = if ($script:GiantMaxPerMap) { $script:GiantMaxPerMap } else { 6 }
     # Width and height of a plan entry: the giant island of its file number, otherwise its class.
-    $dimW = { param($p) $n = [int][BitConverter]::ToUInt16($p, 4); if ($p[1] -eq 4 -and $giantDims.ContainsKey($n)) { $giantDims[$n][0] } else { $ClassW[$p[1]] } }
-    $dimH = { param($p) $n = [int][BitConverter]::ToUInt16($p, 4); if ($p[1] -eq 4 -and $giantDims.ContainsKey($n)) { $giantDims[$n][1] } else { $ClassH[$p[1]] } }
+    $homeInfo = $script:HomeInfo
+    $dimW = { param($p) $n = [int][BitConverter]::ToUInt16($p, 4); if ($p[1] -eq 4 -and $homeInfo -and $n -eq $HomeFileNumber) { $homeInfo.W } elseif ($p[1] -eq 4 -and $giantDims.ContainsKey($n)) { $giantDims[$n][0] } else { $ClassW[$p[1]] } }
+    $dimH = { param($p) $n = [int][BitConverter]::ToUInt16($p, 4); if ($p[1] -eq 4 -and $homeInfo -and $n -eq $HomeFileNumber) { $homeInfo.H } elseif ($p[1] -eq 4 -and $giantDims.ContainsKey($n)) { $giantDims[$n][1] } else { $ClassH[$p[1]] } }
     $giant = ($size -eq 'Giant')
     if ($giant) { $size = 'Large' }
     $plan = New-Object System.Collections.Generic.List[object]
@@ -742,6 +758,48 @@ function Get-IslandPlan($template, [int]$mapW, [int]$mapH, [bool]$stretchOnly, [
     $goal = [math]::Min($IslandMax, [math]::Max($template.Count, [math]::Floor($template.Count * ($mapW * $mapH) / (500 * 350) * $IslandDensity)))
     if ($stretchOnly) { $goal = $template.Count }
     $gap = 14; $margin = 8
+    # Home island (3.6): all four start ships of the endless templates lie within 10 tiles of each other, so the island
+    # does not go there (the rivals would settle it at once): it goes to the place (grid of 10 tiles inside the map) that
+    # lies farthest from the start ships (counted up to 600 tiles) and covers the fewest originals (each counts 120
+    # tiles), as a northern island (climate 0, class lar, its file); originals it covers give way. The human's ship is
+    # moved to the ship place of the island on the side facing the start ships (see the SHIP4 code cave):
+    # HomePlaced = island x, y, side, ship x, y and the template's start of the human ship.
+    $script:HomePlaced = $null
+    $human = @($ships | Where-Object { $_.Count -ge 3 -and $_[2] -eq 0 }) | Select-Object -First 1
+    if ($homeInfo -and $human -and -not $stretchOnly) {
+        $sx = 0.0; $sy = 0.0; foreach ($s in $ships) { $sx += $s[0]; $sy += $s[1] }; $sx /= $ships.Count; $sy /= $ships.Count
+        $best = $null; $bestScore = [double]::MinValue
+        $rects = @(foreach ($p in $plan) { , @([BitConverter]::ToInt32($p, 8), [BitConverter]::ToInt32($p, 12), (& $dimW $p), (& $dimH $p)) })
+        $hw = $homeInfo.W; $hh0 = $homeInfo.H
+        for ($hx = $margin; $hx + $hw -le $mapW - $margin; $hx += 10) {
+            for ($hy = $margin; $hy + $hh0 -le $mapH - $margin; $hy += 10) {
+                $free = $true
+                foreach ($s in $ships) { if ($s[0] -ge $hx - 2 -and $s[0] -lt $hx + $hw + 2 -and $s[1] -ge $hy - 2 -and $s[1] -lt $hy + $hh0 + 2) { $free = $false; break } }
+                if (-not $free) { continue }
+                $cx = $hx + $hw / 2 - $sx; $cy = $hy + $hh0 / 2 - $sy
+                $score = [math]::Min(600.0, [math]::Sqrt($cx * $cx + $cy * $cy))
+                foreach ($r in $rects) { if ($hx -lt $r[0] + $r[2] + $gap -and $r[0] -lt $hx + $hw + $gap -and $hy -lt $r[1] + $r[3] + $gap -and $r[1] -lt $hy + $hh0 + $gap) { $score -= 120 } }
+                if ($score -gt $bestScore) { $bestScore = $score; $best = @($hx, $hy) }
+            }
+        }
+        if ($best) {
+            $hx = $best[0]; $hy = $best[1]
+            # The ship place on the side that faces the start ships (the nearest one to them).
+            $hb = $homeInfo.Harbours | Sort-Object { $dx = $hx + $_[1] - $sx; $dy = $hy + $_[2] - $sy; $dx * $dx + $dy * $dy } | Select-Object -First 1
+            $kept = New-Object System.Collections.Generic.List[object]
+            foreach ($p in $plan) {
+                $px = [BitConverter]::ToInt32($p, 8); $py = [BitConverter]::ToInt32($p, 12)
+                if (-not ($hx -lt $px + (& $dimW $p) + $gap -and $px -lt $hx + $homeInfo.W + $gap -and $hy -lt $py + (& $dimH $p) + $gap -and $py -lt $hy + $homeInfo.H + $gap)) { $kept.Add($p) }
+            }
+            $e = New-Object byte[] 16
+            $e[0] = 0; $e[1] = 4; $e[2] = 0; $e[3] = 0
+            [Array]::Copy([BitConverter]::GetBytes([uint16]$HomeFileNumber), 0, $e, 4, 2)
+            [Array]::Copy([BitConverter]::GetBytes([int32]$hx), 0, $e, 8, 4); [Array]::Copy([BitConverter]::GetBytes([int32]$hy), 0, $e, 12, 4)
+            $kept.Insert(0, $e)
+            $script:HomePlaced = @{ X = $hx; Y = $hy; Side = $hb[0]; ShipX = $hx + $hb[1]; ShipY = $hy + $hb[2]; FromX = [int]$human[0]; FromY = [int]$human[1]; Removed = $plan.Count - ($kept.Count - 1) }
+            $plan = $kept
+        }
+    }
     # There are only 6 (NORD) or 7 (SUED) island files of the class "lar", none in NORDNAT/SUEDNAT.
     # In the game (2026-11-11) only 15 of 23 planned "lar" islands were loaded, the rest was missing.
     # Hence at most $LarMax of them per map, otherwise "big" (68 + 64 files).
@@ -828,13 +886,13 @@ function Get-IslandPlan($template, [int]$mapW, [int]$mapH, [bool]$stretchOnly, [
 # Table: int32 number of entries, then per entry: island count, x0, y0 of the template, new island count, 50 x 16 bytes.
 function Build-IslandTable([int]$mapW, [int]$mapH, [bool]$stretchOnly, [string]$size = 'Normal') {
     $t = New-Object System.Collections.Generic.List[byte]
-    $count = 0; $script:IslandPlans = @{}
+    $count = 0; $script:IslandPlans = @{}; $script:HomeAt = @{}
     if (-not $stretchOnly) {
         foreach ($layout in 0, 1, 2) {
             $tpl = Read-Template (Join-Path $GameFolder "Szenes\[[48]]0$layout.szs")
             if (-not $tpl) { continue }
             $plan = Get-IslandPlan $tpl $mapW $mapH $false $size (Read-Ships (Join-Path $GameFolder "Szenes\[[48]]1$layout.szs"))
-            $script:IslandPlans[$layout] = $plan
+            $script:IslandPlans[$layout] = $plan; $script:HomeAt[$layout] = $script:HomePlaced
             foreach ($x in [BitConverter]::GetBytes([int32]$tpl.Count)) { $t.Add($x) }
             foreach ($x in $tpl[0][8..15]) { $t.Add($x) }
             foreach ($x in [BitConverter]::GetBytes([int32]$plan.Count)) { $t.Add($x) }
@@ -860,8 +918,75 @@ function Build-IslandTable([int]$mapW, [int]$mapH, [bool]$stretchOnly, [string]$
 # readable, in memory only). Island files that are not in our folder still come from the game folder; savegames
 # contain their islands completely and do not depend on the folder.
 $GiantPerClimate = 8; $GiantMaxPerMap = 6
-$IslandForgeUsed = ($Rivers -eq 'Off' -or $Mountains -eq 'Edge' -or $Volcanoes -eq 'Off' -or $IslandSize -eq 'Giant')
+$IslandForgeUsed = ($Rivers -eq 'Off' -or $Mountains -eq 'Edge' -or $Volcanoes -eq 'Off' -or $IslandSize -eq 'Giant' -or $HomeIsland -eq 'Perfect')
 $GiantDims = @{}   # giant file number -> @(width, height), only numbers that exist for both climates
+# Home island (3.6): Nord\lar28 of the forge; $HomeInfo = width, height, ship places per side (side, x, y) and the four
+# ore mountains (x, y), read from the built file. The planner (Get-IslandPlan) and the tool window use it.
+$HomeFileNumber = 28; $HomeInfo = $null
+# The human's start ship goes to the home island: the island code cave sets a flag (RVA 0xE5D30) when it copies a plan
+# into an endless template; the ship loader FUN_14008e4f0 (chunk SHIP4, entries of 0x1B4 bytes: x/y int16 at +0x1C,
+# owner +0x4B; the ship's figure is created at that place) starts with "push rbx / push rsi / sub rsp,0x68" (7 bytes,
+# RVA 0x8E4F0), which jumps to a code cave (RVA 0xE5D50): if the flag is set and the chunk is "SHIP4", it clears the flag
+# and gives the entry of owner 0 whose place is the template's start of one of the three layouts (table RVA 0xE5D38: 3 x
+# from x|y<<16, to x|y<<16) the ship place of the home island; then the three instructions and back. Savegames (no SZENE,
+# flag clear) and scenarios (other places) are not touched.
+$HomeFlagRva = 0xE5D30; $HomeShipTableRva = 0xE5D38; $HomeShipCaveRva = 0xE5D50; $ShipLoaderRva = 0x8E4F0; $ShipLoaderOrig = '40 53 56 48 83 EC 68'
+function Build-HomeShipCode {
+    $c = New-Object System.Collections.Generic.List[byte]
+    $label = @{}; $fixups = New-Object System.Collections.Generic.List[object]
+    $E = { param([byte[]]$b) foreach ($x in $b) { $c.Add($x) } }
+    $J8 = { param([byte]$op, [string]$target) $c.Add($op); $fixups.Add(@($c.Count, $target)); $c.Add(0) }
+    $RipImm = { param([byte[]]$op, [long]$targetRva, [byte[]]$imm) foreach ($x in $op) { $c.Add($x) }; foreach ($x in (Rel32 $targetRva ($HomeShipCaveRva + $c.Count + 4 + $imm.Length))) { $c.Add($x) }; foreach ($x in $imm) { $c.Add($x) } }
+    & $RipImm ([byte[]](0x80, 0x3D)) $HomeFlagRva ([byte[]]@(0))       # cmp byte [flag],0
+    & $J8 0x74 'orig'                                                  # je orig
+    & $E 0x81, 0x39, 0x53, 0x48, 0x49, 0x50                            # cmp dword [rcx],'SHIP'
+    & $J8 0x75 'orig'
+    & $E 0x80, 0x79, 0x04, 0x34                                        # cmp byte [rcx+4],'4'
+    & $J8 0x75 'orig'
+    & $RipImm ([byte[]](0xC6, 0x05)) $HomeFlagRva ([byte[]]@(0))       # mov byte [flag],0
+    & $E 0x4C, 0x8B, 0xCA                                              # mov r9,rdx (first entry)
+    & $E 0x44, 0x89, 0xC0                                              # mov eax,r8d (length)
+    $label.loop = $c.Count
+    & $E 0x3D, 0xB4, 0x01, 0x00, 0x00                                  # cmp eax,0x1B4
+    & $J8 0x72 'orig'                                                  # jb orig
+    & $E 0x41, 0x80, 0x79, 0x4B, 0x00                                  # cmp byte [r9+0x4B],0 (owner)
+    & $J8 0x75 'next'
+    & $E 0x45, 0x8B, 0x51, 0x1C                                        # mov r10d,[r9+0x1C] (x | y<<16)
+    & $RipImm ([byte[]](0x4C, 0x8D, 0x1D)) $HomeShipTableRva ([byte[]]@())   # lea r11,[table]
+    & $E 0x45, 0x3B, 0x13; & $J8 0x74 'hit0'                           # cmp r10d,[r11] / je
+    & $E 0x45, 0x3B, 0x53, 0x08; & $J8 0x74 'hit1'                     # cmp r10d,[r11+8] / je
+    & $E 0x45, 0x3B, 0x53, 0x10; & $J8 0x74 'hit2'                     # cmp r10d,[r11+16] / je
+    & $J8 0xEB 'next'
+    $label.hit2 = $c.Count; & $E 0x49, 0x83, 0xC3, 0x08                # add r11,8
+    $label.hit1 = $c.Count; & $E 0x49, 0x83, 0xC3, 0x08                # add r11,8
+    $label.hit0 = $c.Count
+    & $E 0x45, 0x8B, 0x53, 0x04                                        # mov r10d,[r11+4]
+    & $E 0x45, 0x89, 0x51, 0x1C                                        # mov [r9+0x1C],r10d
+    $label.next = $c.Count
+    & $E 0x49, 0x81, 0xC1, 0xB4, 0x01, 0x00, 0x00                      # add r9,0x1B4
+    & $E 0x2D, 0xB4, 0x01, 0x00, 0x00                                  # sub eax,0x1B4
+    & $J8 0xEB 'loop'
+    $label.orig = $c.Count
+    & $E (Bytes $ShipLoaderOrig)                                       # push rbx / push rsi / sub rsp,0x68
+    $c.Add(0xE9); foreach ($x in (Rel32 ($ShipLoaderRva + 7) ($HomeShipCaveRva + $c.Count + 4))) { $c.Add($x) }   # jmp back
+    foreach ($f in $fixups) {
+        $d = $label[$f[1]] - ($f[0] + 1); if ($d -lt -128 -or $d -gt 127) { throw (Txt "Internal error: jump to $($f[1]) too far." "Interner Fehler: Sprung zu $($f[1]) zu weit.") }
+        $c[$f[0]] = [byte]($d -band 0xFF)
+    }
+    if ($HomeShipCaveRva + $c.Count -gt 0xE5E00) { throw (Txt 'Internal error: home ship code cave too long.' 'Interner Fehler: Heimatschiff-Codestueck zu lang.') }
+    , $c.ToArray()
+}
+# Table for the code cave: per layout 0-2 the template's start of the human ship and its place at the home island.
+function Build-HomeShipTable($homeAt) {
+    $t = New-Object byte[] 24
+    foreach ($lay in 0, 1, 2) {
+        $hp = $homeAt[$lay]
+        $from = if ($hp) { [uint32](($hp.FromX -band 0xFFFF) -bor (($hp.FromY -band 0xFFFF) -shl 16)) } else { [uint32]::MaxValue }
+        $to = if ($hp) { [uint32](($hp.ShipX -band 0xFFFF) -bor (($hp.ShipY -band 0xFFFF) -shl 16)) } else { [uint32]0 }
+        [Array]::Copy([BitConverter]::GetBytes($from), 0, $t, $lay * 8, 4); [Array]::Copy([BitConverter]::GetBytes($to), 0, $t, $lay * 8 + 4, 4)
+    }
+    , $t
+}
 $IslandPathRva = 0x91B200; $IslandPathMax = 0x100
 $IslandPathSites = @(
     @{ Rva = 0xD13B2; Original = '4C 8D 05 E7 41 4F 00' }   # SZENE loader: lea r8 (source of strncpy_s)
@@ -876,7 +1001,7 @@ function Get-IslandFolder {
     if (-not (Test-Path -LiteralPath $forge)) { throw (Txt "island-forge.cs is missing next to the tool ($forge)." "island-forge.cs fehlt neben dem Werkzeug ($forge).") }
     $giants = if ($IslandSize -eq 'Giant') { $GiantPerClimate } else { 0 }
     $hash = (Get-FileHash -LiteralPath $forge -Algorithm SHA256).Hash.Substring(0, 8).ToLower()
-    $sig = '{0}-r{1}-m{2}-v{3}-g{4}' -f $hash, [int]($Rivers -eq 'Off'), [int]($Mountains -eq 'Edge'), [int]($Volcanoes -eq 'Off'), $giants
+    $sig = '{0}-r{1}-m{2}-v{3}-g{4}-h{5}' -f $hash, [int]($Rivers -eq 'Off'), [int]($Mountains -eq 'Edge'), [int]($Volcanoes -eq 'Off'), $giants, [int]($HomeIsland -eq 'Perfect')
     $dir = Join-Path $root $sig
     if (-not (Test-Path -LiteralPath (Join-Path $dir 'forge.log'))) {
         Write-Host (Txt 'Island forge: building the islands for these options (once) ...' 'Inselschmiede: baue die Inseln fuer diese Optionen (einmalig) ...')
@@ -885,6 +1010,7 @@ function Get-IslandFolder {
         if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
         $o = New-Object AnnoIslands.Options
         $o.NoRivers = ($Rivers -eq 'Off'); $o.EdgeMountains = ($Mountains -eq 'Edge'); $o.NoVolcano = ($Volcanoes -eq 'Off'); $o.GiantPerClimate = $giants
+        $o.HomeIsland = ($HomeIsland -eq 'Perfect')
         $log = [AnnoIslands.Forge]::Build($GameFolder, $tmp, $o)
         New-Item -ItemType Directory -Force -Path $tmp | Out-Null
         $log | Set-Content -LiteralPath (Join-Path $tmp 'forge.log') -Encoding UTF8
@@ -896,6 +1022,17 @@ function Get-IslandFolder {
         try { Remove-Item -LiteralPath $old.FullName -Recurse -Force -ErrorAction Stop } catch { }
     }
     $dir
+}
+# Home island: size, ship places and ore mountains from the built file (island-forge.cs, Home.Harbours / Home.OreSpots).
+function Get-HomeInfo([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    if (-not ('AnnoIslands.Home' -as [type])) { Add-Type -Path (Join-Path $PSScriptRoot 'island-forge.cs') -ReferencedAssemblies System.Core }
+    if ([AnnoIslands.Houses]::All.Count -eq 0) { [AnnoIslands.Houses]::Load((Join-Path $GameFolder 'haeuser.cod')) }
+    $f = [AnnoIslands.Island]::Load($path)
+    $ore = @([AnnoIslands.Home]::OreSpots($f) | ForEach-Object { , @([int]$_[0], [int]$_[1]) })
+    $harbours = @([AnnoIslands.Home]::Harbours($f) | ForEach-Object { , @([int]$_[0], [int]$_[1], [int]$_[2]) })
+    if ($ore.Count -ne 4 -or $harbours.Count -eq 0) { return $null }
+    @{ W = $f.W; H = $f.H; Harbours = $harbours; Ore = $ore }
 }
 # Size of a giant island from its file header (INSEL5: width +1, height +2 of the chunk data).
 function Get-IslandFileSize([string]$path) {
@@ -915,6 +1052,7 @@ if ($IslandForgeUsed) {
         $a = Get-IslandFileSize (Join-Path $IslandFolder "Nord\lar$n.scp"); $b = Get-IslandFileSize (Join-Path $IslandFolder "Sued\lar$n.scp")
         if ($a -and $b -and $a[0] -eq $b[0] -and $a[1] -eq $b[1]) { $GiantDims[$n] = $a }
     }
+    if ($HomeIsland -eq 'Perfect' -and -not $CheckOnly) { $HomeInfo = Get-HomeInfo (Join-Path $IslandFolder "Nord\lar$HomeFileNumber.scp") }
     # Path of the folder for the game (ANSI; if a character cannot be written so, the short 8.3 name).
     $islandPath = $IslandFolder.TrimEnd('\') + '\'
     $ansi = [Text.Encoding]::Default
@@ -935,6 +1073,7 @@ if ($IslandForgeUsed) {
     if ($Mountains -eq 'Edge') { $parts += (Txt 'mountains at the coast' 'Berge am Rand') }
     if ($Volcanoes -eq 'Off') { $parts += (Txt 'no volcano' 'kein Vulkan') }
     if ($IslandSize -eq 'Giant') { $parts += ((Txt '{0} giant islands' '{0} Riesen-Inseln') -f $GiantDims.Count) }
+    if ($HomeIsland -eq 'Perfect') { $parts += $(if ($HomeInfo -or $CheckOnly) { (Txt 'perfect home island' 'perfekte Heimatinsel') } else { (Txt 'home island MISSING' 'Heimatinsel FEHLT') }) }
     Write-Host ((Txt 'Island forge: {0} ({1})' 'Inselschmiede: {0} ({1})') -f ($parts -join ', '), (($summary -join ' ') -replace '^SUMMARY ', ''))
     if ($IslandSize -eq 'Giant' -and $GiantDims.Count -eq 0 -and -not $CheckOnly) { Write-Host (Txt 'Island forge: no giant island could be built; the map uses the largest islands of the game instead.' 'Inselschmiede: keine Riesen-Insel gebaut; die Karte nimmt stattdessen die groessten Inseln des Spiels.') -ForegroundColor Yellow }
 }
@@ -942,7 +1081,8 @@ if ($IslandForgeUsed) {
 if (-not $NoIslandSpread) {
     $withResources = ($ResourcePercent -gt 0 -or $Villages -gt 0 -or $FertilityAll) -and -not $StretchOnly
     $withBigMap = -not $StretchOnly
-    $IslandCode = Build-IslandCode $withResources $withBigMap
+    $withHome = [bool]$HomeInfo -and -not $StretchOnly
+    $IslandCode = Build-IslandCode $withResources $withBigMap $withHome
     if ($withBigMap) {
         $BigMapCode = Build-BigMapCode
         $Patches += @{ Name = (Txt 'Big campaign maps           ' 'Grosse Kampagnenkarten      '); Rva = $BigMapCaveRva; Original = ((@('00') * $BigMapCode.Length) -join ' '); Target = $BigMapCode; MemoryOnly = $true }
@@ -951,6 +1091,17 @@ if (-not $NoIslandSpread) {
     $Hook = [byte[]](@(0xE9) + (Rel32 $CaveRva ($HookRva + 5)) + @(0x66, 0x90))
     # Order matters: first the table and the code caves, then the jump (rollback in reverse).
     $Patches += @{ Name = (Txt 'Island spread (table)       ' 'Inselverteilung (Tabelle)   '); Rva = $TableRva; Original = ((@('00') * $IslandTable.Length) -join ' '); Target = $IslandTable; MemoryOnly = $true }
+    if ($withHome) {
+        # Order: flag, table, code cave, then the jump of the ship loader (the flag byte stays 0 until a new endless game).
+        # The game's own code writes the flag, and the free end of .text is read-only for the game (found in the game test:
+        # the island code cave crashed the game at "Spiel starten"), so its page stays writable.
+        $HomeShipTable = Build-HomeShipTable $script:HomeAt
+        $HomeShipCode = Build-HomeShipCode
+        $Patches += @{ Name = (Txt 'Home island ship (flag)     ' 'Heimatinsel Schiff (Merker) '); Rva = $HomeFlagRva; Original = '00'; Target = [byte[]]@(0); MemoryOnly = $true; Writable = $true }
+        $Patches += @{ Name = (Txt 'Home island ship (table)    ' 'Heimatinsel Schiff (Tabelle)'); Rva = $HomeShipTableRva; Original = ((@('00') * 24) -join ' '); Target = $HomeShipTable; MemoryOnly = $true }
+        $Patches += @{ Name = (Txt 'Home island ship (code cave)' 'Heimatinsel Schiff (Code)   '); Rva = $HomeShipCaveRva; Original = ((@('00') * $HomeShipCode.Length) -join ' '); Target = $HomeShipCode; MemoryOnly = $true }
+        $Patches += @{ Name = (Txt 'Home island ship (jump)     ' 'Heimatinsel Schiff (Sprung) '); Rva = $ShipLoaderRva; Original = $ShipLoaderOrig; Target = [byte[]](@(0xE9) + (Rel32 $HomeShipCaveRva ($ShipLoaderRva + 5)) + @(0x90, 0x90)) }
+    }
     if ($withResources) {
         $ResourceCode = Build-ResourceCode $ResourcePercent $Villages $FertilityAll
         $Patches += @{ Name = (Txt 'Resources (code cave)       ' 'Rohstoffe (Codestueck)      '); Rva = $ResourceCaveRva; Original = ((@('00') * $ResourceCode.Length) -join ' '); Target = $ResourceCode; MemoryOnly = $true }
@@ -971,7 +1122,14 @@ if (-not $NoIslandSpread) {
     if ($IslandSize -ne 'Normal') { Write-Host (Txt "Island size: $IslandSize" "Inselgroesse: $(Get-ValueName $IslandSize)") }
     $Patches += @{ Name = (Txt 'Island spread (code cave)   ' 'Inselverteilung (Codestueck)'); Rva = $CaveRva; Original = ((@('00') * $IslandCode.Length) -join ' '); Target = $IslandCode }
     $Patches += @{ Name = (Txt 'Island spread (jump)        ' 'Inselverteilung (Sprung)    '); Rva = $HookRva; Original = '4C 8D 1D D0 F1 F2 FF'; Target = $Hook }
-    foreach ($a in ($script:IslandPlans.Keys | Sort-Object)) { Write-Host ((Txt 'Island plan layout {0}: {1} islands' 'Inselplan Anordnung {0}: {1} Inseln') -f $a, $script:IslandPlans[$a].Count) }
+    foreach ($a in ($script:IslandPlans.Keys | Sort-Object)) {
+        $homeNote = ''
+        if ($HomeInfo) {
+            $hp = $script:HomeAt[$a]
+            $homeNote = if ($hp) { (Txt ', home island at the start ship ({0} side)' ', Heimatinsel beim Start-Schiff ({0})') -f @(@((Txt 'west' 'Westseite'), (Txt 'north' 'Nordseite'), (Txt 'east' 'Ostseite'), (Txt 'south' 'Suedseite'))[$hp.Side]) } else { (Txt ', home island: no room at the start ship' ', Heimatinsel: kein Platz beim Start-Schiff') }
+        }
+        Write-Host ((Txt 'Island plan layout {0}: {1} islands{2}' 'Inselplan Anordnung {0}: {1} Inseln{2}') -f $a, $script:IslandPlans[$a].Count, $homeNote)
+    }
 }
 elseif ($FertilityAll) { Write-Host (Txt 'Fertility: only works with the island spread (not with -NoIslandSpread); NOT set.' 'Fruchtbarkeit: wirkt nur mit der Inselverteilung (nicht mit -NoIslandSpread); NICHT gesetzt.') -ForegroundColor Yellow }
 
@@ -2313,6 +2471,51 @@ function Invoke-ExploreTick {
     }
 }
 
+# --- Perfect home island (-HomeIsland Perfect, 3.6) ------------------------------------------------
+# At the start of a new game (game clock at most $HomeClockMax) the island of the home file (island record +0x18 class 4,
+# +0x1A file 28, +0x1C climate 0) gets: deposits on its four ore mountains (slots of 8 bytes at +0x20, as the SZENE loader
+# FUN_1400d0de0 writes them: +0 = 2, +1 x, +2 y, +4 kind 0 ore / 1 gold, +6 amount x 32: ore 240 t, gold 80 t; count
+# +0x41 = 4), every crop at 100 % (+0x5C bits 1-6 = tobacco, spices, sugar cane, cotton, wine, cocoa; FUN_14009db40) and
+# the local player's explored bit (+0x43). Once per island in a session; loaded games (later clock) stay untouched.
+$HomeClockMax = 3000; $HomeDepositKinds = @(0, 0, 1, 1); $HomeDepositAmounts = @(0x1E00, 0x1E00, 0xA00, 0xA00); $HomeCropBits = 0x7E
+$script:HomeDone = @{}
+# One round (needs $script:h and $script:base). Returns 1 if the home island was set up now, else 0.
+function Invoke-Home {
+    if (-not $HomeInfo) { return 0 }
+    $clock = [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0)
+    if ($clock -le 0 -or $clock -gt $HomeClockMax) { return 0 }
+    $me = (Read-Mem $EventLocalPlayerRva 1)[0]
+    $t = Read-Mem $ExploreIslandRva ($ExploreIslandCount * $ExploreIslandSize)
+    for ($i = 0; $i -lt $ExploreIslandCount; $i++) {
+        $o = $i * $ExploreIslandSize
+        $tiles = [BitConverter]::ToInt64($t, $o + $ExploreTilesOffset)
+        if ($tiles -eq 0 -or [BitConverter]::ToUInt16($t, $o + 0x18) -ne 4 -or [BitConverter]::ToUInt16($t, $o + 0x1A) -ne $HomeFileNumber -or $t[$o + 0x1C] -ne 0) { continue }
+        if ([BitConverter]::ToInt32($t, $o + 0xC) -ne $HomeInfo.W -or [BitConverter]::ToInt32($t, $o + 0x10) -ne $HomeInfo.H) { continue }
+        if ($script:HomeDone.ContainsKey([string]$tiles)) { return 0 }
+        $slots = New-Object byte[] 32
+        for ($k = 0; $k -lt 4; $k++) {
+            $slots[$k * 8] = 2; $slots[$k * 8 + 1] = [byte]$HomeInfo.Ore[$k][0]; $slots[$k * 8 + 2] = [byte]$HomeInfo.Ore[$k][1]
+            $slots[$k * 8 + 4] = [byte]$HomeDepositKinds[$k]
+            [Array]::Copy([BitConverter]::GetBytes([uint16]$HomeDepositAmounts[$k]), 0, $slots, $k * 8 + 6, 2)
+        }
+        $rec = $ExploreIslandRva + $o
+        Write-Mem ($rec + 0x20) $slots $false
+        Write-Mem ($rec + 0x41) ([byte[]]@(4)) $false
+        Write-Mem ($rec + 0x5C) ([BitConverter]::GetBytes([uint32]([BitConverter]::ToUInt32($t, $o + 0x5C) -bor $HomeCropBits))) $false
+        if ($me -le 3) { Write-Mem ($rec + $ExploreBitOffset) ([byte[]]@([byte]($t[$o + $ExploreBitOffset] -bor (1 -shl $me)))) $false }
+        $script:HomeDone[[string]$tiles] = $true
+        return 1
+    }
+    0
+}
+# Called by the waiting loops.
+function Invoke-HomeTick {
+    if ($HomeIsland -ne 'Perfect') { return }
+    $n = 0
+    try { $n = Invoke-Home } catch { return }
+    if ($n) { Write-Host (Txt 'Home island: 2 ore and 2 gold deposits on its four mountains, every crop at 100 %, explored.' 'Heimatinsel: 2 Erz- und 2 Goldvorkommen auf den vier Bergen, jede Pflanze zu 100 %, erkundet.') -ForegroundColor Green }
+}
+
 function Invoke-EventLoop($proc) {
     $script:h = [AnnoMem]::OpenProcess(0x0008 -bor 0x0010 -bor 0x0020 -bor 0x0400, $false, $proc.Id)
     if ($script:h -eq [IntPtr]::Zero) {
@@ -2343,6 +2546,7 @@ function Invoke-EventLoop($proc) {
             if ($TestProcessId -ne 0 -and ((Get-Date) -gt $script:deadline -or ($EventTestUntilClock -gt 0 -and [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0) -ge $EventTestUntilClock))) { break }
             Invoke-RivalSupplyTick
             Invoke-ExploreTick
+            Invoke-HomeTick
             if (-not $on) { continue }
             $now = $sw.ElapsedMilliseconds
             try { Invoke-EventTick ($now - $last); $errors = 0 }
@@ -2396,6 +2600,11 @@ function Invoke-Patch($proc) {
         foreach ($s in $Patches) {
             $before = Read-Mem $s.Rva $s.Size
             Write-Mem $s.Rva $s.Target $true
+            if ($s.Writable) {
+                # The game itself writes here (a flag of a code cave): the page stays writable (PAGE_EXECUTE_READWRITE).
+                $old = [uint32]0
+                if (-not [AnnoMem]::VirtualProtectEx($script:h, [IntPtr]($script:base.ToInt64() + $s.Rva), [IntPtr]$s.Size, 0x40, [ref]$old)) { throw ((Txt 'Page at RVA 0x{0:X} cannot be made writable (error {1}).' 'Seite bei RVA 0x{0:X} nicht beschreibbar (Fehler {1}).') -f $s.Rva, [Runtime.InteropServices.Marshal]::GetLastWin32Error()) }
+            }
             [void]$written.Add(@{ Rva = $s.Rva; Old = $before })
             $new = Read-Mem $s.Rva $s.Size
             if ((Hex $new) -ne (Hex $s.Target)) { throw (Txt "Check at $($s.Name) failed ($(Hex $new))." "Kontrolle an $($s.Name) fehlgeschlagen ($(Hex $new)).") }
@@ -2591,7 +2800,7 @@ Write-Host (Txt 'Done. Now start a NEW endless game in the game (do not load an 
 
 # --- 6. Protection for "Continue game", events ---------------------------------------------------
 $eventsOn = $Events -ne 'Off'
-$supplyOn = $RivalGrowth -eq 'Ambitious' -or $Explored -eq 'All'   # the waiting loop with the ticks of supply / exploring
+$supplyOn = $RivalGrowth -eq 'Ambitious' -or $Explored -eq 'All' -or ($HomeIsland -eq 'Perfect' -and $HomeInfo)   # the waiting loop with the ticks of supply / exploring / home island
 if ($TestProcessId -eq 0 -and (-not $NoLastgameProtection -or $eventsOn -or $supplyOn)) {
     if ($NoLastgameProtection) { Write-Host (Txt 'This window stays open until the game exits (events, supply for the rivals, exploring).' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Ereignisse, Nachschub fuer die Gegner, Erkunden).') -ForegroundColor Yellow }
     else { Write-Host (Txt 'This window stays open until the game exits (protection for "Continue game").' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Schutz fuer "Spiel fortsetzen").') -ForegroundColor Yellow }
@@ -2604,7 +2813,7 @@ if ($TestProcessId -eq 0 -and (-not $NoLastgameProtection -or $eventsOn -or $sup
     elseif ($supplyOn) {
         $script:h = [AnnoMem]::OpenProcess(0x0008 -bor 0x0010 -bor 0x0020 -bor 0x0400, $false, $proc.Id)
         if ($script:h -ne [IntPtr]::Zero) {
-            try { while (-not $proc.HasExited) { Invoke-RivalSupplyTick; Invoke-ExploreTick; Start-Sleep -Seconds 2; $proc.Refresh() } }
+            try { while (-not $proc.HasExited) { Invoke-RivalSupplyTick; Invoke-ExploreTick; Invoke-HomeTick; Start-Sleep -Seconds 2; $proc.Refresh() } }
             finally { [void][AnnoMem]::CloseHandle($script:h) }
         }
     }

@@ -205,6 +205,10 @@ $Options = [ordered]@{
     Explored      = @{ Group = 'Landscape'; Label = (Txt 'Explored' 'Erkundet'); Default = 'Default'; Choices = [ordered]@{
             'Default' = New-Choice 'As in the original (sail there)' 'Wie im Original (hinfahren)'
             'All'     = New-Choice 'All islands from the start' 'Alle Inseln von Anfang an' @('-Explored', 'All') } }
+    # 3.6: a perfect home island right at the start ship (anno-patcher.ps1 -HomeIsland Perfect).
+    HomeIsland    = @{ Group = 'Landscape'; Label = (Txt 'Home island' 'Heimatinsel'); Default = 'Default'; Choices = [ordered]@{
+            'Default' = New-Choice 'Find one yourself' 'Selbst suchen'
+            'Perfect' = New-Choice 'Perfect, at the start ship' 'Perfekt, beim Start-Schiff' @('-HomeIsland', 'Perfect') } }
 }
 # Groups in the window (order: left column top, right column top, left bottom, right bottom, right below that).
 $Groups = [ordered]@{
@@ -248,7 +252,7 @@ $Relaxed = @{
     World = '1000x700'; Islands = 'More'; IslandSize = 'Large'; Resources = 'Lots'; Fertility = 'Everywhere'; Mines = 'Infinite'
     Pirates = 'Off'; Disasters = 'Off'; StartGold = '100000'; Residents = '2'; Production = '2'; Storage = '3'
     BuildCost = '0.5'; Upkeep = '0.5'; Taxes = '2'; Radius = '1.5'; Turbo = '16'; Ultra = '32'
-    Rivers = 'Off'; Mountains = 'Edge'; Volcanoes = 'Off'; Explored = 'All'
+    Rivers = 'Off'; Mountains = 'Edge'; Volcanoes = 'Off'; Explored = 'All'; HomeIsland = 'Perfect'
 }
 
 # "Tough test": the rivals at their strongest (since 3.4 also ambitious) with lots of gold, strong pirates with a huge

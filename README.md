@@ -67,6 +67,7 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 | Mountains | at the coast: mountains in the middle of an island move to the coast – long ranges as single mountains; the inland stays free |
 | Volcano | none: the game's only volcano becomes a normal mountain, no eruptions |
 | Explored | all islands from the start: their ore and gold deposits are visible and the natives known without sailing there |
+| Home island | perfect, at the start ship: a giant flat northern island (160 × 140) only for you – no river, four large ore mountains in the corners with 2 ore and 2 gold deposits, every crop at 100 %; your start ship begins right at its coast, far from the rivals |
 | Resources | More: ore, gold, fertility and treasures scaled to the island count; Lots: double that |
 | Natives | 4 + 4 or 7 + 7 villages instead of 2 + 2 |
 | Fertility | every crop on every island (new endless games) |
@@ -106,7 +107,7 @@ The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiters
   | **Everything big** (*Alles gross*) | 1000 × 700, giant islands, lots of resources, 7 + 7 villages, three times as many traders, rivals like "Hard" and ambitious with 60,000 gold, pirates attack with up to 8 ships, residents ×5, storage ×5, 8 cargo holds per ship, production and ships ×2, turbo 16× and F8 32×, all islands explored, your gold 50,000 |
   | **For campaigns** (*Für Kampagnen*) | big map and turbo 16×, F8 32×, everything else as the scenario intends |
   | **Giant world** (*Riesenwelt*) | 2000 × 1400 for the [giant world](#giant-world) maps, ships ×2 for the long sea routes, turbo 16× and F8 32×, everything else as the scenario intends |
-  | **Relaxed** (*Gemütlich*) | building costs and running costs halved, taxes ×2, radius ×1.5, every crop everywhere, inexhaustible mines, no pirates, no disasters, no rivers, mountains at the coast, no volcano, all islands explored, 100,000 gold, residents ×2, production ×2, storage ×3, large islands, lots of resources, turbo 16× and F8 32× |
+  | **Relaxed** (*Gemütlich*) | building costs and running costs halved, taxes ×2, radius ×1.5, every crop everywhere, inexhaustible mines, no pirates, no disasters, no rivers, mountains at the coast, no volcano, all islands explored, the perfect home island, 100,000 gold, residents ×2, production ×2, storage ×3, large islands, lots of resources, turbo 16× and F8 32× |
   | **Tough test** (*Harte Probe*) | rivals like "Hard" and ambitious with 100,000 gold, strong pirates with up to 12 ships, more disasters, 4 + 4 villages, turbo 16× and F8 32× |
   | **Reset to defaults** (*Alles auf Standard*) | 1000 × 700 with more islands and more resources, everything else original |
 
@@ -339,8 +340,8 @@ anno1602-extensions/
 │   ├── install.ps1                installer behind get.ps1, install.cmd, uninstall.cmd and the Apps list
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
-│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (727 checks)
-│   ├── test-islands.ps1           island forge with all island files of the game: rivers, mountains, volcano, giant islands (21 checks)
+│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (748 checks)
+│   ├── test-islands.ps1           island forge with all island files of the game: rivers, mountains, volcano, giant islands, home island (30 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
 │   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (43 checks)
 ├── dev/                           helpers for development

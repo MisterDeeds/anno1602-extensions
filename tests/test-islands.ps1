@@ -17,6 +17,8 @@
     5  Giant islands: 8 per climate (lar20-lar27), larger than "lar" (100 x 90), the same size in Nord and Sued, no
        river, at least one mountain, coast and water only from pieces the game itself uses for the same shape.
     6  The same options give byte-identical files (deterministic), the build takes less than 30 s.
+    7  Home island (3.6): only Nord\lar28 written, 160 x 140, north, whole, no river, exactly four rocks 1110 turned 0,
+       one in each quarter, completely at the coast; ore spots = the rocks; a ship place on every side.
 #>
 param()
 $ErrorActionPreference = 'Stop'
@@ -168,6 +170,36 @@ try {
     }
     Assert-Check "all options: every mountain of the giant islands completely at the coast ($groups groups, $inland not)" ($groups -gt 100 -and $inland -eq 0)
     Assert-Check ("build time {0:N1} s (all options)" -f $all1.Seconds) ($all1.Seconds -lt 30)
+
+    Write-Host '7  Home island (3.6)'
+    $o7 = New-Object AnnoIslands.Options; $o7.HomeIsland = $true
+    $hd = Join-Path $tmp 'home'; $hlog = [AnnoIslands.Forge]::Build($game, $hd, $o7)
+    $hd2 = Join-Path $tmp 'home2'; [void][AnnoIslands.Forge]::Build($game, $hd2, $o7)
+    $hp = Join-Path $hd 'Nord\lar28.scp'
+    $written = @(Get-ChildItem -LiteralPath $hd -Recurse -File -Filter *.scp)
+    Assert-Check ("only Nord\lar28.scp written ({0}), twice byte-identical" -f (($written | ForEach-Object { $_.FullName.Substring($hd.Length + 1) }) -join ', ')) ($written.Count -eq 1 -and (Test-Path -LiteralPath $hp) -and (Get-FileHash -LiteralPath $hp).Hash -eq (Get-FileHash -LiteralPath (Join-Path $hd2 'Nord\lar28.scp')).Hash)
+    $hi = [AnnoIslands.Island]::Load($hp)
+    $whole = $true; try { [void]$hi.Cover($true) } catch { $whole = $false }
+    Assert-Check ("{0} x {1}, header file {2} / class {3} / climate {4} (north), covers each tile once" -f $hi.W, $hi.H, [BitConverter]::ToUInt16($hi.Header, 96), [BitConverter]::ToUInt16($hi.Header, 98), $hi.Header[100]) ($hi.W -eq 160 -and $hi.H -eq 140 -and [BitConverter]::ToUInt16($hi.Header, 96) -eq 28 -and [BitConverter]::ToUInt16($hi.Header, 98) -eq 4 -and $hi.Header[100] -eq 0 -and $whole)
+    $hr = @($hi.E | Where-Object { $RiverIds -contains $_.Id }).Count
+    $rocks = @($hi.E | Where-Object { (Get-Kind $_.Id) -eq 'FELS' })
+    $groups = @([AnnoIslands.Forge]::MountainGroups($hi))
+    Assert-Check ("no river ({0}); exactly four rocks, all 1110 (6 x 6 large ore mountain) turned 0 ({1})" -f $hr, (($rocks | ForEach-Object { '{0}@{1}/{2} r{3}' -f $_.Id, $_.X, $_.Y, $_.Rot }) -join ', ')) ($hr -eq 0 -and $rocks.Count -eq 4 -and @($rocks | Where-Object { $_.Id -ne 1110 -or $_.Rot -ne 0 }).Count -eq 0)
+    Assert-Check ("four mountain groups, each one rock, completely at the coast ({0})" -f (($groups | ForEach-Object { 'd{0}-{1}' -f $_[2], $_[3] }) -join ' ')) ($groups.Count -eq 4 -and @($groups | Where-Object { $_[0] -ne 1 -or $_[2] -gt 3 -or $_[3] -gt [AnnoIslands.Forge]::EdgeBand }).Count -eq 0)
+    $quads = @($rocks | ForEach-Object { [int]($_.X + 3 -ge $hi.W / 2) + 2 * [int]($_.Y + 3 -ge $hi.H / 2) } | Sort-Object -Unique)
+    Assert-Check ("one mountain in each quarter of the island (quarters {0})" -f ($quads -join ',')) ($quads.Count -eq 4)
+    $ore = @([AnnoIslands.Home]::OreSpots($hi))
+    Assert-Check ("ore spots = the origins of the four rocks ({0})" -f (($ore | ForEach-Object { $_ -join '/' }) -join ' ')) ($ore.Count -eq 4 -and @($ore | Where-Object { $sp = $_; -not ($rocks | Where-Object { $_.X -eq $sp[0] -and $_.Y -eq $sp[1] }) }).Count -eq 0)
+    $g7 = $hi.Cover($false)
+    $hb = @([AnnoIslands.Home]::Harbours($hi))
+    $hbOk = @($hb | Where-Object {
+        $x = $_[1]; $y = $_[2]; $k = Get-Kind $hi.E[$g7[$x, $y]].Id
+        $dx = @(-1, 0, 1, 0)[$_[0]]; $dy = @(0, -1, 0, 1)[$_[0]]   # next tile inwards: east, south, west, north
+        $k2 = Get-Kind $hi.E[$g7[($x - $dx), ($y - $dy)]].Id
+        $k -eq 'MEER' -and $k2 -ne 'MEER' })
+    Assert-Check ("a ship place on every side, open sea right in front of the surf ({0})" -f (($hb | ForEach-Object { $_ -join '/' }) -join ' ')) ($hb.Count -eq 4 -and $hbOk.Count -eq 4)
+    Assert-Check ("only landscape pieces (meadow, forest, beach, sea, rock and slope) ({0} kinds)" -f (@($hi.E | ForEach-Object { Get-Kind $_.Id } | Sort-Object -Unique) -join ', ')) (@($hi.E | Where-Object { (Get-Kind $_.Id) -notin 'MEER', 'BRANDUNG', 'BRANDECK', 'MUENDUNG', 'STRAND', 'STRANDVARI', 'STRANDECKA', 'STRANDECKI', 'BODEN', 'WALD', 'FELS', 'HANG', 'HANGECK' }).Count -eq 0)
+    Assert-Check "coast and water of the home island only from pieces the game uses for the same shape ($([AnnoIslands.Giants]::CountTilesWithoutRule($hi)) tiles without a rule)" ([AnnoIslands.Giants]::CountTilesWithoutRule($hi) -eq 0)
 
     $after = Get-GameHashes
     $changed = @($before.Keys | Where-Object { $after[$_] -ne $before[$_] }).Count

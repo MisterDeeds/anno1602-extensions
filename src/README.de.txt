@@ -55,6 +55,10 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
                        laesst das Spiel sie dort lesen; nur fuer neue Spiele, Spielstaende behalten ihre Inseln.)
   Erkundet             Alle Inseln von Anfang an: ihre Erz- und Goldvorkommen sind sichtbar und die
                        Ureinwohner bekannt, ohne hinzufahren (auch in geladenen Spielen).
+  Heimatinsel          Perfekt, beim Start-Schiff: eine riesige flache Nordinsel (160 x 140) nur fuer
+                       dich - kein Fluss, vier grosse Erzberge in den Ecken mit 2 Erz- und 2 Gold-
+                       vorkommen, jede Pflanze zu 100 %; dein Start-Schiff beginnt direkt an ihrer
+                       Kueste, weit weg von den Gegnern (neue Endlosspiele).
   Rohstoffe            Mehr: Erz, Gold, Fruchtbarkeit und Schaetze passend zur Inselzahl; Viele: doppelt
   Ureinwohner          Mehr / Viele: 4 + 4 bzw. 7 + 7 Doerfer statt 2 + 2 (Nord + Sued)
   Fruchtbarkeit        "Jede Pflanze auf jeder Insel": in neuen Endlosspielen traegt jede Insel

@@ -220,6 +220,7 @@ namespace AnnoIslands
         public bool NoRivers, EdgeMountains, NoVolcano;
         public int GiantPerClimate;       // giant islands per climate (0 = none)
         public int GiantW = 150, GiantH = 130;
+        public bool HomeIsland;           // 3.6: the perfect home island Nord\lar28 (see Home)
     }
 
     public static class Forge
@@ -590,6 +591,62 @@ namespace AnnoIslands
             return true;
         }
 
+        // Home island (3.6): one single mountain of the game with the rock 'rockId' (turned to 0, so that its first tile is
+        // the place of a deposit) in each corner of the island: the free spot (only meadow and forest under and around
+        // it, at least 2 and at most EdgeBand tiles from the coast) closest to that corner. 'rocks': x, y of each rock.
+        public static bool PlaceCornerMountains(Island f, Dictionary<int, List<Entry>> library, int rockId, out List<int[]> rocks)
+        {
+            rocks = new List<int[]>();
+            var tpl = RockTemplate(library, rockId);
+            if (tpl == null) return false;
+            tpl = tpl.Select(e => { var c = e.Copy(); if (c.Id == rockId) c.Bits &= ~3u; return c; }).ToList();
+            var tplRock = tpl.First(e => e.Id == rockId);
+            var rel = CellsOf(tpl);
+            int bw = rel.Max(c => c[0]) + 1, bh = rel.Max(c => c[1]) + 1;
+            const uint own = (0xFFu << 6) | (7u << 14) | (0xFu << 22);
+            uint refBits = f.E.First(e => Houses.Kind(e.Id) == "BODEN").Bits;
+            int[][] corners = { new[] { 0, 0 }, new[] { f.W, 0 }, new[] { 0, f.H }, new[] { f.W, f.H } };
+            var placedAll = new HashSet<int>();
+            foreach (var corner in corners)
+            {
+                var g = f.Cover(false); var dist = CoastDistance(f, g);
+                int bestOx = -1, bestOy = -1; long best = long.MaxValue;
+                for (int ox = 0; ox + bw <= f.W; ox++) for (int oy = 0; oy + bh <= f.H; oy++)
+                {
+                    long cx = 2 * ox + bw - 2 * corner[0], cy = 2 * oy + bh - 2 * corner[1];
+                    long d2 = cx * cx + cy * cy;
+                    if (d2 >= best) continue;
+                    bool ok = true;
+                    foreach (var c in rel)
+                    {
+                        int x = c[0] + ox, y = c[1] + oy, i = g[x, y];
+                        if (i < 0 || !Plain.Contains(Houses.Kind(f.E[i].Id)) || dist[x, y] < 2 || dist[x, y] > EdgeBand) { ok = false; break; }
+                        foreach (var d in N8)
+                        {
+                            int nx = x + d[0], ny = y + d[1];
+                            if (!In(f, nx, ny)) { ok = false; break; }
+                            int j = g[nx, ny];
+                            if (j < 0 || !Plain.Contains(Houses.Kind(f.E[j].Id))) { ok = false; break; }
+                        }
+                        if (!ok) break;
+                    }
+                    if (ok) { best = d2; bestOx = ox; bestOy = oy; }
+                }
+                if (bestOx < 0) return false;
+                var g2 = f.Cover(false);
+                var target = new HashSet<int>(rel.Select(c => (c[0] + bestOx) * 1000 + (c[1] + bestOy)));
+                var covered = target.Select(t => g2[t / 1000, t % 1000]).Distinct().ToList();
+                uint cb = f.E[covered[0]].Bits;
+                var old = RemoveEntries(f, covered);
+                f.E.AddRange(tpl.Select(e => new Entry { Id = e.Id, X = e.X + bestOx, Y = e.Y + bestOy, Bits = (e.Bits & ~own) | (refBits & own) }));
+                FillMeadow(f, old.Where(c => !target.Contains(c[0] * 1000 + c[1])).ToList(), cb);
+                placedAll.UnionWith(target);
+                rocks.Add(new[] { tplRock.X + bestOx, tplRock.Y + bestOy });
+            }
+            DropDeer(f, placedAll);
+            return true;
+        }
+
         static bool IsPlateau(Island f, int[,] g, int x, int y)
         {
             int i = g[x, y]; if (i < 0) return false;
@@ -761,6 +818,7 @@ namespace AnnoIslands
                         changedFiles++; log.Add(v.Key + ": rivers (village)");
                     }
             if (o.GiantPerClimate > 0) giants = Giants.Build(gameDir, outDir, o, log);
+            if (o.HomeIsland) Home.Build(gameDir, outDir, log);
             log.Add(string.Format("SUMMARY changed={0} giant={1}", changedFiles, giants));
             return log;
         }
@@ -907,7 +965,7 @@ namespace AnnoIslands
         }
 
         // Builds one giant island from the model 'src'. Returns null if no valid coast came out.
-        public static Island Make(Island src, int W, int H, int seed, out string why)
+        public static Island Make(Island src, int W, int H, int seed, out string why, bool withMountains = true)
         {
             why = "";
             var rnd = new Random(seed);
@@ -984,7 +1042,7 @@ namespace AnnoIslands
             // groups once more at random places, so that the larger island has about as much rock per area.
             var plateaus = Plateaus(src, gs);
             double areaFactor = (double)(W * H) / (src.W * src.H);
-            int copies = Math.Max(1, (int)Math.Round(areaFactor));
+            int copies = withMountains ? Math.Max(1, (int)Math.Round(areaFactor)) : 0;
             for (int c = 0; c < copies; c++)
                 foreach (var p in plateaus)
                 {
@@ -1117,6 +1175,81 @@ namespace AnnoIslands
                 }
             }
             return made;
+        }
+
+        internal static void EnsureRules(string gameDir) { if (rules == null) Learn(gameDir); }
+    }
+
+    // The perfect home island (3.6): the largest northern island the forge makes (160 x 140, file Nord\lar28, class
+    // lar, climate north), flat - no river and no mountain but four large ore mountains (rock 1110, 6 x 6, haeuser.cod
+    // ROHSTERZ / ERZBERG_GROSS, with the game's own ring of slopes), one in each corner of the island right at the coast.
+    // The tool puts the island next to the human's start ship and gives it ore and gold on these mountains and every crop
+    // at 100 % (anno-patcher.ps1 -HomeIsland Perfect).
+    public static class Home
+    {
+        public const int FileNumber = 28, W = 160, H = 140, OreRock = 1110;
+        public const string Folder = "Nord";
+        public static string FileName { get { return "lar" + FileNumber + ".scp"; } }
+
+        // Builds Nord\lar28.scp from the first large northern island of the game that gives a valid coast.
+        public static Island Make(string gameDir, out string from, out string why)
+        {
+            from = ""; why = "";
+            Giants.EnsureRules(gameDir);
+            string src = Path.Combine(gameDir, Folder);
+            var models = Directory.GetFiles(src, "lar*.scp").Where(p => !Path.GetFileName(p).Equals("lar.scp", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(p => p, StringComparer.OrdinalIgnoreCase).ToList();
+            var library = Forge.RockLibrary(gameDir, Folder);
+            foreach (var path in models)
+            {
+                Island model; try { model = Island.Load(path); } catch (Exception) { continue; }
+                if (!Forge.IsWhole(model) || model.HausCount != 1 || model.Header.Length < 102) continue;
+                for (int seed = 0; seed < 6; seed++)
+                {
+                    var f = Giants.Make(model, W, H, 2828 + seed * 17, out why, false);
+                    if (f == null) continue;
+                    List<int[]> rocks;
+                    if (!Forge.PlaceCornerMountains(f, library, OreRock, out rocks)) { why = "no room for the four mountains"; continue; }
+                    var h = f.Header;
+                    BitConverter.GetBytes((ushort)FileNumber).CopyTo(h, 96); BitConverter.GetBytes((ushort)4).CopyTo(h, 98); h[100] = 0;
+                    f.Cover(true);
+                    from = Path.GetFileName(path);
+                    return f;
+                }
+            }
+            return null;
+        }
+
+        public static void Build(string gameDir, string outDir, List<string> log)
+        {
+            string from, why;
+            var f = Make(gameDir, out from, out why);
+            if (f == null) { log.Add(Folder + "\\" + FileName + ": no home island (" + why + ")"); return; }
+            string dst = Path.Combine(outDir, Folder); Directory.CreateDirectory(dst);
+            File.WriteAllBytes(Path.Combine(dst, FileName), f.Save());
+            log.Add(Folder + "\\" + FileName + ": home island " + W + "x" + H + " from " + from);
+        }
+
+        // The ore mountains of an island: x, y of every rock 1110 that lies with turn 0 (its origin tile, where the game
+        // keeps a deposit: FUN_140093720 for turn 0 = the first tile of the piece).
+        public static List<int[]> OreSpots(Island f)
+        {
+            return f.E.Where(e => e.Id == OreRock && e.Rot == 0).OrderBy(e => e.Y).ThenBy(e => e.X).Select(e => new[] { e.X, e.Y }).ToList();
+        }
+
+        // Places for the start ship next to the coast, one per side (west, north, east, south): from the middle of the
+        // side inwards, the last open sea tile ("MEER") before surf or beach. Each: side 0-3, x, y.
+        public static List<int[]> Harbours(Island f)
+        {
+            var g = f.Cover(false); var res = new List<int[]>();
+            int[][] starts = { new[] { 0, f.H / 2, 1, 0 }, new[] { f.W / 2, 0, 0, 1 }, new[] { f.W - 1, f.H / 2, -1, 0 }, new[] { f.W / 2, f.H - 1, 0, -1 } };
+            for (int s = 0; s < 4; s++)
+            {
+                int x = starts[s][0], y = starts[s][1], dx = starts[s][2], dy = starts[s][3], lx = -1, ly = -1;
+                while (x >= 0 && y >= 0 && x < f.W && y < f.H && g[x, y] >= 0 && Houses.Kind(f.E[g[x, y]].Id) == "MEER") { lx = x; ly = y; x += dx; y += dy; }
+                if (lx >= 0 && x >= 0 && y >= 0 && x < f.W && y < f.H) res.Add(new[] { s, lx, ly });
+            }
+            return res;
         }
     }
 }

@@ -52,6 +52,10 @@ What is changed (only in memory, no game file is modified):
                        them from there; for new games only, savegames keep their islands.)
   Explored             All islands from the start: their ore and gold deposits are visible and the
                        natives known without sailing there (also in loaded games).
+  Home island          Perfect, at the start ship: a giant flat northern island (160 x 140) only for
+                       you - no river, four large ore mountains in the corners with 2 ore and 2 gold
+                       deposits, every crop at 100 %; your start ship begins right at its coast, far
+                       from the rivals (new endless games).
   Resources            More: ore, gold, fertility and treasures to match the island count;
                        Lots: double that
   Natives              More / Lots: 4 + 4 or 7 + 7 villages instead of 2 + 2 (north + south)

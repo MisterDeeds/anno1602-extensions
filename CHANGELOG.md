@@ -3,6 +3,27 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.6.0 – 2026-11-22
+
+- **Perfect home island** (option "Home island: perfect, at the start ship", also in the preset "Relaxed"): new endless
+  games get a giant northern island of 160 × 140 tiles only for you – flat, without river, forest and meadow, and four
+  large ore mountains, one in each corner right at the coast. At the start it gets 2 ore deposits (240 t) and 2 gold
+  deposits (80 t) on these mountains, every crop at 100 % (tobacco, sugar cane and wine grow in the north anyway; spices,
+  cotton and cocoa too) and is explored. Your start ship begins right in front of its coast – "Build warehouse" is one
+  click away.
+- How: the island forge builds `Nord\lar28.scp` (from the game's large northern island, outline and coast with the
+  learned rules, the game's own single mountain with rock 1110). The planner puts it where it lies farthest from the
+  start ships (all four start ships of the endless templates lie within 10 tiles of each other, so the rivals would
+  otherwise settle it at once) and covers the fewest islands, as a northern island (climate 0). The human's start ship
+  is moved there by a small code cave in front of the ship loader (`FUN_14008e4f0`), only in new endless games (the
+  island code cave sets a flag when it copies a plan); savegames and scenarios are not touched. Deposits, crops and the
+  explored bit are set by the tool window in the first seconds of a new game.
+- Tests: `tests/test-islands.ps1` 30 checks (new section 7: the home island), `tests/test-patcher.ps1` 748 checks (new cases AX
+  (island file, plans at 2000 × 1400 and 1000 × 700, start ship, code caves) and AY (deposits, crops, explored, once,
+  not in loaded games)), `tests/test-install.ps1` 43. Checked in the running game (2000 × 1400 with giant islands): the home island loaded as a
+  northern island, your ship at its coast with the warehouse button, the rivals' ships far away, the four deposits on
+  tiles the game itself accepts for ore.
+
 ## 3.5.0 – 2026-11-22
 
 - **Fix "Cargo space":** since it was added (2026-11-10) this option did not raise the cargo but the hull of the ships. The value it scaled

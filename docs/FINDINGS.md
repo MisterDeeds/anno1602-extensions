@@ -1576,6 +1576,54 @@ island +0x20 + k × 8 (count +0x41): +0 = 2, +1 x, +2 y, +4 kind (0 ore, 1 gold)
 gold 0xA00 = 80 t), set by the SZENE loader on rock tiles that haeuser.cod marks as ore mountains (`ROHSTERZ`:
 1108/1109/1110 "ERZBERG_GROSS", 1103/1107 "ERZBERG_KLEIN"; 1104/1105/1106 never); at most 2 per island from the loader.
 
+### Perfect home island (2026-11-22, version 3.6)
+
+**Wish (user):** the largest, flattest northern island, ore and gold right on it with mines possible, full production of
+tobacco and liquor – and the ship should start there.
+
+**Findings (O):**
+- Tobacco 0x2E, sugar cane 0x30 and wine 0x32 are northern crops (see "Crop climates"); liquor comes from sugar cane or
+  wine. Crop bits at island +0x5C: bit = crop − 0x2D (tobacco 1 … cocoa 6); with the bit a crop grows at 100 %.
+- Deposits: slots of 8 bytes at island +0x20 + k × 8, count +0x41 (see 3.5). The SZENE loader takes only rock tiles
+  whose building entry (gfx table RVA 0x6CBB00 → entry) has kind 0xC and +0x21 = '7' and that are the origin tile of the
+  rock (`FUN_140093720`: for turn 0 the first tile of the piece, for turns 1–3 the other corners). `FUN_14009eab0`
+  removes a deposit and only sets redraw flags (0x1406EB5C4 |= 0x40, 0x1405C4ED8) – the game draws deposits from the list.
+- **All four start ships of the endless templates lie within 10 tiles** (`[[48]]10`: 230/270, 230/263, 225/275,
+  226/269; `11`: 310/110 …; `12`: 80/270 …; SHIP4 +0x1C/+0x1E, owner +0x4B, not stretched). An island at the human's
+  ship would be the rivals' first island too.
+- The ship loader `FUN_14008e4f0(name, data, length)` creates each ship's figure at SHIP4 +0x1C/+0x1E; it starts with
+  `push rbx / push rsi / sub rsp,0x68` (RVA 0x8E4F0, 7 bytes, position-independent). In a template the SZENE chunk (with
+  our island code cave) is read before SHIP4.
+
+**Implementation (`-HomeIsland Perfect`):**
+- Island forge: `Home.Make` → `Nord\lar28.scp`, 160 × 140, from the first northern "lar" model with a valid coast
+  (outline, coast and forest as for the giant islands, no mountains), then `Forge.PlaceCornerMountains`: the game's
+  single mountain with rock 1110 (rock turned to 0), in each corner the free spot closest to it with 2 ≤ coast distance
+  ≤ 10. Header file 28, class 4, climate 0. `Home.Harbours`: per side the last open sea tile before the surf.
+- Planner: the home island first, at the 10-tile grid spot farthest from the start ships (up to 600 tiles) that covers
+  the fewest originals (−120 each); climate 0, class 4, file 28; covered originals are dropped. The ship place on the side
+  facing the start ships.
+- Start ship: the island code cave sets a flag (RVA 0xE5D30) after copying a plan; the ship loader jumps to a code cave
+  (RVA 0xE5D50, 122 bytes): flag set and chunk "SHIP4" → clear the flag; an entry of owner 0 at a template start (table
+  RVA 0xE5D38, 3 × from/to) gets the ship place; then the three instructions and back to 0x8E4F7.
+- Tool window: in the first 3000 clock steps of a game the island with class 4 / file 28 / climate 0 (160 × 140) gets
+  the deposits on the four rocks (ore, ore, gold, gold; 0x1E00 / 0xA00 like the loader), count 4, crop bits 0x7E, the
+  local player's explored bit; once per island (tiles pointer).
+- Offline (O): the plans put the island 556–647 tiles from the start ships (2000 × 1400 and 1000 × 700, all three layouts),
+  0–3 originals dropped, the human's ship always on open sea; test-islands 30, test-patcher AX/AY.
+- **First game test (O): the game exited at "Spiel starten"** – also with the ship loader jump taken back. Cause: the
+  island code cave writes the flag into the free end of .text, which is read-only (execute/read) for the game; the tool's
+  other markers there are written by the tool (with VirtualProtectEx), never by the game. Fix: the patch of the flag has
+  `Writable = $true`, the tool leaves that page PAGE_EXECUTE_READWRITE.
+- **Game test (O), 2026-11-22 13:40–13:50,** `-Width 2000 -Height 1400 -IslandSize Giant -HomeIsland Perfect -Rivers Off
+  -Mountains Edge -Volcanoes Off -Explored All -Resources Lots -Fertility Everywhere -Cargo 3 -Turbo -TurboLevel 16 -Ultra`,
+  new endless game (layout 2): the home island in island slot 0 at 8/808, 160 × 140, class 4, file 28, climate 0; the
+  human's ship "Secunda" at 88.5/822.5 (its ship place), the rivals' ships at the old start (131/352 …); the ship menu
+  shows the warehouse button right away; the tool window: "Heimatinsel: 2 Erz- und 2 Goldvorkommen …" – deposits
+  32/29 and 120/29 ore 240 t, 118/110 and 16/115 gold 80 t, each on the origin tile of a rock 1110 (gfx 5680 = base,
+  turn 0, building no. 282: kind 0xC, +0x21 '7', +0x3F 0 – exactly what the SZENE loader accepts), crop bits set,
+  explored. A regular island with file 28 of another class (big28, south) stayed untouched.
+
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
 - Tool with `-Pirates Strong -ShipSpeed 2 -StartGold 50000 -Storage 3`, 1000 × 700, layout 0 (43 islands). The test session then broke off with a connection error of the Claude app; the tool ended with exit 4 without renaming `lastgame.gam`.
