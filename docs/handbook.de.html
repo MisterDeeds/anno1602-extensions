@@ -101,7 +101,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
 
 <main>
   <header class="sheet masthead">
-    <div class="topline"><span class="course">Logbuch · Version 3.4.1 · Stand 22. November 2026</span><a class="lang-link" href="handbook.html" hreflang="en" lang="en">English</a></div>
+    <div class="topline"><span class="course">Logbuch · Version 3.5.0 · Stand 22. November 2026</span><a class="lang-link" href="handbook.html" hreflang="en" lang="en">English</a></div>
     <h1>Anno 1602 Erweiterungen</h1>
     <p class="lead">Grössere Welten, stärkere Gegner, günstigeres Bauen, mehr Leben auf See, sechs Kampagnen mit Geschichte – eine davon in einer Riesenwelt –, 15 Herausforderungen, Zufalls- und Tagesabenteuer, eigene Szenarien, Ereignisse, Zeitlimits und ein Logbuch neben dem Spiel. Alles läuft im Arbeitsspeicher, keine Spieldatei wird verändert.</p>
   </header>
@@ -112,7 +112,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
       <li><span>Auf dem Desktop <strong>„Anno 1602 – Erweiterungen“</strong> öffnen.</span></li>
       <li><span>Auf der Registerkarte <strong>Neues Spiel</strong> Optionen wählen oder eine Vorlage nehmen: <strong>Alles gross</strong> (maximal), <strong>Für Kampagnen</strong> (Kampagnen wie vorgesehen), <strong>Riesenwelt</strong> (das Weltreich auf 2000 × 1400), <strong>Gemütlich</strong> (in Ruhe bauen), <strong>Harte Probe</strong> (Gegner und Piraten in Höchstform) oder <strong>Alles auf Standard</strong>.</span></li>
       <li><span><strong>Mit Erweiterungen spielen</strong>. Im Spiel <em>Einzelspieler → Neues Spiel</em>: oben das Endlosspiel, ganz unten unter <em>Eigene Szenarien</em> die Kampagnen.</span></li>
-      <li><span>Mit <kbd>F7</kbd> auf bis zu 16-fache Geschwindigkeit. Nach Angriffsmeldungen schaltet das Spiel selbst zurück, dann F7 erneut drücken.</span></li>
+      <li><span>Mit <kbd>F7</kbd> auf bis zu 16-fache Geschwindigkeit, mit <kbd>F8</kbd> auf Ultra-Tempo (bis 128-fach, Option «Ultra»). Nach Angriffsmeldungen schaltet das Spiel selbst zurück, dann die Taste erneut drücken.</span></li>
       <li><span>Später weiterspielen: Registerkarte <strong>Weiterspielen</strong>, Spielstand auswählen, <strong>Mit diesen Einstellungen spielen</strong>, dann im Spiel <em>Spiel laden</em>. Der Spielstand wird mit genau den Optionen geladen, mit denen er entstanden ist.</span></li>
     </ol>
   </section>
@@ -138,7 +138,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
           <tr><td>Ereignisse</td><td>Zufällige Ereignisse während des Spiels (siehe unten)</td><td>Aus · Selten · Häufig</td></tr>
           <tr><td>Dein Startgold</td><td>Gold bei neuen Spielen</td><td>bis 100 000</td></tr>
           <tr><td>Einwohner je Haus</td><td>Grössere Städte</td><td>× 1 bis × 5 (bis 200 je Haus)</td></tr>
-          <tr><td>Turbo (F7)</td><td>Geschwindigkeit der Taste F7</td><td>4 · 8 · 12 · 16-fach</td></tr>
+          <tr><td>Turbo (F7)</td><td>Geschwindigkeit der Taste F7</td><td>4 · 8 · 12 · 16-fach</td></tr><tr><td>Ultra (F8)</td><td>Neue Taste F8</td><td>aus · 32 · 64 · 128-fach</td></tr>
           <tr><td>Produktionstempo</td><td>Alle Betriebe arbeiten schneller</td><td>× 1 bis × 3</td></tr>
           <tr><td>Lager je Ware</td><td>Kontore und Märkte fassen mehr</td><td>× 1 bis × 5</td></tr>
           <tr><td>Baukosten</td><td>Gold, Werkzeug, Holz und Ziegel je Gebäude (auch für die Gegner)</td><td>Normal · × 0,75 · Halb · Ein Viertel · Gratis</td></tr>
@@ -147,7 +147,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
           <tr><td>Einflussradius</td><td>Kontor, Markt und öffentliche Bauten reichen weiter</td><td>× 1 · × 1,5 · × 2</td></tr>
           <tr><td>Erz- und Goldminen</td><td>Vorkommen erschöpfen sich nie</td><td>Normal · Unerschöpflich</td></tr>
           <tr><td>Schiffstempo</td><td>Alle Schiffe fahren schneller</td><td>× 1 bis × 3</td></tr>
-          <tr><td>Laderaum</td><td>Tonnen je Laderaum der baubaren Schiffe</td><td>× 1 bis × 3</td></tr>
+          <tr><td>Laderäume</td><td>Laderäume zu 50 t der baubaren Schiffe</td><td>4 · 6 · 8 (kleines Handelsschiff)</td></tr>
         </tbody>
       </table>
     </div>
@@ -382,7 +382,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
   </section>
 
   <footer class="foot">
-    <p>Gebaut mit Reverse Engineering der History Edition. Geprüft: 702 automatische Tests am geladenen Spielcode und 21 mit allen Inseldateien des Spiels, dazu Läufe im echten Spiel (50 Inseln, 14 Dörfer, bis 12 Piratenschiffe, Wettlauf, Siegbedingungen, Startflotte) und ein Dauerlauf über 14,5 Spielstunden bei 16-fach mit allen Optionen: immer reagierend, 430 bis 490 MB Speicher. Version 3.0.0 ist ohne Spiel geprüft (alle 41 Szenarien in beiden Sprachen, 200 Zufallsabenteuer, eigene Szenarien, 147 Selbsttests des Logbuchs, 27 Prüfungen des Installers in einer abgeschotteten Umgebung) und am 15. November 2026 im laufenden Spiel getestet: das Zeitlimit von „Gegen die Uhr“ (Uhr, Spielstand, verloren bei Fristende), die Ereignisse ausser den beiden Steuer-Ereignissen, „Land der vielen Völker“ auf der grossen Karte und ein eigenes Szenario mit 4 Stunden Zeitlimit. Version 3.1.0 wurde am selben Tag im laufenden Spiel geprüft: „Weltreich 1“ mit der Vorlage „Riesenwelt“ (alle 50 Inseln der Riesenwelt-Karte am Platz, die Gegner siedeln in fernen Reichen), in 1000 × 700 (grosse Fassung) und ohne Erweiterungen (klassische Karte). Version 3.4.0 wurde am 22. November 2026 im laufenden Spiel geprüft: alle 50 Inseln mit sechs Riesen-Inseln, kein Fluss mehr, die Berge an der Küste, die Hauptstädte der Gegner bis zu Aristokraten gewachsen. Die Balance der 36 seit November 2026 dazugekommenen Szenarien ist noch nicht durchgespielt.</p>
+    <p>Gebaut mit Reverse Engineering der History Edition. Geprüft: 727 automatische Tests am geladenen Spielcode und 21 mit allen Inseldateien des Spiels, dazu Läufe im echten Spiel (50 Inseln, 14 Dörfer, bis 12 Piratenschiffe, Wettlauf, Siegbedingungen, Startflotte) und ein Dauerlauf über 14,5 Spielstunden bei 16-fach mit allen Optionen: immer reagierend, 430 bis 490 MB Speicher. Version 3.0.0 ist ohne Spiel geprüft (alle 41 Szenarien in beiden Sprachen, 200 Zufallsabenteuer, eigene Szenarien, 147 Selbsttests des Logbuchs, 27 Prüfungen des Installers in einer abgeschotteten Umgebung) und am 15. November 2026 im laufenden Spiel getestet: das Zeitlimit von „Gegen die Uhr“ (Uhr, Spielstand, verloren bei Fristende), die Ereignisse ausser den beiden Steuer-Ereignissen, „Land der vielen Völker“ auf der grossen Karte und ein eigenes Szenario mit 4 Stunden Zeitlimit. Version 3.1.0 wurde am selben Tag im laufenden Spiel geprüft: „Weltreich 1“ mit der Vorlage „Riesenwelt“ (alle 50 Inseln der Riesenwelt-Karte am Platz, die Gegner siedeln in fernen Reichen), in 1000 × 700 (grosse Fassung) und ohne Erweiterungen (klassische Karte). Version 3.4.0 wurde am 22. November 2026 im laufenden Spiel geprüft: alle 50 Inseln mit sechs Riesen-Inseln, kein Fluss mehr, die Berge an der Küste, die Hauptstädte der Gegner bis zu Aristokraten gewachsen. Die Balance der 36 seit November 2026 dazugekommenen Szenarien ist noch nicht durchgespielt.</p>
     <p>Nur für das Einzelspiel und die Ubisoft-Connect-Version. Nach einem Spiel-Update bricht das Werkzeug ab, ohne etwas zu ändern.</p>
   </footer>
 </main>

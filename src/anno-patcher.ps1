@@ -95,9 +95,12 @@
                                   level (normally 2/6/15/25/40). haeuser.cod "Maxwohn" of the 5
                                   population groups, x 64 as int at RVA 0x6BA02C + no. * 0x50
                                   (parser FUN_140090660, read among others in FUN_1400b7c60).
-    Cargo (-Cargo)                Factor 1 to 3 for the tons per cargo slot of the buildable ships
-                                  (small/large trading and war ship, no. 21-28).
-                                  figuren.cod "Maxware", 16 bits x 32 at figure table +0x3E.
+    Cargo (-Cargo)                Factor 1 to 3 for the number of cargo holds of the buildable ships
+                                  (small/large trading and war ship, no. 21-28), at most 8 (the ship
+                                  record has 8 holds, the large war ship already uses them); every hold
+                                  takes 50 t. figuren.cod "Maxware", 16 bits at figure table +0x3A
+                                  (4/6/3/8). Until 3.4 this option scaled +0x3E, which is "Maxenergy"
+                                  (the hull): start ships then began with a third of their hull.
     Production (-Production)      Factor 1 to 3 for the work speed of all production buildings. Divides
                                   haeuser.cod "Interval" (16 bits at building table +0x3A) of all
                                   500 entries by the factor. The game reads the value at
@@ -108,6 +111,22 @@
                                   correspondingly faster (FUN_1400e2d60, RVA 0xE3376:
                                   mov ecx,4 -> mov ecx,8/12/16). The game loop FUN_1400c8e20 works
                                   with any factor; F5/F6 stay 1x and 2x.
+    Explored (-Explored All)      Every island counts as explored by you from the start: its ore and gold
+                                  deposits are visible and the natives are known without sailing there.
+                                  Island table RVA 0x62DDC0 (50 x 0x2CC8), +0x43 = one bit per player
+                                  who knows the island (set by FUN_140077210 when a ship of that player
+                                  reaches it; FUN_1400c6c50 then draws the explored tiles of +0x2CB0
+                                  instead of +0x2CC0). While the game runs, this window sets the bit of
+                                  the local player (RVA 0x5F1D60) on every island (new and loaded games).
+    Ultra (-Ultra)                New key F8: 32x, with -UltraLevel 48, 64, 96 or 128 correspondingly.
+                                  The key switch of FUN_1400e2d60 ends at F7 (keys 0x10-0x76);
+                                  its "ja" to the end (RVA 0xE2D7E) goes to a code cave (RVA
+                                  0xE5BE0): F8 -> FUN_1400c8be0(level) like F5-F7, every other key
+                                  on to the end as before. Works with or without -Turbo. F8 alone
+                                  is also an accelerator of the game (player status): a filter in
+                                  front of TranslateAcceleratorA (RVA 0xED11 -> code cave 0xE5D00)
+                                  lets F8 without Shift/Ctrl through to the switch; the status stays
+                                  on the STATUS button and Shift/Ctrl+F8.
     Rival gold (-RivalGold)       Gold of the three computer rivals (slots 1-3) in new games,
                                   0 = as the template. In the same hook as the start gold.
     Rivals (-Rivals)              Hard: the computer rivals always plan military and expansion as
@@ -228,6 +247,13 @@ param(
     [switch]$Turbo,
     # Speed of F7 with -Turbo: 8, 12 or 16x.
     [ValidateSet(8, 12, 16)][int]$TurboLevel = 8,
+    # Islands explored from the start: Default (as in the game, a ship has to visit them) or All (the resources of every
+    # island are known at once).
+    [ValidateSet('Default', 'All')][string]$Explored = 'Default',
+    # New key F8 for ultra speed (the game has no F8 speed).
+    [switch]$Ultra,
+    # Speed of F8 with -Ultra: 32, 48, 64, 96 or 128x (measured in the game at 2000 x 1400 with giant islands: all exact).
+    [ValidateSet(32, 48, 64, 96, 128)][int]$UltraLevel = 32,
     # Gold of the three computer rivals in new games (0 = as the template).
     [ValidateRange(0, 9999999)][int]$RivalGold = 0,
     # Computer rivals: Default (as the difficulty) or Hard (always as the highest level).
@@ -556,7 +582,7 @@ function Build-IslandCode([bool]$withResources = $false, [bool]$withBigMap = $fa
 # south (template 2 / 2). The loader picks that many islands whose island file has a village site
 # (table 0x1400F94E4-0x1400F98A3: 240 files of the classes lit to big, no "lar") and loads them
 # from NORDNAT/SUEDNAT. Each village takes one of the 75 settlement slots (FUN_14009a9f0, 0x140622DC0).
-$ResourceCaveRva = 0xE5C00; $ResourceCaveEnd = 0xE5E00   # from 0xE5E00: code caves for pirates and traders
+$ResourceCaveRva = 0xE5C00; $ResourceCaveEnd = 0xE5D00   # from 0xE5D00: F8 accelerator cave (3.5), from 0xE5E00: pirates and traders
 $ResourceOffsets = @(0x96, 0x9E, 0xA6, 0xAE, 0xB6, 0xBE, 0xC6, 0xCE, 0xD6, 0xDE, 0xE6, 0xEE, 0xF6, 0xFE, 0x106, 0x10E, 0x116)
 # Fertility everywhere: the 12 fertility entries from +0xB4 (house no. 16 bits, amount 16 bits, int) get the
 # amount 50 (where a house no. is set), SZENE +0x60 (most fertilities per island, template 2) the marker
@@ -1129,6 +1155,54 @@ if ($Turbo) {
     Write-Host (Txt "Turbo: F7 = ${TurboLevel}x" "Turbo: F7 = $TurboLevel-fach")
 }
 
+# --- Ultra (F8) ----------------------------------------------------------------------------------
+# The key switch of FUN_1400e2d60: "add r8d,-0x10 / cmp r8d,0x66 / ja end" (RVA 0xE2D7E, 0F 87 to RVA 0xE3380 =
+# "return 0"), then a byte table of 0x67 entries. F8 (0x77) is 0x67 after the subtraction, just behind the table.
+# The "ja" goes to a code cave (RVA 0xE5BE0, free bytes after the event marker): cmp r8d,0x67 / jne end /
+# mov ecx,<level> / call FUN_1400c8be0 / jmp end. Same stack as in the switch cases (they call FUN_1400c8be0 too).
+$UltraCaveRva = 0xE5BE0; $UltraHookRva = 0xE2D7E; $UltraHookOrig = '0F 87 FC 05 00 00'; $KeyEndRva = 0xE3380; $SetSpeedRva = 0xC8BE0
+function Build-UltraCode([int]$level) {
+    $c = New-Object System.Collections.Generic.List[byte]
+    foreach ($x in 0x41, 0x83, 0xF8, 0x67) { $c.Add($x) }                                                # cmp r8d,0x67 (F8)
+    foreach ($x in 0x75, 0x0A) { $c.Add($x) }                                                            # jne +10
+    $c.Add(0xB9); foreach ($x in [BitConverter]::GetBytes([int32]$level)) { $c.Add($x) }                 # mov ecx,level
+    $c.Add(0xE8); foreach ($x in (Rel32 $SetSpeedRva ($UltraCaveRva + $c.Count + 4))) { $c.Add($x) }     # call FUN_1400c8be0
+    $c.Add(0xE9); foreach ($x in (Rel32 $KeyEndRva ($UltraCaveRva + $c.Count + 4))) { $c.Add($x) }       # jmp end (return 0)
+    , $c.ToArray()
+}
+# F8 alone is also an accelerator of the game (resource 0x8B: F8 -> command 0x9CBA = player status, Ctrl+F8 0x9CBB,
+# Shift+F8 0x9CCA; F9-F12 too): the message loop FUN_14000ec00 calls TranslateAcceleratorA (RVA 0xED11,
+# "call [IAT 0xE64B8]") and does not dispatch a translated key, so the WM_KEYDOWN of F8 never reached the switch
+# (measured in the game: speed stayed 1, the status page opened). That call goes to a second code cave (RVA 0xE5D00):
+# WM_KEYDOWN (msg +8 = 0x100) of F8 (msg +0x10 = 0x77) without Shift/Ctrl (the game keeps them in bits 4/8 of RVA
+# 0x5EBE9C, from every mouse message and the Shift/Ctrl keys) -> eax = 0 ("not translated", TranslateMessage and
+# DispatchMessage follow); everything else -> jmp [IAT] (TranslateAcceleratorA with the same registers and stack).
+# The player status stays on the STATUS button and Shift/Ctrl+F8.
+$UltraAccelCaveRva = 0xE5D00; $UltraAccelCallRva = 0xED11; $UltraAccelCallOrig = 'FF 15 A1 77 0D 00'; $AccelIatRva = 0xE64B8; $ModifierFlagsRva = 0x5EBE9C
+function Build-UltraAccelCode {
+    $c = New-Object System.Collections.Generic.List[byte]
+    foreach ($x in 0x41, 0x81, 0x78, 0x08, 0x00, 0x01, 0x00, 0x00) { $c.Add($x) }                     # cmp dword [r8+8],0x100 (WM_KEYDOWN)
+    $c.Add(0x75); $c.Add(0); $j1 = $c.Count - 1                                                          # jne translate
+    foreach ($x in 0x41, 0x83, 0x78, 0x10, 0x77) { $c.Add($x) }                                         # cmp dword [r8+0x10],0x77 (F8)
+    $c.Add(0x75); $c.Add(0); $j2 = $c.Count - 1                                                          # jne translate
+    $c.Add(0xF6); $c.Add(0x05); foreach ($x in (Rel32 $ModifierFlagsRva ($UltraAccelCaveRva + $c.Count + 5))) { $c.Add($x) }; $c.Add(0x0C)   # test byte [flags],0x0C (Shift/Ctrl)
+    $c.Add(0x75); $c.Add(0); $j3 = $c.Count - 1                                                          # jne translate
+    foreach ($x in 0x31, 0xC0, 0xC3) { $c.Add($x) }                                                     # xor eax,eax / ret
+    $t = $c.Count
+    foreach ($j in $j1, $j2, $j3) { $c[$j] = [byte]($t - ($j + 1)) }
+    $c.Add(0xFF); $c.Add(0x25); foreach ($x in (Rel32 $AccelIatRva ($UltraAccelCaveRva + $c.Count + 4))) { $c.Add($x) }   # translate: jmp [TranslateAcceleratorA]
+    , $c.ToArray()
+}
+if ($Ultra) {
+    $UltraCode = Build-UltraCode $UltraLevel
+    $UltraAccelCode = Build-UltraAccelCode
+    $Patches += @{ Name = (Txt 'Ultra speed F8 (code cave)  ' 'Ultra-Tempo F8 (Codestueck) '); Rva = $UltraCaveRva; Original = ((@('00') * $UltraCode.Length) -join ' '); Target = $UltraCode; MemoryOnly = $true }
+    $Patches += @{ Name = (Txt 'Ultra speed F8 (key filter) ' 'Ultra-Tempo F8 (Tastenfilter'); Rva = $UltraAccelCaveRva; Original = ((@('00') * $UltraAccelCode.Length) -join ' '); Target = $UltraAccelCode; MemoryOnly = $true }
+    $Patches += @{ Name = (Txt 'Ultra speed F8 (accelerator)' 'Ultra-Tempo F8 (Kuerzel)    '); Rva = $UltraAccelCallRva; Original = $UltraAccelCallOrig; Target = [byte[]](@(0xE8) + (Rel32 $UltraAccelCaveRva ($UltraAccelCallRva + 5)) + @(0x90)) }
+    $Patches += @{ Name = ((Txt 'Ultra speed F8 ({0}x)' 'Ultra-Tempo F8 ({0}-fach)') -f $UltraLevel).PadRight(28); Rva = $UltraHookRva; Original = $UltraHookOrig; Target = [byte[]](@(0x0F, 0x87) + (Rel32 $UltraCaveRva ($UltraHookRva + 6))) }
+    Write-Host (Txt "Ultra: F8 = ${UltraLevel}x" "Ultra: F8 = $UltraLevel-fach")
+}
+
 # --- Mines ---------------------------------------------------------------------------------------
 # FUN_1400b9ed0, case 3 (mine): the deposit (island +0x20 + i*8: ware, x, y, -, kind +4, amount +6 in
 # tons x 32) loses haeuser.cod "Rohmenge" (+0x26 of the mine) per work step and disappears below 1 t
@@ -1200,12 +1274,17 @@ if ($Volcanoes -eq 'Off' -and $Disasters -ne 'Off') {
 $ResidentRva = 0x6BA02C; $ResidentSize = 0x50
 $ResidentOrig = @(128, 384, 960, 1600, 2560)   # 2/6/15/25/40 residents x 64
 if ($Residents -ne 1.0) { Write-Host ((Txt 'Residents: x{0:0.##} ({1} instead of 40 per house of the highest level)' 'Einwohner: x{0:0.##} ({1} statt 40 je Haus der hoechsten Stufe)') -f $Residents, [int][math]::Round(40 * $Residents)) }
-# Cargo: figuren.cod "Maxware" (tons per cargo slot x 32) as 16 bits at figure table +0x3E;
-# read among others by the ship loader FUN_14008e4f0. No. 21-28: small/large trading ship,
-# small/large war ship (50/80/65/120 t, read in the game 2026-11-09).
-$CargoOffset = 0x3E
-$CargoOrig = @{ 21 = 1600; 22 = 1600; 23 = 2560; 24 = 2560; 25 = 2080; 26 = 2080; 27 = 3840; 28 = 3840 }
-if ($Cargo -ne 1.0) { Write-Host ((Txt 'Cargo: x{0:0.##} (small trading ship {1} t instead of 50 t per cargo slot)' 'Laderaum: x{0:0.##} (kleines Handelsschiff {1} t statt 50 t je Laderaum)') -f $Cargo, [int][math]::Round(50 * $Cargo)) }
+# Cargo: figuren.cod "Maxware" = number of cargo holds, 16 bits at figure table +0x3A (parser FUN_140068f10;
+# the ship functions loop over that many holds of 4 bytes at ship +0x300, e.g. FUN_140021840). The figure parser
+# stores "Maxtrag" x32 at +0x38, "Maxkanon" at +0x3C, "Maxenergy" x32 at +0x3E (hull: ship +0x12 is the current
+# value, the ship loader FUN_14008e4f0 caps it there, the shipyard repairs up to it), "Hitpoint" at +0x40.
+# Every hold takes 50 t (0x640 in the loading code). No. 21-28: small/large trading ship, small/large war ship,
+# two entries each: 4/6/3/8 holds (figuren.cod). The ship record has 8 holds (SHIP4 +0x174: 8 x 8 bytes), so at
+# most 8, as the large war ship already has.
+$CargoOffset = 0x3A; $CargoMaxHolds = 8
+$CargoOrig = @{ 21 = 4; 22 = 4; 23 = 6; 24 = 6; 25 = 3; 26 = 3; 27 = 8; 28 = 8 }
+function Get-CargoHolds([int]$orig, [double]$factor) { [int][math]::Min($CargoMaxHolds, [math]::Floor($orig * $factor + 0.5)) }
+if ($Cargo -ne 1.0) { Write-Host ((Txt 'Cargo: x{0:0.##} (small trading ship {1} holds of 50 t instead of 4)' 'Laderaum: x{0:0.##} (kleines Handelsschiff {1} Laderaeume zu 50 t statt 4)') -f $Cargo, (Get-CargoHolds 4 $Cargo)) }
 # Production: haeuser.cod "Interval" as 16 bits at building table +0x3A (parser 0x140091... ,
 # DAT_1406ba1fa). Read at every work step in FUN_1400b43e0 and FUN_1400b9ed0 through the
 # pointer to the building entry. Marker 'NUFR' + factor x 100 at RVA 0xE5F70 (free bytes before the
@@ -2197,6 +2276,43 @@ function Invoke-RivalSupplyTick {
     }
 }
 
+# --- All islands explored (-Explored All, 3.5) -----------------------------------------------------
+# Island table RVA 0x62DDC0, 50 slots of 0x2CC8 (tiles at +0x2CB0, 0 = free slot); +0x43 holds one bit per player that
+# knows the island. The game sets it in FUN_140077210 when a ship reaches the island (and reports the natives there to
+# the local player); FUN_1400c6c50 draws an island the local player knows with its explored tiles (+0x2CB0, ore and
+# gold deposits) instead of +0x2CC0. This window sets the local player's bit on every island while the game runs (new
+# games and loaded ones; once set, the game keeps it and stores it in the savegame).
+$ExploreIslandRva = 0x62DDC0; $ExploreIslandSize = 0x2CC8; $ExploreIslandCount = 50; $ExploreBitOffset = 0x43; $ExploreTilesOffset = 0x2CB0
+$script:ExploredTotal = 0
+# One round (needs $script:h and $script:base). Returns the number of islands newly marked.
+function Invoke-Explore {
+    if ([BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0) -le 0) { return 0 }
+    $me = (Read-Mem $EventLocalPlayerRva 1)[0]
+    if ($me -gt 3) { return 0 }
+    $bit = [byte](1 -shl $me)
+    $t = Read-Mem $ExploreIslandRva ($ExploreIslandCount * $ExploreIslandSize)
+    $n = 0
+    for ($i = 0; $i -lt $ExploreIslandCount; $i++) {
+        $o = $i * $ExploreIslandSize
+        if ([BitConverter]::ToInt64($t, $o + $ExploreTilesOffset) -eq 0) { continue }
+        $v = $t[$o + $ExploreBitOffset]
+        if (($v -band $bit) -ne 0) { continue }
+        Write-Mem ($ExploreIslandRva + $o + $ExploreBitOffset) ([byte[]]@([byte]($v -bor $bit))) $false
+        $n++
+    }
+    $n
+}
+# Called by the waiting loops.
+function Invoke-ExploreTick {
+    if ($Explored -ne 'All') { return }
+    $n = 0
+    try { $n = Invoke-Explore } catch { return }
+    if ($n -gt 0) {
+        $script:ExploredTotal += $n
+        Write-Host ((Txt 'Islands explored: {0} more ({1} in this session) - their ore and gold deposits are visible.' 'Inseln erkundet: {0} weitere ({1} in dieser Sitzung) - ihre Erz- und Goldvorkommen sind sichtbar.') -f $n, $script:ExploredTotal)
+    }
+}
+
 function Invoke-EventLoop($proc) {
     $script:h = [AnnoMem]::OpenProcess(0x0008 -bor 0x0010 -bor 0x0020 -bor 0x0400, $false, $proc.Id)
     if ($script:h -eq [IntPtr]::Zero) {
@@ -2226,6 +2342,7 @@ function Invoke-EventLoop($proc) {
             if (-not (Test-Running)) { break }
             if ($TestProcessId -ne 0 -and ((Get-Date) -gt $script:deadline -or ($EventTestUntilClock -gt 0 -and [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0) -ge $EventTestUntilClock))) { break }
             Invoke-RivalSupplyTick
+            Invoke-ExploreTick
             if (-not $on) { continue }
             $now = $sw.ElapsedMilliseconds
             try { Invoke-EventTick ($now - $last); $errors = 0 }
@@ -2379,10 +2496,10 @@ function Invoke-Patch($proc) {
         if ($r) { Write-Host ((Txt 'Residents x{0:0.##}: at most {1} per house (5 values set).' 'Einwohner x{0:0.##}: hoechstens {1} je Haus (5 Werte gesetzt).') -f $Residents, (($e | ForEach-Object { [math]::Round($_.Target / 64, 1) }) -join '/')) -ForegroundColor Green }
     }
     if ($Cargo -ne 1.0) {
-        $e = foreach ($nr in ($CargoOrig.Keys | Sort-Object)) { @{ Rva = $FigureRva + $nr * $FigureSize + $CargoOffset; Orig = $CargoOrig[$nr]; Target = [math]::Min(65535, [int][math]::Round($CargoOrig[$nr] * $Cargo)); Bytes = 2 } }
+        $e = foreach ($nr in ($CargoOrig.Keys | Sort-Object)) { @{ Rva = $FigureRva + $nr * $FigureSize + $CargoOffset; Orig = $CargoOrig[$nr]; Target = (Get-CargoHolds $CargoOrig[$nr] $Cargo); Bytes = 2 } }
         $r = Set-TableValues (Txt 'Cargo' 'Laderaum') $e
         if ($null -eq $r) { return $false }
-        if ($r) { Write-Host ((Txt 'Cargo x{0:0.##}: {1} t per cargo slot (8 ship values set).' 'Laderaum x{0:0.##}: {1} t je Laderaum (8 Schiffswerte gesetzt).') -f $Cargo, (($e | Where-Object { $true } | Select-Object -Index 0, 2, 4, 6 | ForEach-Object { [math]::Round($_.Target / 32) }) -join '/')) -ForegroundColor Green }
+        if ($r) { Write-Host ((Txt 'Cargo x{0:0.##}: {1} holds of 50 t (small/large trading ship, small/large war ship; 8 ship values set).' 'Laderaum x{0:0.##}: {1} Laderaeume zu 50 t (kleines/grosses Handelsschiff, kleines/grosses Kriegsschiff; 8 Schiffswerte gesetzt).') -f $Cargo, (($e | Select-Object -Index 0, 2, 4, 6 | ForEach-Object { $_.Target }) -join '/')) -ForegroundColor Green }
     }
     if ($Production -ne 1.0) {
         $r = Set-Production $Production
@@ -2474,9 +2591,9 @@ Write-Host (Txt 'Done. Now start a NEW endless game in the game (do not load an 
 
 # --- 6. Protection for "Continue game", events ---------------------------------------------------
 $eventsOn = $Events -ne 'Off'
-$supplyOn = $RivalGrowth -eq 'Ambitious'
+$supplyOn = $RivalGrowth -eq 'Ambitious' -or $Explored -eq 'All'   # the waiting loop with the ticks of supply / exploring
 if ($TestProcessId -eq 0 -and (-not $NoLastgameProtection -or $eventsOn -or $supplyOn)) {
-    if ($NoLastgameProtection) { Write-Host (Txt 'This window stays open until the game exits (events, supply for the rivals).' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Ereignisse, Nachschub fuer die Gegner).') -ForegroundColor Yellow }
+    if ($NoLastgameProtection) { Write-Host (Txt 'This window stays open until the game exits (events, supply for the rivals, exploring).' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Ereignisse, Nachschub fuer die Gegner, Erkunden).') -ForegroundColor Yellow }
     else { Write-Host (Txt 'This window stays open until the game exits (protection for "Continue game").' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Schutz fuer "Spiel fortsetzen").') -ForegroundColor Yellow }
     # The events (and the supply for the rivals) run while the game runs; whatever happens to them, the protection
     # below still follows.
@@ -2487,7 +2604,7 @@ if ($TestProcessId -eq 0 -and (-not $NoLastgameProtection -or $eventsOn -or $sup
     elseif ($supplyOn) {
         $script:h = [AnnoMem]::OpenProcess(0x0008 -bor 0x0010 -bor 0x0020 -bor 0x0400, $false, $proc.Id)
         if ($script:h -ne [IntPtr]::Zero) {
-            try { while (-not $proc.HasExited) { Invoke-RivalSupplyTick; Start-Sleep -Seconds 2; $proc.Refresh() } }
+            try { while (-not $proc.HasExited) { Invoke-RivalSupplyTick; Invoke-ExploreTick; Start-Sleep -Seconds 2; $proc.Refresh() } }
             finally { [void][AnnoMem]::CloseHandle($script:h) }
         }
     }

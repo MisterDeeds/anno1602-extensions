@@ -6,7 +6,7 @@
 *[English version](README.md)*
 
 Ein Fan-Projekt für **Anno 1602 History Edition** (Ubisoft Connect): grössere Welt, mehr Inseln,
-stärkere Gegner, günstigeres Bauen und reichere Städte, Turbo bis 16-fach, zufällige Ereignisse
+stärkere Gegner, günstigeres Bauen und reichere Städte, Turbo bis 16-fach (mit F8 bis 128-fach), zufällige Ereignisse
 während des Spiels, 49 eigene Szenarien mit Geschichte und Auftrag (sechs Kampagnen – eine davon für die
 Riesenwelt gebaut – und 15 Herausforderungen, einige gegen die Uhr), ein Szenario-Baukasten, Zufalls- und Tagesabenteuer und
 ein Logbuch-Fenster mit Verlaufskurven neben dem Spiel.
@@ -66,6 +66,7 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 | Flüsse | keine: Flüsse werden zu Wiese, Mündung und Quelle zu Strand und Hang (mehr Bauland) |
 | Berge | am Rand: Berge, die mitten auf der Insel stehen, rücken an die Küste – lange Gebirgszüge als einzelne Berge; die Inselmitte bleibt frei |
 | Vulkan | keiner: der einzige Vulkan des Spiels wird ein normaler Berg, es gibt keine Ausbrüche |
+| Erkundet | alle Inseln von Anfang an: ihre Erz- und Goldvorkommen sind sichtbar und die Ureinwohner bekannt, ohne hinzufahren |
 | Rohstoffe | Mehr: Erz, Gold, Fruchtbarkeit und Schätze passend zur Inselzahl; Viele: doppelt |
 | Ureinwohner | 4 + 4 oder 7 + 7 Dörfer statt 2 + 2 |
 | Fruchtbarkeit | jede Pflanze auf jeder Insel (neue Endlosspiele) |
@@ -76,7 +77,8 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 | Katastrophen | keine (kein Feuer, keine Pest, Dürre oder Vulkan) oder häufiger |
 | Gold | Startgold für dich und für die Gegner |
 | Einwohner je Haus | ×1,5 bis ×5 |
-| Produktion, Schiffstempo, Laderaum | ×1,5 bis ×3 |
+| Produktion, Schiffstempo | ×1,5 bis ×3 |
+| Laderäume | mehr Laderäume zu 50 t: kleines Handelsschiff 6 oder 8 statt 4, höchstens 8 auf jedem Schiff |
 | Lager je Ware | ×2 bis ×5 |
 | Baukosten | ×0,75, halb, ein Viertel oder gratis (Gold, Werkzeug, Holz und Ziegel; auch für die Gegner) |
 | Betriebskosten | ×0,75, halb, ein Viertel oder keine |
@@ -85,6 +87,7 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 | Erz- und Goldminen | unerschöpflich |
 | Ereignisse | zufällige Ereignisse während des Spiels, selten oder häufig (siehe [Ereignisse](#ereignisse)) |
 | Turbo (F7) | 8-, 12- oder 16-fache Geschwindigkeit |
+| Ultra (F8) | neue Taste F8: 32-, 64- oder 128-fache Geschwindigkeit (das Spiel kennt kein F8-Tempo) |
 
 ## Das Startfenster
 
@@ -100,11 +103,11 @@ Das Startfenster hat drei Registerkarten:
 
   | Vorlage | Einstellungen |
   |---|---|
-  | **Alles gross** | 1000 × 700, gigantische Inseln, viele Rohstoffe, 7 + 7 Dörfer, dreimal so viele Händler, Gegner wie „Schwer“ und ehrgeizig mit 60 000 Gold, Piraten greifen an mit bis zu 8 Schiffen, Einwohner ×5, Lager ×5, Laderaum ×3, Produktion und Schiffe ×2, Turbo 16-fach, dein Gold 50 000 |
-  | **Für Kampagnen** | grosse Karte und Turbo 16-fach, alles andere wie im Szenario vorgesehen |
-  | **Riesenwelt** | 2000 × 1400 für die Karten der [Riesenwelt](#riesenwelt), Schiffe ×2 für die langen Seewege, Turbo 16-fach, alles andere wie im Szenario vorgesehen |
-  | **Gemütlich** | Bau- und Betriebskosten halbiert, Steuern ×2, Radius ×1,5, jede Pflanze überall, unerschöpfliche Minen, keine Piraten, keine Katastrophen, keine Flüsse, Berge am Rand, kein Vulkan, 100 000 Gold, Einwohner ×2, Produktion ×2, Lager ×3, grosse Inseln, viele Rohstoffe, Turbo 16-fach |
-  | **Harte Probe** | Gegner wie „Schwer“ und ehrgeizig mit 100 000 Gold, starke Piraten mit bis zu 12 Schiffen, mehr Katastrophen, 4 + 4 Dörfer, Turbo 16-fach |
+  | **Alles gross** | 1000 × 700, gigantische Inseln, viele Rohstoffe, 7 + 7 Dörfer, dreimal so viele Händler, Gegner wie „Schwer“ und ehrgeizig mit 60 000 Gold, Piraten greifen an mit bis zu 8 Schiffen, Einwohner ×5, Lager ×5, 8 Laderäume je Schiff, Produktion und Schiffe ×2, Turbo 16-fach und F8 32-fach, alle Inseln erkundet, dein Gold 50 000 |
+  | **Für Kampagnen** | grosse Karte und Turbo 16-fach, F8 32-fach, alles andere wie im Szenario vorgesehen |
+  | **Riesenwelt** | 2000 × 1400 für die Karten der [Riesenwelt](#riesenwelt), Schiffe ×2 für die langen Seewege, Turbo 16-fach und F8 32-fach, alles andere wie im Szenario vorgesehen |
+  | **Gemütlich** | Bau- und Betriebskosten halbiert, Steuern ×2, Radius ×1,5, jede Pflanze überall, unerschöpfliche Minen, keine Piraten, keine Katastrophen, keine Flüsse, Berge am Rand, kein Vulkan, alle Inseln erkundet, 100 000 Gold, Einwohner ×2, Produktion ×2, Lager ×3, grosse Inseln, viele Rohstoffe, Turbo 16-fach und F8 32-fach |
+  | **Harte Probe** | Gegner wie „Schwer“ und ehrgeizig mit 100 000 Gold, starke Piraten mit bis zu 12 Schiffen, mehr Katastrophen, 4 + 4 Dörfer, Turbo 16-fach und F8 32-fach |
   | **Alles auf Standard** | 1000 × 700 mit mehr Inseln und mehr Rohstoffen, sonst wie im Original |
 
 - **Weiterspielen**: deine Spielstände mit den Einstellungen, mit denen sie entstanden sind.
@@ -345,7 +348,7 @@ anno1602-extensions/
 │   ├── install.ps1                Installer hinter get.ps1, install.cmd, uninstall.cmd und der Apps-Liste
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
-│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (702 Prüfungen)
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (727 Prüfungen)
 │   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln (21 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
 │   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (43 Prüfungen)

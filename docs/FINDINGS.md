@@ -259,7 +259,7 @@ Found with REA/Ghidra (`analysis/scan/all-functions.c`: all 1,275 functions deco
 - **O Production:** `haeuser.cod` "Interval" is stored as 16 bits at building table +0x3A (`DAT_1406ba1fa`). It is read at every work step, in `FUN_1400b43e0` (`*(ushort*)(type + 0x3a) × share / 128`) and in `FUN_1400b9ed0` (the same), each time through the pointer to the building entry (hence no direct cross-reference list).
   - `MAXHAUS` = 500 (`FUN_140002ae0("MAXHAUS",500)`).
   - **I** Smaller intervals take effect immediately on all production buildings, also in loaded savegames.
-- **O Cargo space:** `figuren.cod` "Maxware" is stored as 16 bits at figure table +0x3E (`0x1406d80fe`, 26 reading functions, among them the ship loader `FUN_14008e4f0`).
+- **O Cargo space:** `figuren.cod` "Maxware" is stored as 16 bits at figure table +0x3E (`0x1406d80fe`, 26 reading functions, among them the ship loader `FUN_14008e4f0`). **Wrong, corrected 2026-11-22 (3.5):** +0x3E is "Maxenergy" (the hull); "Maxware" (number of holds) is +0x3A – see "Ship values, F8, explored islands".
 - **O Game speed:** keyboard `FUN_1400e2d60`: F5/F6/F7 → `FUN_1400c8be0(1/2/4)` (command 0x0F, variable `0x1400f99f8`).
   - The game loop `FUN_1400c8e20` computes `speed × time` in steps of 200 (upper limit only when speed × time > 2,999). `FUN_140060560` already has a branch for speed ≥ 5.
   - F7 at `0x1400E3376`: `B9 04 00 00 00` (`mov ecx,4`).
@@ -1526,6 +1526,55 @@ Read-only analysis of the decompiled AI (`analysis/scan/alle-funktionen.c`), the
   (`Invoke-RivalSupply`, every poll, at most once per 2000 clock steps): for every town of a player of kind 0xC with
   settlers or more, tools, bricks, cloth, liquor, tobacco goods and spices (from settlers), cocoa (from citizens), clothes
   and jewellery (from merchants) below 20 t are set to 30 t (at most the storage limit of the town). Gold untouched.
+
+### Ship values, F8, explored islands (2026-11-22, version 3.5)
+
+**"Cargo space" was the hull (O):** reported with a screenshot: the start ship's bar was mostly red with "Cargo ×3".
+The figure parser (`FUN_140068f10`, figure table RVA 0x6D80C0, 0x18C per entry) stores **"Maxtrag" ×32 at +0x38,
+"Maxware" at +0x3A, "Maxkanon" at +0x3C, "Maxenergy" ×32 at +0x3E, "Hitpoint" at +0x40**. figuren.cod: small/medium
+trading ship Maxware 4/6, Maxenergy 50/80; small/large warship 3/8, 65/120; free trader 6, 95; pirate 5, 95. The value
+the tool scaled since 2026-11-10 (+0x3E, "50/80/65/120 t") is therefore the hull: ship +0x12 is the current hull, the
+ship loader `FUN_14008e4f0` caps it at +0x3E (SHIP4 +0x3C holds the start value, the full hull of the original), the
+command 0x17 in `FUN_14008cef0` repairs up to it. With ×3 every start ship – the human's and the rivals' – began with a
+third. (The earlier "check" read back the written value; it never looked at a hold.) Holds: the ship functions loop
+over +0x3A holds of 4 bytes at ship +0x300 (good code, amount ×32 in bits 8–21); every hold takes 50 t (0x640 in nine
+loading/trade functions). The ship record has 8 holds (SHIP4 +0x174: 8 × 8 bytes), the large warship already has 8.
+- **Implementation:** `-Cargo F` now sets +0x3A of no. 21–28 to min(8, round(holds × F)): ×1.5 = 6/8/5/8, ×2 =
+  8/8/6/8, ×3 = 8 everywhere. +0x3E stays.
+- **In the game (O), 2026-11-22 12:18–12:30:** `-Cargo 3` (with the user's map options): holds of no. 21–28 = 8, hull
+  50/50/80/80/65/65/120/120 unchanged; all four start ships (human, 3 rivals) hull 100 % (1600/1600, 2560/2560), ship
+  window with 2 rows of 4 holds, the bar over the ship green.
+
+**F8 (O):** the key switch of `FUN_1400e2d60` ("add r8d,-0x10 / cmp r8d,0x66 / ja end", byte table 0xE33D0, jump
+table 0xE3390) handles F5–F7 (`FUN_1400c8be0(1/2/4)`); F8 = 0x77 lies just behind it. The first version (only the
+switch cave) did nothing in the game: F8 alone is an **accelerator** (resource 0x8B, loaded by `LoadAcceleratorsA`;
+digits with Shift/Ctrl, Ctrl+C/V, F8–F12: F8 → command 0x9CBA = player status page, Ctrl+F8 0x9CBB, Shift+F8 0x9CCA),
+and the message loop `FUN_14000ec00` does not dispatch a key that `TranslateAcceleratorA` translated (RVA 0xED11,
+`call [0xE64B8]`). 44 F8 presses opened the player status. The speed itself works at any level: 64 written directly
+gave exactly 64.0×; the command 0x0F handler sets the variable without a check.
+- **Implementation:** the call at 0xED11 goes to a filter (RVA 0xE5D00, 35 bytes): WM_KEYDOWN of F8 without the
+  Shift/Ctrl bits 4/8 of RVA 0x5EBE9C (the game sets them from every mouse message and on the Shift/Ctrl keys) returns
+  0, everything else goes on to `TranslateAcceleratorA` with the same registers and stack (`jmp [IAT]`). The switch's
+  "ja" goes to the cave at 0xE5BE0 (F8 → `FUN_1400c8be0(level)`, other keys → end). The resource cave now ends at
+  0xE5D00 (it uses 158 bytes).
+- **Measured (O), 2026-11-22 12:27–12:29,** new endless game 2000 × 1400 with 6 giant islands, game window behind other
+  windows: **32×, 48×, 64×, 96×, 128× all exact** (clock +6535/9802/13080/19620/26161 in 20.4 s), CPU 46–50 % of one
+  core at every level (F7 16×: 51 %) – at the start of a game the load is drawing, not game logic. With the Ctrl bit
+  set, F8 went to the game (speed stayed 1); without, 64×; F5 back to 1×. Levels offered: 32, 64, 128 (48 and 96 as
+  parameters).
+
+**Explored islands (O):** island +0x43 holds one bit per player that knows the island. `FUN_140077210` sets it when a
+ship of that player reaches the island (`FUN_14009d000` = island under the figure) and reports natives there to the
+local player (messages 0x2F/0x30); the ship loader sets it for start ships at an island. `FUN_1400c6c50` draws an
+island the local player knows with the tiles of +0x2CB0, otherwise +0x2CC0 (ore and gold deposits only on the first).
+- **Implementation:** `-Explored All`: the tool window ORs the local player's bit (RVA 0x5F1D60) into +0x43 of every
+  existing island (tiles pointer ≠ 0) while the game clock runs, every 2 s, new and loaded games.
+- **In the game (O):** 50 of 50 islands known to the local player right after the start (79 ore/gold deposits).
+
+**For the perfect home island (I, next version):** the ore and gold deposits of an island are slots of 8 bytes at
+island +0x20 + k × 8 (count +0x41): +0 = 2, +1 x, +2 y, +4 kind (0 ore, 1 gold), +6 amount ×32 (ore 0x1E00 = 240 t,
+gold 0xA00 = 80 t), set by the SZENE loader on rock tiles that haeuser.cod marks as ore mountains (`ROHSTERZ`:
+1108/1109/1110 "ERZBERG_GROSS", 1103/1107 "ERZBERG_KLEIN"; 1104/1105/1106 never); at most 2 per island from the loader.
 
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 

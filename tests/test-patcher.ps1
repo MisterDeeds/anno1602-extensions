@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   Offline test for src\anno-patcher.ps1, without starting the game.
 
@@ -42,7 +42,7 @@
        stay; a second run does not multiply twice; unexpected value: nothing set.
     N  -Residents: the 5 Maxwohn values (x 64) are multiplied, neighbours stay, no
        double multiplying, unexpected value: nothing set.
-    O  -Cargo: the 8 cargo values of the buildable ships are multiplied, the trader stays.
+    O  -Cargo: the cargo holds of the 8 buildable ship entries are multiplied (at most 8), the hull and the trader stay.
     P  -Production: intervals of the building table are divided (at least 1, 0 stays 0),
        marker set; a second run does not divide again.
     Q  -Turbo: F7 site "mov ecx,8", F6 untouched.
@@ -87,6 +87,10 @@
     AU Supply for ambitious rivals: the tool's Invoke-RivalSupply against fake towns in the helper process: luxury goods
        of rival towns with settlers filled (by stage, up to the storage limit), human and other towns untouched,
        once per 2000 clock steps, nothing after the end of the game.
+    AW -Explored All (3.5): the tool marks every existing island as known to the local player (island +0x43), only those
+       bytes change, nothing before the clock runs or for an invalid player.
+    AV -Ultra (3.5): the key filter in front of TranslateAcceleratorA lets F8 through; the "ja" of the key switch goes to the code cave, which compares F8 (0x77 - 0x10), sets the level
+       with FUN_1400c8be0 and returns like the other keys; F7 untouched; same run again, other level, with -Turbo.
     AH Everything together: all options, code caves and markers do not overlap, production x2 shortens
        exactly the 125 intervals counted in the game (2026-11-10).
   The event cases run the tool's event engine (functions and C# class loaded via the syntax tree) in this test
@@ -171,12 +175,12 @@ $CodeKind = @{ 'Width start' = 'Width'; 'Height start' = 'Height'; 'Range start'
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$null, [ref]$null)
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
-    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode)\b') -or
-        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock)\b') { . ([scriptblock]::Create($txt)) }
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode|Build-UltraCode|Get-CargoHolds|Build-UltraAccelCode)\b') -or
+        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|CargoMaxHolds|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock|UltraCaveRva|UltraHookRva|UltraHookOrig|KeyEndRva|SetSpeedRva|UltraAccelCaveRva|UltraAccelCallRva|UltraAccelCallOrig|AccelIatRva|ModifierFlagsRva)\b') { . ([scriptblock]::Create($txt)) }
     # Event engine (cases AI-AO): its constants, functions and the two C# types run here in the test process, against
     # the helper process ($script:h / $script:base as in the tool).
-    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Invoke-RivalSupply|Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs)\b') -or
-        $txt -cmatch '^\$Event[A-Z]\w*\s*=' -or ($txt -match '^Add-Type -TypeDefinition' -and $txt -match 'public static class (AnnoMem|AnnoEvents) ')) { . ([scriptblock]::Create($txt)) }
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Invoke-RivalSupply|Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs|Invoke-Explore)\b') -or
+        $txt -cmatch '^\$(Event|Explore)[A-Z]\w*\s*=' -or ($txt -match '^Add-Type -TypeDefinition' -and $txt -match 'public static class (AnnoMem|AnnoEvents) ')) { . ([scriptblock]::Create($txt)) }
 }
 $PirateHookOrig = '0F 29 05 B7 B3 4F 00'
 $PirateHookTarget = Hex ([byte[]](@(0xE9) + (Rel32 $PirateCaveRva ($TimersHookRva + 5)) + @(0x66, 0x90)))
@@ -1195,21 +1199,35 @@ try {
     Assert-Check 'N unexpected value: nothing set' ([BitConverter]::ToInt32((Read-Image $a (Get-ResidentAddress 0) 4), 0) -eq 128)
     Stop-ImageProcess $a
 
-    Write-Host 'O  -Cargo'
+    Write-Host 'O  -Cargo (holds; since 3.5 no longer the hull)'
     function Get-CargoAddress([int]$nr) { $FigureRva + $nr * $FigureSize + $CargoOffset }
+    # The hull ("Maxenergy" x32 at +0x3E: 50/80/65/120) lies next to the holds and must stay.
+    $HullOrig = @{ 21 = 1600; 22 = 1600; 23 = 2560; 24 = 2560; 25 = 2080; 26 = 2080; 27 = 3840; 28 = 3840 }
+    function Get-Hulls($a) { ((21..28) | ForEach-Object { [BitConverter]::ToUInt16((Read-Image $a ($FigureRva + $_ * $FigureSize + 0x3E) 2), 0) }) -join '/' }
+    Assert-Check "O holds offset +0x3A (Maxware), at most 8 holds, originals 4/6/3/8" ($CargoOffset -eq 0x3A -and $CargoMaxHolds -eq 8 -and (((21, 23, 25, 27) | ForEach-Object { $CargoOrig[$_] }) -join '/') -eq '4/6/3/8')
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    foreach ($nr in $CargoOrig.Keys) { Write-Image $a (Get-CargoAddress $nr) ([BitConverter]::GetBytes([uint16]$CargoOrig[$nr])); Write-Image $a ($FigureRva + $nr * $FigureSize + 0x3E) ([BitConverter]::GetBytes([uint16]$HullOrig[$nr])) }
+    $hullsBefore = Get-Hulls $a
+    $r = Invoke-Tool $a @('-Cargo', '1.5')
+    Assert-Check "O exit code $($r.Code)" ($r.Code -eq 0)
+    $expect15 = @{ 21 = 6; 22 = 6; 23 = 8; 24 = 8; 25 = 5; 26 = 5; 27 = 8; 28 = 8 }
+    foreach ($nr in ($CargoOrig.Keys | Sort-Object)) {
+        $n = [BitConverter]::ToUInt16((Read-Image $a (Get-CargoAddress $nr) 2), 0)
+        Assert-Check ('O x1.5 ship no. {0}: {1} -> {2} holds (expected {3})' -f $nr, $CargoOrig[$nr], $n, $expect15[$nr]) ($n -eq $expect15[$nr] -and $n -eq (Get-CargoHolds $CargoOrig[$nr] 1.5))
+    }
+    Assert-Check "O hull untouched ($(Get-Hulls $a))" ((Get-Hulls $a) -eq $hullsBefore -and $hullsBefore -eq '1600/1600/2560/2560/2080/2080/3840/3840')
+    Assert-Check 'O trader (no. 29) untouched' ((Hex (Read-Image $a (Get-CargoAddress 29) 2)) -eq '00 00')
+    Assert-Check "O message: holds of 50 t" ($r.Text -match 'Cargo x1\.5: 6/8/5/8 holds of 50 t')
+    $r = Invoke-Tool $a @('-Cargo', '1.5')
+    Assert-Check "O second run: exit code $($r.Code), no. 21 = $([BitConverter]::ToUInt16((Read-Image $a (Get-CargoAddress 21) 2), 0)) holds" ($r.Code -eq 0 -and [BitConverter]::ToUInt16((Read-Image $a (Get-CargoAddress 21) 2), 0) -eq 6)
+    Stop-ImageProcess $a
     $a = Start-ImageProcess
     Invoke-SimulatedStart $a
     foreach ($nr in $CargoOrig.Keys) { Write-Image $a (Get-CargoAddress $nr) ([BitConverter]::GetBytes([uint16]$CargoOrig[$nr])) }
-    $r = Invoke-Tool $a @('-Cargo', '1.5')
-    Assert-Check "O exit code $($r.Code)" ($r.Code -eq 0)
-    foreach ($nr in ($CargoOrig.Keys | Sort-Object)) {
-        $n = [BitConverter]::ToUInt16((Read-Image $a (Get-CargoAddress $nr) 2), 0)
-        $target = [int][math]::Round($CargoOrig[$nr] * 1.5)
-        Assert-Check ('O ship no. {0}: {1} -> {2} (expected {3})' -f $nr, $CargoOrig[$nr], $n, $target) ($n -eq $target)
-    }
-    Assert-Check 'O trader (no. 29) untouched' ((Hex (Read-Image $a (Get-CargoAddress 29) 2)) -eq '00 00')
-    $r = Invoke-Tool $a @('-Cargo', '1.5')
-    Assert-Check "O second run: exit code $($r.Code), no. 21 = $([BitConverter]::ToUInt16((Read-Image $a (Get-CargoAddress 21) 2), 0))" ($r.Code -eq 0 -and [BitConverter]::ToUInt16((Read-Image $a (Get-CargoAddress 21) 2), 0) -eq 2400)
+    $r = Invoke-Tool $a @('-Cargo', '3')
+    $holds = ((21..28) | ForEach-Object { [BitConverter]::ToUInt16((Read-Image $a (Get-CargoAddress $_) 2), 0) }) -join '/'
+    Assert-Check "O x3: every buildable ship 8 holds ($holds), exit code $($r.Code)" ($r.Code -eq 0 -and $holds -eq '8/8/8/8/8/8/8/8')
     Stop-ImageProcess $a
 
     Write-Host 'P  -Production'
@@ -1905,6 +1923,76 @@ try {
     Assert-Check "AU only every 2000 clock steps ($t2 t at +1000, $t3 t at +2000 after the liquor fell to 3 t), nothing after the end of the game ($t4 t)" ($t2 -eq 0 -and [math]::Abs($t3 - (860 / 32)) -lt 0.001 -and $t4 -eq 0 -and (& $stock (Read-Image $a $EventSettlementRva (75 * 600)) 2 18) -eq 0)
     Stop-ImageProcess $a
 
+    Write-Host 'AW -Explored All (Invoke-Explore against the helper process)'
+    $a = Start-ImageProcess
+    Connect-EventEngine $a
+    Write-Image $a $ClockRva (I32 500); Write-Image $a $EventLocalPlayerRva ([byte[]]@(0))
+    # Islands 0, 1, 2 and 49 exist (tiles pointer), slot 3 is free; island 1 is known to rivals 1 and 2, island 2 to the human.
+    $isl = @{ 0 = @(0x1000, 0x00); 1 = @(0x2000, 0x06); 2 = @(0x3000, 0x01); 3 = @(0, 0x00); 49 = @(0x4000, 0x00) }
+    foreach ($k in $isl.Keys) { $o = $ExploreIslandRva + $k * $ExploreIslandSize; Write-Image $a ($o + $ExploreTilesOffset) ([BitConverter]::GetBytes([int64]$isl[$k][0])); Write-Image $a ($o + $ExploreBitOffset) ([byte[]]@($isl[$k][1])) }
+    $x0 = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
+    $n1 = Invoke-Explore
+    $x1 = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
+    $bits = { param($t, $i) $t[$i * $ExploreIslandSize + $ExploreBitOffset] }
+    Assert-Check ("AW human (player 0): {0} islands marked; bits 0x{1:X2}/0x{2:X2}/0x{3:X2}, free slot 0x{4:X2}, island 49 0x{5:X2}" -f $n1, (& $bits $x1 0), (& $bits $x1 1), (& $bits $x1 2), (& $bits $x1 3), (& $bits $x1 49)) ($n1 -eq 3 -and (& $bits $x1 0) -eq 1 -and (& $bits $x1 1) -eq 7 -and (& $bits $x1 2) -eq 1 -and (& $bits $x1 3) -eq 0 -and (& $bits $x1 49) -eq 1)
+    $diff = @(for ($j = 0; $j -lt $x0.Length; $j++) { if ($x0[$j] -ne $x1[$j]) { $j } })
+    Assert-Check "AW only the bit bytes changed ($($diff.Count) bytes)" ($diff.Count -eq 3 -and @($diff | Where-Object { ($_ % $ExploreIslandSize) -ne $ExploreBitOffset }).Count -eq 0)
+    $n2 = Invoke-Explore
+    Write-Image $a $EventLocalPlayerRva ([byte[]]@(2))
+    $n3 = Invoke-Explore
+    $x3 = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
+    Assert-Check ("AW second round {0} (nothing new); local player 2: {1} islands, island 0 = 0x{2:X2}, island 1 stays 0x{3:X2}" -f $n2, $n3, (& $bits $x3 0), (& $bits $x3 1)) ($n2 -eq 0 -and $n3 -eq 3 -and (& $bits $x3 0) -eq 5 -and (& $bits $x3 1) -eq 7 -and (& $bits $x3 2) -eq 5 -and (& $bits $x3 49) -eq 5)
+    Write-Image $a ($ExploreIslandRva + 0 * $ExploreIslandSize + $ExploreBitOffset) ([byte[]]@(0)); Write-Image $a $ClockRva (I32 0)
+    $n4 = Invoke-Explore
+    Write-Image $a $ClockRva (I32 500); Write-Image $a $EventLocalPlayerRva ([byte[]]@(7))
+    $n5 = Invoke-Explore
+    Assert-Check "AW nothing before the game clock runs ($n4) and nothing for an invalid local player ($n5)" ($n4 -eq 0 -and $n5 -eq 0 -and (& $bits (Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)) 0) -eq 0)
+    Stop-ImageProcess $a
+
+    Write-Host 'AV -Ultra (F8)'
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    $zero32 = (@('00') * 32) -join ' '
+    Assert-Check "AV before: switch jump $(Hex (Read-Image $a $UltraHookRva 6)), accelerator call $(Hex (Read-Image $a $UltraAccelCallRva 6)), caves empty" ((Hex (Read-Image $a $UltraHookRva 6)) -eq $UltraHookOrig -and (Hex (Read-Image $a $UltraAccelCallRva 6)) -eq $UltraAccelCallOrig -and (Hex (Read-Image $a $UltraCaveRva 32)) -eq $zero32 -and (Hex (Read-Image $a $UltraAccelCaveRva 32)) -eq $zero32)
+    # The original "ja" leads to the end of the switch (return 0), the table has 0x67 entries (keys 0x10-0x76).
+    $ja = Read-Image $a $UltraHookRva 6
+    Assert-Check ("AV original jump target 0x{0:X} = end of the key switch, compare 'cmp r8d,0x66' before it ({1})" -f ($UltraHookRva + 6 + [BitConverter]::ToInt32($ja, 2)), (Hex (Read-Image $a ($UltraHookRva - 4) 4))) (($UltraHookRva + 6 + [BitConverter]::ToInt32($ja, 2)) -eq $KeyEndRva -and (Hex (Read-Image $a ($UltraHookRva - 4) 4)) -eq '41 83 F8 66')
+    $r = Invoke-Tool $a @('-Ultra') 'de'
+    Assert-Check "AV exit code $($r.Code), message 'Ultra: F8 = 32-fach'" ($r.Code -eq 0 -and $r.Text -match 'Ultra: F8 = 32-fach')
+    $uc = Build-UltraCode 32
+    $cave = Read-Image $a $UltraCaveRva $uc.Length
+    Assert-Check "AV cave = $(Hex $cave)" ((Hex $cave) -eq (Hex $uc) -and $uc.Length -le 32)
+    $ja = Read-Image $a $UltraHookRva 6
+    Assert-Check ("AV switch jump {0} -> 0x{1:X} (the cave)" -f (Hex $ja), ($UltraHookRva + 6 + [BitConverter]::ToInt32($ja, 2))) ($ja[0] -eq 0x0F -and $ja[1] -eq 0x87 -and ($UltraHookRva + 6 + [BitConverter]::ToInt32($ja, 2)) -eq $UltraCaveRva)
+    # Decode the cave: cmp r8d,0x67 (F8 = 0x77 after "add r8d,-0x10"), jne over 10 bytes to the jmp, mov ecx,32, call, jmp.
+    $callTarget = $UltraCaveRva + 16 + [BitConverter]::ToInt32($cave, 12); $jmpTarget = $UltraCaveRva + 21 + [BitConverter]::ToInt32($cave, 17)
+    Assert-Check ("AV cave: F8 compare {0}, jne +{1}, level {2}, call 0x{3:X} (FUN_1400c8be0, like F5-F7), jmp 0x{4:X} (return 0)" -f (Hex $cave[0..3]), $cave[5], [BitConverter]::ToInt32($cave, 7), $callTarget, $jmpTarget) ((Hex $cave[0..3]) -eq '41 83 F8 67' -and $cave[4] -eq 0x75 -and $cave[5] -eq 10 -and $cave[6] -eq 0xB9 -and [BitConverter]::ToInt32($cave, 7) -eq 32 -and $cave[11] -eq 0xE8 -and $callTarget -eq $SetSpeedRva -and $cave[16] -eq 0xE9 -and $jmpTarget -eq $KeyEndRva)
+    Assert-Check "AV F5/F6/F7 calls the same function: F7 at 0xE337B calls 0x$('{0:X}' -f (0xE3380 + [BitConverter]::ToInt32((Read-Image $a 0xE337C 4), 0)))" ((0xE3380 + [BitConverter]::ToInt32((Read-Image $a 0xE337C 4), 0)) -eq $SetSpeedRva)
+    Assert-Check "AV F7 untouched ($(Hex (Read-Image $a 0xE3376 5)))" ((Hex (Read-Image $a 0xE3376 5)) -eq 'B9 04 00 00 00')
+    # The key filter in front of TranslateAcceleratorA (F8 alone is the game's shortcut for the player status).
+    $kc = Build-UltraAccelCode
+    $kcave = Read-Image $a $UltraAccelCaveRva $kc.Length
+    $call = Read-Image $a $UltraAccelCallRva 6
+    $callTarget = $UltraAccelCallRva + 5 + [BitConverter]::ToInt32($call, 1)
+    $flagTarget = $UltraAccelCaveRva + 24 + [BitConverter]::ToInt32($kcave, 19)
+    $iatTarget = $UltraAccelCaveRva + 35 + [BitConverter]::ToInt32($kcave, 31)
+    Assert-Check ("AV key filter: call 0x{0:X} -> {1} (cave 0x{2:X}), nop" -f $UltraAccelCallRva, (Hex $call), $callTarget) ($call[0] -eq 0xE8 -and $callTarget -eq $UltraAccelCaveRva -and $call[5] -eq 0x90 -and $UltraAccelCallOrig -eq 'FF 15 A1 77 0D 00')
+    Assert-Check ("AV key filter cave {0}: WM_KEYDOWN, F8, Shift/Ctrl flags 0x{1:X} & 0x0C, else jmp [IAT 0x{2:X}]" -f (Hex $kcave), $flagTarget, $iatTarget) ((Hex $kcave) -eq (Hex $kc) -and (Hex $kcave[0..7]) -eq '41 81 78 08 00 01 00 00' -and (Hex $kcave[10..14]) -eq '41 83 78 10 77' -and $kcave[23] -eq 0x0C -and $flagTarget -eq $ModifierFlagsRva -and (Hex $kcave[26..28]) -eq '31 C0 C3' -and $kcave[29] -eq 0xFF -and $kcave[30] -eq 0x25 -and $iatTarget -eq $AccelIatRva)
+    Assert-Check ("AV key filter jumps all lead to the jmp (+{0}, +{1}, +{2})" -f $kcave[9], $kcave[16], $kcave[25]) ((10 + $kcave[9]) -eq 29 -and (17 + $kcave[16]) -eq 29 -and (26 + $kcave[25]) -eq 29)
+    $r = Invoke-Tool $a @('-Ultra')
+    Assert-Check "AV second run with the same level: exit code $($r.Code), cave and jump unchanged" ($r.Code -eq 0 -and $r.Text -notmatch 'unexpected bytes' -and (Hex (Read-Image $a $UltraCaveRva $uc.Length)) -eq (Hex $uc) -and (Hex (Read-Image $a $UltraHookRva 6)) -eq (Hex $ja))
+    $r = Invoke-Tool $a @('-Ultra', '-UltraLevel', '64')
+    Assert-Check "AV other level in the already patched process: abort (exit code $($r.Code))" ($r.Code -ne 0 -and $r.Text -match 'unexpected bytes')
+    Stop-ImageProcess $a
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    $r = Invoke-Tool $a @('-Ultra', '-UltraLevel', '64', '-Turbo', '-TurboLevel', '16')
+    $cave = Read-Image $a $UltraCaveRva 21
+    Assert-Check "AV 64x with turbo 16x: exit code $($r.Code), F8 level $([BitConverter]::ToInt32($cave, 7)), F7 = $(Hex (Read-Image $a 0xE3376 5))" ($r.Code -eq 0 -and [BitConverter]::ToInt32($cave, 7) -eq 64 -and (Hex (Read-Image $a 0xE3376 5)) -eq 'B9 10 00 00 00' -and $r.Text -match 'F8 = 64x')
+    $r = Invoke-Tool $a @('-Ultra', '-UltraLevel', '40')
+    Assert-Check "AV level 40 refused by the parameter check (exit code $($r.Code)), F8 level stays 64" ($r.Code -ne 0 -and [BitConverter]::ToInt32((Read-Image $a $UltraCaveRva 11), 7) -eq 64)
+    Stop-ImageProcess $a
+
     Write-Host 'AH Everything together (real haeuser.cod)'
     $a = Start-ImageProcess -Crt
     Invoke-SimulatedStart $a
@@ -1913,7 +2001,7 @@ try {
     foreach ($nr in $CargoOrig.Keys) { Write-Image $a ($FigureRva + $nr * $FigureSize + $CargoOffset) ([BitConverter]::GetBytes([uint16]$CargoOrig[$nr])) }
     $all = @('-IslandSize', 'Huge', '-Resources', 'Lots', '-Natives', 'Lots', '-Rivals', 'Hard', '-PirateFleet', 'Huge', '-Traders', 'Lots',
         '-Pirates', 'Strong', '-StartGold', '50000', '-RivalGold', '60000', '-Residents', '5', '-Turbo', '-TurboLevel', '16', '-Production', '2', '-Storage', '5', '-ShipSpeed', '2', '-Cargo', '3',
-        '-BuildCost', '0.25', '-Upkeep', '0.5', '-Taxes', '3', '-Radius', '2', '-Fertility', 'Everywhere', '-Mines', 'Infinite', '-Disasters', 'Off')
+        '-BuildCost', '0.25', '-Upkeep', '0.5', '-Taxes', '3', '-Radius', '2', '-Fertility', 'Everywhere', '-Mines', 'Infinite', '-Disasters', 'Off', '-Ultra')
     $r = Invoke-Tool $a $all
     Assert-Check "AH all options: exit code $($r.Code), production x2 shortens the 125 intervals counted in the game" ($r.Code -eq 0 -and $r.Text -match 'Production x2: 125 work intervals shortened' -and $r.Text -match 'Storage x5' -and $r.Text -match 'Residents x5' -and $r.Text -match 'Ship speed x2' -and $r.Text -match 'Cargo x3')
     if ($r.Code -ne 0) { Write-Host $r.Text }
@@ -1921,7 +2009,7 @@ try {
     Assert-Check "AH build cost x0.25, upkeep x0.5, taxes x3, radius x2 all set" ((Compare-ScaledTable $t0 $t1 $TestCostFields 0.25).Wrong -eq 0 -and (Compare-ScaledTable $t0 $t1 $TestUpkeepFields 0.5).Wrong -eq 0 -and (Get-Taxes $a) -eq '21/24/33/36/39' -and $t1[270 * 0x90 + 0x20] -eq 32 -and $t1[461 * 0x90 + 0x20] -eq 48)
     $tabH = Build-IslandTable 1000 700 $false 'Huge'
     $rc = Build-ResourceCode 200 7 $true; $fc = Build-FertilityCode
-    $ranges = @(@('IslandTable', $TableRva, $tabH), @('Fertility', $FertCaveRva, $fc), @('BuildCostMarker', $CostMarkerRva, (New-Object byte[] 8)), @('UpkeepMarker', $UpkeepMarkerRva, (New-Object byte[] 8)), @('EventMarker', $EventMarkerRva, (New-Object byte[] 16)), @('Resources', $ResourceCaveRva, $rc),
+    $ranges = @(@('IslandTable', $TableRva, $tabH), @('Fertility', $FertCaveRva, $fc), @('BuildCostMarker', $CostMarkerRva, (New-Object byte[] 8)), @('UpkeepMarker', $UpkeepMarkerRva, (New-Object byte[] 8)), @('EventMarker', $EventMarkerRva, (New-Object byte[] 16)), @('Ultra', $UltraCaveRva, (Build-UltraCode 32)), @('Resources', $ResourceCaveRva, $rc), @('UltraKeys', $UltraAccelCaveRva, (Build-UltraAccelCode)),
         @('PirateFleet', $FleetCaveRva, (Build-FleetCode 3)), @('Traders', $TraderCaveRva, (Build-TraderCode 3)), @('BigMap', $BigMapCaveRva, (Build-BigMapCode)), @('ProductionMarker', $ProdMarkerRva, (New-Object byte[] 8)), @('TIMERS', $PirateCaveRva, (Build-PirateCode 'Strong' 50000 60000)))
     $ok = $true
     for ($i = 0; $i -lt $ranges.Count - 1; $i++) { if ($ranges[$i][1] + $ranges[$i][2].Length -gt $ranges[$i + 1][1]) { $ok = $false } }

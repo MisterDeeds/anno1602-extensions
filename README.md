@@ -6,7 +6,7 @@
 *[Deutsche Fassung](README.de.md)*
 
 A fan project for **Anno 1602 History Edition** (Ubisoft Connect): a bigger world, more islands,
-tougher rivals, cheaper building and richer towns, up to 16× game speed, random events while you play,
+tougher rivals, cheaper building and richer towns, up to 16× game speed (128× with F8), random events while you play,
 49 new scenarios with a story and a mission (six campaigns – one of them made for the giant world –
 and 15 challenges, some against the clock), a scenario designer, random and daily adventures, and a logbook window with charts next to
 the game.
@@ -66,6 +66,7 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 | Rivers | none: rivers become meadow, mouth and spring become beach and slope (more land to build on) |
 | Mountains | at the coast: mountains in the middle of an island move to the coast – long ranges as single mountains; the inland stays free |
 | Volcano | none: the game's only volcano becomes a normal mountain, no eruptions |
+| Explored | all islands from the start: their ore and gold deposits are visible and the natives known without sailing there |
 | Resources | More: ore, gold, fertility and treasures scaled to the island count; Lots: double that |
 | Natives | 4 + 4 or 7 + 7 villages instead of 2 + 2 |
 | Fertility | every crop on every island (new endless games) |
@@ -76,7 +77,8 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 | Disasters | none (no fire, plague, drought or volcano) or more often |
 | Gold | starting gold for you and for the rivals |
 | Residents per house | ×1.5 to ×5 |
-| Production, ship speed, cargo space | ×1.5 to ×3 |
+| Production, ship speed | ×1.5 to ×3 |
+| Cargo holds | more holds of 50 t: small trading ship 6 or 8 instead of 4, at most 8 on every ship |
 | Storage per good | ×2 to ×5 |
 | Building costs | ×0.75, half, a quarter or free (gold, tools, wood and bricks; also for the rivals) |
 | Running costs | ×0.75, half, a quarter or none |
@@ -85,6 +87,7 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 | Ore and gold mines | inexhaustible |
 | Events | random events while you play, rarely or often (see [Events](#events)) |
 | Turbo (F7) | 8×, 12× or 16× game speed |
+| Ultra (F8) | new key F8: 32×, 64× or 128× game speed (the game has no F8 speed) |
 
 ## The launcher
 
@@ -100,11 +103,11 @@ The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiters
 
   | Preset | Settings |
   |---|---|
-  | **Everything big** (*Alles gross*) | 1000 × 700, giant islands, lots of resources, 7 + 7 villages, three times as many traders, rivals like "Hard" and ambitious with 60,000 gold, pirates attack with up to 8 ships, residents ×5, storage ×5, cargo space ×3, production and ships ×2, turbo 16×, your gold 50,000 |
-  | **For campaigns** (*Für Kampagnen*) | big map and turbo 16×, everything else as the scenario intends |
-  | **Giant world** (*Riesenwelt*) | 2000 × 1400 for the [giant world](#giant-world) maps, ships ×2 for the long sea routes, turbo 16×, everything else as the scenario intends |
-  | **Relaxed** (*Gemütlich*) | building costs and running costs halved, taxes ×2, radius ×1.5, every crop everywhere, inexhaustible mines, no pirates, no disasters, no rivers, mountains at the coast, no volcano, 100,000 gold, residents ×2, production ×2, storage ×3, large islands, lots of resources, turbo 16× |
-  | **Tough test** (*Harte Probe*) | rivals like "Hard" and ambitious with 100,000 gold, strong pirates with up to 12 ships, more disasters, 4 + 4 villages, turbo 16× |
+  | **Everything big** (*Alles gross*) | 1000 × 700, giant islands, lots of resources, 7 + 7 villages, three times as many traders, rivals like "Hard" and ambitious with 60,000 gold, pirates attack with up to 8 ships, residents ×5, storage ×5, 8 cargo holds per ship, production and ships ×2, turbo 16× and F8 32×, all islands explored, your gold 50,000 |
+  | **For campaigns** (*Für Kampagnen*) | big map and turbo 16×, F8 32×, everything else as the scenario intends |
+  | **Giant world** (*Riesenwelt*) | 2000 × 1400 for the [giant world](#giant-world) maps, ships ×2 for the long sea routes, turbo 16× and F8 32×, everything else as the scenario intends |
+  | **Relaxed** (*Gemütlich*) | building costs and running costs halved, taxes ×2, radius ×1.5, every crop everywhere, inexhaustible mines, no pirates, no disasters, no rivers, mountains at the coast, no volcano, all islands explored, 100,000 gold, residents ×2, production ×2, storage ×3, large islands, lots of resources, turbo 16× and F8 32× |
+  | **Tough test** (*Harte Probe*) | rivals like "Hard" and ambitious with 100,000 gold, strong pirates with up to 12 ships, more disasters, 4 + 4 villages, turbo 16× and F8 32× |
   | **Reset to defaults** (*Alles auf Standard*) | 1000 × 700 with more islands and more resources, everything else original |
 
 - **Continue**: your savegames with the settings they were made with. *Play with these
@@ -336,7 +339,7 @@ anno1602-extensions/
 │   ├── install.ps1                installer behind get.ps1, install.cmd, uninstall.cmd and the Apps list
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
-│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (702 checks)
+│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (727 checks)
 │   ├── test-islands.ps1           island forge with all island files of the game: rivers, mountains, volcano, giant islands (21 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
 │   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (43 checks)

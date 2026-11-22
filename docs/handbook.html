@@ -101,7 +101,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
 
 <main>
   <header class="sheet masthead">
-    <div class="topline"><span class="course">Logbook · Version 3.4.1 · As of 22 November 2026</span><a class="lang-link" href="handbook.de.html" hreflang="de" lang="de">Deutsch</a></div>
+    <div class="topline"><span class="course">Logbook · Version 3.5.0 · As of 22 November 2026</span><a class="lang-link" href="handbook.de.html" hreflang="de" lang="de">Deutsch</a></div>
     <h1>Anno 1602 Extensions</h1>
     <p class="lead">Bigger worlds, stronger rivals, cheaper building, more life at sea, six campaigns with a story – one of them in a giant world –, 15 challenges, random and daily adventures, scenarios of your own, events, time limits and a logbook next to the game. Everything runs in memory, no game file is changed.</p>
   </header>
@@ -112,7 +112,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
       <li><span>Open <strong>“Anno 1602 – Extensions”</strong> on the desktop (on a German Windows: “Anno 1602 – Erweiterungen”).</span></li>
       <li><span>On the <strong>New game</strong> tab choose the options or use a preset: <strong>Everything big</strong> (maximum), <strong>For campaigns</strong> (campaigns as intended), <strong>Giant world</strong> (the World Empire on 2000 × 1400), <strong>Relaxed</strong> (build in peace), <strong>Tough test</strong> (rivals and pirates at their strongest) or <strong>Reset to defaults</strong>.</span></li>
       <li><span><strong>Play with extensions</strong>. In the game <em>Single Player → New Game</em>: the endless game at the top, the campaigns at the very bottom under <em>Own Scenarios</em>.</span></li>
-      <li><span>Press <kbd>F7</kbd> for up to 16× speed. After attack messages the game switches back by itself; then press F7 again.</span></li>
+      <li><span>Press <kbd>F7</kbd> for up to 16× speed, <kbd>F8</kbd> for ultra speed (up to 128×, option “Ultra”). After attack messages the game switches back by itself; then press the key again.</span></li>
       <li><span>To continue later: tab <strong>Continue</strong>, select the save, <strong>Play with these settings</strong>, then <em>Load Game</em> in the game. The save is loaded with exactly the options it was made with.</span></li>
     </ol>
   </section>
@@ -138,7 +138,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
           <tr><td>Events</td><td>Random events while you play (see below)</td><td>Off · Rare · Often</td></tr>
           <tr><td>Your starting gold</td><td>Gold in new games</td><td>up to 100,000</td></tr>
           <tr><td>Residents per house</td><td>Bigger towns</td><td>× 1 to × 5 (up to 200 per house)</td></tr>
-          <tr><td>Turbo (F7)</td><td>Speed of the F7 key</td><td>4 · 8 · 12 · 16×</td></tr>
+          <tr><td>Turbo (F7)</td><td>Speed of the F7 key</td><td>4 · 8 · 12 · 16×</td></tr><tr><td>Ultra (F8)</td><td>New key F8</td><td>off · 32 · 64 · 128×</td></tr>
           <tr><td>Production speed</td><td>All production buildings work faster</td><td>× 1 to × 3</td></tr>
           <tr><td>Storage per good</td><td>Warehouses and markets hold more</td><td>× 1 to × 5</td></tr>
           <tr><td>Building costs</td><td>Gold, tools, wood and bricks per building (also for the rivals)</td><td>Normal · × 0.75 · Half · A quarter · Free</td></tr>
@@ -147,7 +147,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
           <tr><td>Influence radius</td><td>Warehouse, market and public buildings reach further</td><td>× 1 · × 1.5 · × 2</td></tr>
           <tr><td>Ore and gold mines</td><td>Deposits never run dry</td><td>Normal · Inexhaustible</td></tr>
           <tr><td>Ship speed</td><td>All ships sail faster</td><td>× 1 to × 3</td></tr>
-          <tr><td>Cargo space</td><td>Tons per hold of the ships you can build</td><td>× 1 to × 3</td></tr>
+          <tr><td>Cargo holds</td><td>Holds of 50 t of the ships you can build</td><td>4 · 6 · 8 (small trading ship)</td></tr>
         </tbody>
       </table>
     </div>
@@ -382,7 +382,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 0.88em; bac
   </section>
 
   <footer class="foot">
-    <p>Built by reverse engineering the History Edition. Checked: 702 automatic tests against the loaded game code and 21 with all island files of the game, plus runs in the real game (50 islands, 14 villages, up to 12 pirate ships, race, victory conditions, start fleet) and an endurance run over 14.5 game hours at 16× with all options: always responsive, 430 to 490 MB of memory. Version 3.0.0 was checked offline (all 41 scenarios in both languages, 200 random adventures, scenarios of your own, 147 logbook self-tests, 27 installer checks in a sandbox) and in the running game on 15 November 2026: the time limit of “Against the Clock” (clock, savegame, lost at the deadline), the events except the two tax events, “Land of Many Peoples” on the big map and a scenario of your own with a 4-hour limit. Version 3.1.0 was checked in the running game the same day: “The World Empire 1” with the preset “Giant world” (all 50 islands of the giant map in place, the rivals settle in far-off realms), on 1000 × 700 (big version) and without the extensions (classic map). Version 3.4.0 was checked in the running game on 22 November 2026: all 50 islands with six giant islands, no river left, the mountains at the coast, the rivals’ capitals grown to aristocrats. The balance of the 36 scenarios added since November 2026 has not been played through yet.</p>
+    <p>Built by reverse engineering the History Edition. Checked: 727 automatic tests against the loaded game code and 21 with all island files of the game, plus runs in the real game (50 islands, 14 villages, up to 12 pirate ships, race, victory conditions, start fleet) and an endurance run over 14.5 game hours at 16× with all options: always responsive, 430 to 490 MB of memory. Version 3.0.0 was checked offline (all 41 scenarios in both languages, 200 random adventures, scenarios of your own, 147 logbook self-tests, 27 installer checks in a sandbox) and in the running game on 15 November 2026: the time limit of “Against the Clock” (clock, savegame, lost at the deadline), the events except the two tax events, “Land of Many Peoples” on the big map and a scenario of your own with a 4-hour limit. Version 3.1.0 was checked in the running game the same day: “The World Empire 1” with the preset “Giant world” (all 50 islands of the giant map in place, the rivals settle in far-off realms), on 1000 × 700 (big version) and without the extensions (classic map). Version 3.4.0 was checked in the running game on 22 November 2026: all 50 islands with six giant islands, no river left, the mountains at the coast, the rivals’ capitals grown to aristocrats. The balance of the 36 scenarios added since November 2026 has not been played through yet.</p>
     <p>Single player only and only for the Ubisoft Connect version. After a game update the tool stops without changing anything.</p>
   </footer>
 </main>

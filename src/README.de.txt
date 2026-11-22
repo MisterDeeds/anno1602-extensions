@@ -53,6 +53,8 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
                        (Fluesse, Berge, Vulkan und Riesen-Inseln: das Werkzeug schreibt einmalig
                        veraenderte Inseldateien nach %LOCALAPPDATA%\Anno1602-Extensions\islands und
                        laesst das Spiel sie dort lesen; nur fuer neue Spiele, Spielstaende behalten ihre Inseln.)
+  Erkundet             Alle Inseln von Anfang an: ihre Erz- und Goldvorkommen sind sichtbar und die
+                       Ureinwohner bekannt, ohne hinzufahren (auch in geladenen Spielen).
   Rohstoffe            Mehr: Erz, Gold, Fruchtbarkeit und Schaetze passend zur Inselzahl; Viele: doppelt
   Ureinwohner          Mehr / Viele: 4 + 4 bzw. 7 + 7 Doerfer statt 2 + 2 (Nord + Sued)
   Fruchtbarkeit        "Jede Pflanze auf jeder Insel": in neuen Endlosspielen traegt jede Insel
@@ -87,8 +89,9 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
                        Hochschule, Feuerwehr, Galgen)
   Erz- und Goldminen   Unerschoepflich: Vorkommen gehen nie zu Ende
   Schiffstempo         x1,5 bis x3
-  Laderaum             x1,5 bis x3 fuer die baubaren Schiffe
+  Laderaeume           Mehr Laderaeume zu 50 t fuer die baubaren Schiffe (kleines Handelsschiff 6 oder 8 statt 4, hoechstens 8)
   Turbo (Taste F7)     8-, 12- oder 16-fache Geschwindigkeit (F5 = normal, F6 = 2-fach).
+  Ultra (Taste F8)     Neue Taste F8: 32-, 64- oder 128-fache Geschwindigkeit (das Spiel kennt kein F8-Tempo).
                        Gemessen: 16-fach haelt exakt, bei rund der Haelfte eines Prozessorkerns.
   Baukosten, Betriebskosten, Steuereinnahmen, Einflussradius, Fruchtbarkeit, Minen und
   Katastrophen wurden am 12. November 2026 im laufenden Spiel geprueft. Die Ereignisse (neu in
@@ -97,27 +100,27 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
 
   Knopf "Alles gross": stellt mit einem Klick alles gross ein (1000 x 700, riesige Inseln,
   viele Rohstoffe, 7 + 7 Ureinwohnerdoerfer, dreimal so viele Haendler, Gegner wie "Schwer" mit
-  60 000 Gold, Piraten greifen an mit doppelter Flotte, Einwohner x5, Lager x5, Laderaum x3,
-  Produktion und Schiffe x2, Turbo 16-fach, dein Gold 50 000). Einzelne Felder kannst du danach
+  60 000 Gold, Piraten greifen an mit doppelter Flotte, Einwohner x5, Lager x5, 8 Laderaeume je Schiff,
+  Produktion und Schiffe x2, Turbo 16-fach und F8 32-fach, dein Gold 50 000). Einzelne Felder kannst du danach
   noch aendern.
 
-  Knopf "Fuer Kampagnen": grosse Karte (1000 x 700, mehr Inseln) und Turbo 16-fach, alles andere
+  Knopf "Fuer Kampagnen": grosse Karte (1000 x 700, mehr Inseln) und Turbo 16-fach, F8 32-fach, alles andere
   wie im Original. So sind die Kampagnen so schwer wie vorgesehen, und das Startgold kommt aus dem
   Szenario.
 
   Knopf "Riesenwelt": die Riesenwelt 2000 x 1400 fuer die Kampagne "Das Weltreich" und die
   Riesen-Herausforderungen (siehe "Riesenwelt" weiter unten), Schiffe x2 fuer die langen Reisen,
-  Turbo 16-fach, alles andere wie im Szenario vorgesehen.
+  Turbo 16-fach und F8 32-fach, alles andere wie im Szenario vorgesehen.
 
   Knopf "Gemuetlich": in Ruhe bauen (1000 x 700, grosse Inseln, viele Rohstoffe, jede Pflanze
   ueberall, unerschoepfliche Minen, Bau- und Betriebskosten halbiert, Steuern x2, Radius x1,5,
   keine Piraten, keine Katastrophen, dein Gold 100 000, Einwohner x2, Produktion x2, Lager x3,
-  Turbo 16-fach). Gedacht fuer das Endlosspiel: In einem Szenario ersetzen die 100 000 Gold
+  Turbo 16-fach und F8 32-fach). Gedacht fuer das Endlosspiel: In einem Szenario ersetzen die 100 000 Gold
   dessen Gold.
 
   Knopf "Harte Probe": Gegner wie "Schwer" mit 100 000 Gold, starke Piraten mit einer Flotte
   von bis zu 12 Schiffen, mehr Katastrophen, 4 + 4 Ureinwohnerdoerfer, mehr Rohstoffe,
-  Turbo 16-fach.
+  Turbo 16-fach und F8 32-fach.
 
   Knopf "Alles auf Standard": 1000 x 700 mit mehr Inseln und mehr Rohstoffen, alles andere wie
   im Original.

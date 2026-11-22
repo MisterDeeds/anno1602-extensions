@@ -50,6 +50,8 @@ What is changed (only in memory, no game file is modified):
                        (Rivers, mountains, volcano and giant islands: the tool writes changed island
                        files to %LOCALAPPDATA%\Anno1602-Extensions\islands once and lets the game read
                        them from there; for new games only, savegames keep their islands.)
+  Explored             All islands from the start: their ore and gold deposits are visible and the
+                       natives known without sailing there (also in loaded games).
   Resources            More: ore, gold, fertility and treasures to match the island count;
                        Lots: double that
   Natives              More / Lots: 4 + 4 or 7 + 7 villages instead of 2 + 2 (north + south)
@@ -83,8 +85,9 @@ What is changed (only in memory, no game file is modified):
                        university, fire brigade, gallows)
   Ore and gold mines   Inexhaustible: deposits never run dry
   Ship speed           x1.5 to x3
-  Cargo space          x1.5 to x3 for the ships you can build
+  Cargo holds          More holds of 50 t for the ships you can build (small trading ship 6 or 8 instead of 4, at most 8)
   Turbo (F7 key)       8x, 12x or 16x speed (F5 = normal, F6 = 2x).
+  Ultra (F8 key)       New key F8: 32x, 64x or 128x speed (the game has no F8 speed).
                        Measured: 16x holds exactly, at about half of one processor core.
   Building costs, running costs, tax income, influence radius, fertility, mines and disasters
   were checked in the running game on 12 November 2026. Events (new in version 3.0.0) were
@@ -92,25 +95,25 @@ What is changed (only in memory, no game file is modified):
 
   Button "Everything big": sets everything big with one click (1000 x 700, huge islands,
   lots of resources, 7 + 7 native villages, three times as many traders, rivals like "Hard" with
-  60,000 gold, pirates attack with a double fleet, residents x5, storage x5, cargo space x3,
-  production and ships x2, turbo 16x, your gold 50,000). You can still change single fields
+  60,000 gold, pirates attack with a double fleet, residents x5, storage x5, 8 cargo holds per ship,
+  production and ships x2, turbo 16x and F8 32x, your gold 50,000). You can still change single fields
   afterwards.
 
-  Button "For campaigns": big map (1000 x 700, more islands) and turbo 16x, everything else
+  Button "For campaigns": big map (1000 x 700, more islands) and turbo 16x, F8 32x, everything else
   as in the original. That way the campaigns are as hard as intended, and the starting gold
   comes from the scenario.
 
   Button "Giant world": the giant world 2000 x 1400 for the campaign "The World Empire" and
-  the giant challenges (see "Giant world" below), ships x2 for the long voyages, turbo 16x,
+  the giant challenges (see "Giant world" below), ships x2 for the long voyages, turbo 16x and F8 32x,
   everything else as the scenario intends.
 
   Button "Relaxed": build in peace (1000 x 700, large islands, lots of resources, every crop
   everywhere, inexhaustible mines, building costs and running costs halved, taxes x2, radius
   x1.5, no pirates, no disasters, your gold 100,000, residents x2, production x2, storage x3,
-  turbo 16x). Meant for the endless game: in a scenario the 100,000 gold replace its gold.
+  turbo 16x and F8 32x). Meant for the endless game: in a scenario the 100,000 gold replace its gold.
 
   Button "Tough test": rivals like "Hard" with 100,000 gold, strong pirates with a fleet of up
-  to 12 ships, more disasters, 4 + 4 native villages, more resources, turbo 16x.
+  to 12 ships, more disasters, 4 + 4 native villages, more resources, turbo 16x and F8 32x.
 
   Button "Reset to defaults": 1000 x 700 with more islands and more resources, everything
   else as in the original.

@@ -144,6 +144,10 @@ $Options = [ordered]@{
     Turbo         = @{ Group = 'Ships'; Label = (Txt 'Turbo (F7 key)' 'Turbo (Taste F7)'); Default = 'Off'; Choices = [ordered]@{
             'Off' = New-Choice 'Off (4×)' 'Aus (4-fach)'; '8' = New-Choice '8×' '8-fach' @('-Turbo')
             '12' = New-Choice '12×' '12-fach' @('-Turbo', '-TurboLevel', '12'); '16' = New-Choice '16×' '16-fach' @('-Turbo', '-TurboLevel', '16') } }
+    # 3.5: a new key F8 for ultra speed (anno-patcher.ps1 -Ultra -UltraLevel); the game has no F8 speed.
+    Ultra         = @{ Group = 'Ships'; Label = (Txt 'Ultra (F8 key)' 'Ultra (Taste F8)'); Default = 'Off'; Choices = [ordered]@{
+            'Off' = New-Choice 'Off (no F8)' 'Aus (kein F8)'; '32' = New-Choice '32×' '32-fach' @('-Ultra')
+            '64' = New-Choice '64×' '64-fach' @('-Ultra', '-UltraLevel', '64'); '128' = New-Choice '128×' '128-fach' @('-Ultra', '-UltraLevel', '128') } }
     Production    = @{ Group = 'Economy'; Label = (Txt 'Production speed' 'Produktionstempo'); Default = 'Normal'; Choices = [ordered]@{
             'Normal' = New-Choice 'Normal' 'Normal'; '1.5' = New-Choice '× 1.5' '× 1,5' @('-Production', '1.5')
             '2' = New-Choice '× 2' '× 2' @('-Production', '2'); '3' = New-Choice '× 3' '× 3' @('-Production', '3') } }
@@ -153,9 +157,10 @@ $Options = [ordered]@{
     ShipSpeed     = @{ Group = 'Ships'; Label = (Txt 'Ship speed' 'Schiffstempo'); Default = 'Normal'; Choices = [ordered]@{
             'Normal' = New-Choice 'Normal' 'Normal'; '1.5' = New-Choice '× 1.5' '× 1,5' @('-ShipSpeed', '1.5')
             '2' = New-Choice '× 2' '× 2' @('-ShipSpeed', '2'); '3' = New-Choice '× 3' '× 3' @('-ShipSpeed', '3') } }
-    Cargo         = @{ Group = 'Ships'; Label = (Txt 'Cargo space' 'Laderaum der Schiffe'); Default = 'Normal'; Choices = [ordered]@{
-            'Normal' = New-Choice 'Normal' 'Normal'; '1.5' = New-Choice '× 1.5' '× 1,5' @('-Cargo', '1.5')
-            '2' = New-Choice '× 2' '× 2' @('-Cargo', '2'); '3' = New-Choice '× 3' '× 3' @('-Cargo', '3') } }
+    # 3.5: more cargo holds of 50 t (up to 8); until 3.4 this option wrongly raised the hull of the ships.
+    Cargo         = @{ Group = 'Ships'; Label = (Txt 'Cargo holds' 'Laderäume der Schiffe'); Default = 'Normal'; Choices = [ordered]@{
+            'Normal' = New-Choice 'Normal (small ship 4)' 'Normal (kleines Schiff 4)'; '1.5' = New-Choice '× 1.5 (small ship 6)' '× 1,5 (kleines Schiff 6)' @('-Cargo', '1.5')
+            '2' = New-Choice '× 2 (small ship 8)' '× 2 (kleines Schiff 8)' @('-Cargo', '2'); '3' = New-Choice 'Maximum (8 on every ship)' 'Maximum (8 auf jedem Schiff)' @('-Cargo', '3') } }
     BuildCost     = @{ Group = 'Economy'; Label = (Txt 'Building costs' 'Baukosten'); Default = 'Normal'; Choices = [ordered]@{
             'Normal' = New-Choice 'Normal' 'Normal'; '0.75' = New-Choice '× 0.75' '× 0,75' @('-BuildCost', '0.75')
             '0.5' = New-Choice 'Half' 'Halb' @('-BuildCost', '0.5'); '0.25' = New-Choice 'A quarter' 'Ein Viertel' @('-BuildCost', '0.25')
@@ -196,6 +201,10 @@ $Options = [ordered]@{
     Volcanoes     = @{ Group = 'Landscape'; Label = (Txt 'Volcano' 'Vulkan'); Default = 'Default'; Choices = [ordered]@{
             'Default' = New-Choice 'As in the original' 'Wie im Original'
             'Off'     = New-Choice 'None (no eruptions)' 'Keiner (keine Ausbrüche)' @('-Volcanoes', 'Off') } }
+    # 3.5: every island explored from the start - ore and gold deposits visible (anno-patcher.ps1 -Explored All).
+    Explored      = @{ Group = 'Landscape'; Label = (Txt 'Explored' 'Erkundet'); Default = 'Default'; Choices = [ordered]@{
+            'Default' = New-Choice 'As in the original (sail there)' 'Wie im Original (hinfahren)'
+            'All'     = New-Choice 'All islands from the start' 'Alle Inseln von Anfang an' @('-Explored', 'All') } }
 }
 # Groups in the window (order: left column top, right column top, left bottom, right bottom, right below that).
 $Groups = [ordered]@{
@@ -214,7 +223,7 @@ $EverythingBig = @{
     World = '1000x700'; Islands = 'More'; IslandSize = 'Giant'
     Resources = 'Lots'; Natives = 'Lots'; Traders = 'Lots'
     Rivals = 'Hard'; RivalGrowth = 'Ambitious'; RivalGold = '60000'; Pirates = 'Active'; PirateFleet = 'Large'
-    StartGold = '50000'; Residents = '5'; Turbo = '16'; Production = '2'; Storage = '5'; ShipSpeed = '2'; Cargo = '3'
+    StartGold = '50000'; Residents = '5'; Turbo = '16'; Ultra = '32'; Production = '2'; Storage = '5'; ShipSpeed = '2'; Cargo = '3'; Explored = 'All'
 }
 
 # "For campaigns": big version of the campaign maps (from 1000 x 700 with "More islands"), gold as intended by the
@@ -222,7 +231,7 @@ $EverythingBig = @{
 # so that the missions are as hard as planned.
 $ForCampaigns = @{
     World = '1000x700'; Islands = 'More'; RivalGold = 'Difficulty'; StartGold = 'Difficulty'
-    Turbo = '16'
+    Turbo = '16'; Ultra = '32'
 }
 
 # "Giant world" (since 3.1): the giant version of the World Empire maps (2000 x 1400, five island realms), ships twice
@@ -230,7 +239,7 @@ $ForCampaigns = @{
 # big version stretched to this size, the endless game 50 islands spread over the giant world.
 $GiantWorld = @{
     World = '2000x1400'; Islands = 'More'; RivalGold = 'Difficulty'; StartGold = 'Difficulty'
-    ShipSpeed = '2'; Turbo = '16'
+    ShipSpeed = '2'; Turbo = '16'; Ultra = '32'
 }
 
 # "Relaxed": build in peace - cheap buildings, more taxes, every crop everywhere, no pirates and no disasters; since
@@ -238,15 +247,15 @@ $GiantWorld = @{
 $Relaxed = @{
     World = '1000x700'; Islands = 'More'; IslandSize = 'Large'; Resources = 'Lots'; Fertility = 'Everywhere'; Mines = 'Infinite'
     Pirates = 'Off'; Disasters = 'Off'; StartGold = '100000'; Residents = '2'; Production = '2'; Storage = '3'
-    BuildCost = '0.5'; Upkeep = '0.5'; Taxes = '2'; Radius = '1.5'; Turbo = '16'
-    Rivers = 'Off'; Mountains = 'Edge'; Volcanoes = 'Off'
+    BuildCost = '0.5'; Upkeep = '0.5'; Taxes = '2'; Radius = '1.5'; Turbo = '16'; Ultra = '32'
+    Rivers = 'Off'; Mountains = 'Edge'; Volcanoes = 'Off'; Explored = 'All'
 }
 
 # "Tough test": the rivals at their strongest (since 3.4 also ambitious) with lots of gold, strong pirates with a huge
 # fleet, more disasters.
 $Tough = @{
     World = '1000x700'; Islands = 'More'; Resources = 'More'; Natives = 'More'
-    Rivals = 'Hard'; RivalGrowth = 'Ambitious'; RivalGold = '100000'; Pirates = 'Strong'; PirateFleet = 'Huge'; Disasters = 'More'; Turbo = '16'
+    Rivals = 'Hard'; RivalGrowth = 'Ambitious'; RivalGold = '100000'; Pirates = 'Strong'; PirateFleet = 'Huge'; Disasters = 'More'; Turbo = '16'; Ultra = '32'
 }
 
 # Load the last choice (option id -> value key). Missing or broken file: defaults.

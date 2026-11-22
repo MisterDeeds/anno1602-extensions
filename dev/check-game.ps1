@@ -42,7 +42,8 @@ try {
     $res['F7'] = (((Read-Rva 0xE3376 5) | ForEach-Object { '{0:X2}' -f $_ }) -join ' ') + $(if ((Read-Rva 0xE3377 1)[0] -eq 8) { ' (8x)' } else { ' (4x)' })
     $res['Game speed now'] = I32 0xF99F8
     $res['Residents per house'] = ((0..4 | ForEach-Object { (I32 (0x6BA02C + $_ * 0x50)) / 64 }) -join '/')
-    $res['Cargo t'] = ((21, 23, 25, 27 | ForEach-Object { (U16 (0x6D80C0 + $_ * 0x18C + 0x3E)) / 32 }) -join '/') + ' (small/large trade, small/large war)'
+    $res['Cargo holds'] = ((21, 23, 25, 27 | ForEach-Object { U16 (0x6D80C0 + $_ * 0x18C + 0x3A) }) -join '/') + ' (small/large trade, small/large war; 50 t each)'
+    $res['Hull'] = ((21, 23, 25, 27 | ForEach-Object { (U16 (0x6D80C0 + $_ * 0x18C + 0x3E)) / 32 }) -join '/') + ' (Maxenergy; 50/80/65/120 in the original)'
     $res['Ship speed small'] = [BitConverter]::ToSingle((Read-Rva (0x6D80C0 + 21 * 0x18C + 0x10) 4), 0)
     $res['Storage trading post I t'] = (U16 (0x6BA1C0 + 270 * 0x90 + 0x30)) / 32
     $mark = Read-Rva 0xE5F70 8

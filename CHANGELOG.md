@@ -3,6 +3,29 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.5.0 – 2026-11-22
+
+- **Fix "Cargo space":** since it was added (2026-11-10) this option did not raise the cargo but the hull of the ships. The value it scaled
+  (figure table +0x3E) is figuren.cod "Maxenergy" (small/large trading ship 50/80, small/large warship 65/120), not
+  "Maxware". Start ships come from the game's template with the normal hull, so with ×3 every start ship – yours and the
+  rivals' – showed only a third of its bar (reported with a screenshot); a shipyard filled them up. Now the option
+  ("Cargo holds") gives real cargo: more holds of 50 t (figuren.cod "Maxware", +0x3A): ×1.5 = small trading ship 6
+  instead of 4, ×2 = 8, maximum = 8 on every ship (the ship record has 8 holds, the large warship already uses 8). The
+  hull stays as in the original.
+- **Ultra speed (F8):** a new key. The game's key switch ends at F7; its jump to the end now goes through a small code
+  cave that sets 32×, 64× or 128× for F8 (option "Ultra (F8 key)"; the presets with turbo set 32×). F5–F7 unchanged.
+  F8 alone was a shortcut of the game for the player status (found in the game test: the key never reached the
+  switch); a filter in front of the game's shortcut table now passes F8 without Shift/Ctrl to the speed keys – the
+  player status stays on the STATUS button, Shift/Ctrl+F8 work as before. Measured at 2000 × 1400 with giant islands:
+  32×, 48×, 64×, 96× and 128× all exact at about half of one processor core.
+- Ships, islands and F8 checked in the running game: every start ship (yours and the rivals') with a full hull and 8
+  holds, all 50 islands explored, F8 switches to the chosen speed, Ctrl+F8 still goes to the game.
+- **Explored:** "All islands from the start" – every island counts as explored by you: its ore and gold deposits are
+  visible and the natives are known without sailing there (island +0x43, one bit per player, set by the game when a
+  ship reaches an island; the tool window sets yours while the game runs). In the presets "Everything big" and
+  "Relaxed".
+- Tests: `tests/test-patcher.ps1` 727 checks (new cases AV for F8 with the key filter, AW for exploring, case O for the holds), `tests/test-install.ps1` 43, `tests/test-islands.ps1` 21.
+
 ## 3.4.1 – 2026-11-22
 
 - Mountains "At the coast" now really leave the inland free, also on giant islands: in 3.4.0 a mountain range counted
