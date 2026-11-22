@@ -77,12 +77,16 @@
        (unchanged for the limits 1-3, climate ignored for 'FERT'); -StretchOnly/-NoIslandSpread: nothing.
     AF -Mines Infinite: both subtractions NOPs, neighbours unchanged, falsified site -> abort.
     AG -Disasters Off/More: 5 calls NOPs or 10 limits changed; other mode in the same process -> abort.
-    AQ -RivalGrowth Ambitious (3.4): the two phase exits and the goods wait of the AI become NOPs (6 bytes).
+    AQ -RivalGrowth Ambitious (3.4): the two phase exits and the goods wait of the AI become NOPs, the three money-only
+       phase exits jumps to the building part (9 bytes).
     AR -Volcanoes Off: the volcano call alone a NOP; together with Disasters Off or More.
     AS Island forge: the folder is built below LOCALAPPDATA (of the test), its path lies at RVA 0x91B200, the five
        loader instructions point there, a second run reuses the folder, other options replace it.
     AT -IslandSize Giant: plans at 1000 x 700, 2000 x 1400 and 750 x 525 with the real giant islands: no overlap,
        everything inside, at most 6 giant islands each once, at most 10 of class "lar" in total.
+    AU Supply for ambitious rivals: the tool's Invoke-RivalSupply against fake towns in the helper process: luxury goods
+       of rival towns with settlers filled (by stage, up to the storage limit), human and other towns untouched,
+       once per 2000 clock steps, nothing after the end of the game.
     AH Everything together: all options, code caves and markers do not overlap, production x2 shortens
        exactly the 125 intervals counted in the game (2026-11-10).
   The event cases run the tool's event engine (functions and C# class loaded via the syntax tree) in this test
@@ -168,10 +172,10 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$nu
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
     if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode)\b') -or
-        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap)\b') { . ([scriptblock]::Create($txt)) }
+        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock)\b') { . ([scriptblock]::Create($txt)) }
     # Event engine (cases AI-AO): its constants, functions and the two C# types run here in the test process, against
     # the helper process ($script:h / $script:base as in the tool).
-    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs)\b') -or
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Invoke-RivalSupply|Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs)\b') -or
         $txt -cmatch '^\$Event[A-Z]\w*\s*=' -or ($txt -match '^Add-Type -TypeDefinition' -and $txt -match 'public static class (AnnoMem|AnnoEvents) ')) { . ([scriptblock]::Create($txt)) }
 }
 $PirateHookOrig = '0F 29 05 B7 B3 4F 00'
@@ -1781,7 +1785,7 @@ try {
     Assert-Check "AQ exit code $($r.Code), German message" ($r.Code -eq 0 -and $r.Text -cmatch 'Gegner-Ausbau: ehrgeizig')
     foreach ($g in $RivalGrowthSites) { $n = (Bytes $g.Original).Length; Assert-Check ("AQ {0} = {1}" -f $g.Name, (Hex (Read-Image $a $g.Rva $n))) ((Hex (Read-Image $a $g.Rva $n)) -eq $g.Target) }
     $diff = 0; foreach ($g in $RivalGrowthSites) { $t = Bytes $g.Target; $o = Bytes $g.Original; for ($k = 0; $k -lt $t.Length; $k++) { if ($t[$k] -ne $o[$k]) { $diff++ } } }
-    Assert-Check "AQ exactly 6 bytes differ from the original (two jumps and one wait become NOPs: $diff)" ($diff -eq 6)
+    Assert-Check "AQ exactly 9 bytes differ from the original (two jumps and one wait become NOPs, three money exits jumps: $diff)" ($diff -eq 9)
     $r = Invoke-Tool $a @('-RivalGrowth', 'Ambitious')
     Assert-Check "AQ second run: exit code $($r.Code)" ($r.Code -eq 0)
     Stop-ImageProcess $a
@@ -1864,6 +1868,42 @@ try {
         $script:GiantDims = @{}
     }
     finally { $env:LOCALAPPDATA = $localBefore }
+
+    Write-Host 'AU Supply for ambitious rivals (Invoke-RivalSupply against the helper process)'
+    $a = Start-ImageProcess
+    Connect-EventEngine $a
+    # Players: 0 human, 1 and 2 computer rivals (0xC), 3 not a rival.
+    foreach ($k in @(@(0, 0), @(1, 12), @(2, 12), @(3, 0))) { Write-Image $a ($EventPlayersRva + $k[0] * $PlayerSize) (I32 $k[1]) }
+    Write-Image $a $ClockRva (I32 5000); Write-Image $a $EventLockRva (I32 0)
+    $supTowns = @(
+        @{ Slot = 1; Name = 'Mensch'; Island = 1; Owner = 0; Limit = 960; Markets = 1; Workers = 0; Stages = @(10, 90, 0, 0, 0); Stock = @{} }
+        @{ Slot = 2; Name = 'Rivalia'; Island = 2; Owner = 1; Limit = 960; Markets = 1; Workers = 0; Stages = @(5, 100, 0, 0, 0); Stock = @{ 18 = 320; 19 = 800 } }
+        @{ Slot = 3; Name = 'Hochburg'; Island = 3; Owner = 2; Limit = 640; Markets = 1; Workers = 0; Stages = @(0, 0, 10, 20, 0); Stock = @{} }
+        @{ Slot = 4; Name = 'Kleinhof'; Island = 4; Owner = 1; Limit = 960; Markets = 1; Workers = 0; Stages = @(40, 0, 0, 0, 0); Stock = @{} }
+        @{ Slot = 5; Name = 'Niemand'; Island = 5; Owner = 3; Limit = 960; Markets = 1; Workers = 0; Stages = @(0, 80, 0, 0, 0); Stock = @{} }
+    )
+    Set-EventTowns $a $supTowns
+    $s0 = Read-Image $a $EventSettlementRva (75 * 600)
+    $script:SupplyClock = -1; $script:SupplyTons = 0
+    $t1 = Invoke-RivalSupply
+    $s1 = Read-Image $a $EventSettlementRva (75 * 600)
+    $stock = { param([byte[]]$s, [int]$slot, [int]$good) [BitConverter]::ToUInt16($s, $slot * 600 + 0x2A + $good * 12) }
+    Assert-Check ("AU settler town of a rival: liquor 10 -> {0} t, tobacco goods {1} t, spices {2} t, tools {3} t, bricks {4} t, cloth stays {5} t (above 20 t), no cocoa ({6})" -f ((& $stock $s1 2 18) / 32), ((& $stock $s1 2 15) / 32), ((& $stock $s1 2 16) / 32), ((& $stock $s1 2 22) / 32), ((& $stock $s1 2 24) / 32), ((& $stock $s1 2 19) / 32), (& $stock $s1 2 17)) (
+        (& $stock $s1 2 18) -eq 960 -and (& $stock $s1 2 15) -eq 960 -and (& $stock $s1 2 16) -eq 960 -and (& $stock $s1 2 22) -eq 960 -and (& $stock $s1 2 24) -eq 960 -and (& $stock $s1 2 19) -eq 800 -and (& $stock $s1 2 17) -eq 0)
+    $merchantGoods = @(15, 16, 17, 18, 19, 20, 21, 22, 24)
+    Assert-Check ("AU merchant town of a rival with 20 t storage: the 7 luxury goods, tools and bricks filled to 20 t ({0})" -f (($merchantGoods | ForEach-Object { (& $stock $s1 3 $_) / 32 }) -join '/')) (@($merchantGoods | Where-Object { (& $stock $s1 3 $_) -ne 640 }).Count -eq 0)
+    $diff = @(for ($j = 0; $j -lt $s0.Length; $j++) { if ($s0[$j] -ne $s1[$j]) { $j } })
+    $allowed = @(foreach ($g in 18, 15, 16, 22, 24) { 2 * 600 + 0x2A + $g * 12; 2 * 600 + 0x2A + $g * 12 + 1 }) + @(foreach ($g in $merchantGoods) { 3 * 600 + 0x2A + $g * 12; 3 * 600 + 0x2A + $g * 12 + 1 })
+    Assert-Check "AU nothing else changed: the human's town, the pioneer town of a rival and the town of a non-rival untouched ($($diff.Count) bytes changed, delivered $t1 t)" (@($diff | Where-Object { $allowed -notcontains $_ }).Count -eq 0 -and $t1 -eq 320)
+    Write-Image $a $ClockRva (I32 6000)
+    $t2 = Invoke-RivalSupply
+    Write-Image $a ($EventSettlementRva + 2 * 600 + 0x2A + 18 * 12) ([BitConverter]::GetBytes([uint16]100))
+    Write-Image $a $ClockRva (I32 7000)
+    $t3 = Invoke-RivalSupply
+    Write-Image $a $EventLockRva (I32 1); Write-Image $a ($EventSettlementRva + 2 * 600 + 0x2A + 18 * 12) ([BitConverter]::GetBytes([uint16]0)); Write-Image $a $ClockRva (I32 20000)
+    $t4 = Invoke-RivalSupply
+    Assert-Check "AU only every 2000 clock steps ($t2 t at +1000, $t3 t at +2000 after the liquor fell to 3 t), nothing after the end of the game ($t4 t)" ($t2 -eq 0 -and [math]::Abs($t3 - (860 / 32)) -lt 0.001 -and $t4 -eq 0 -and (& $stock (Read-Image $a $EventSettlementRva (75 * 600)) 2 18) -eq 0)
+    Stop-ImageProcess $a
 
     Write-Host 'AH Everything together (real haeuser.cod)'
     $a = Start-ImageProcess -Crt

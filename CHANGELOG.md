@@ -15,8 +15,11 @@ All versions are for Anno 1602 History Edition (Ubisoft Connect), single player.
 - Island size "Giant": up to 6 giant islands of 135 × 120 to 160 × 140 tiles – larger than the largest islands of
   the game (100 × 90). They grow from the game's large islands; coast, beach and surf are laid with the pieces the game
   itself uses for each shape.
-- Rivals' towns "Ambitious": the rivals' capitals no longer get stuck at citizens or merchants (two dead ends and a
-  wait in the AI's building plan removed); they build church, bathhouse, theatre and college.
+- Rivals' towns "Ambitious (with supplies)": measured in the game, the rivals stop at 34 settler houses because they
+  never make liquor, tobacco goods and spices and hardly ever have bricks; rich rivals also skip the building steps of
+  their plan. Now their building plan builds before it moves on (no money shortcuts, no dead ends before church/
+  bathhouse and theatre/college), and while the game runs the tool window tops up tools, bricks and luxury goods in their
+  towns like a trader. In the game test their capitals built taverns and got citizens within minutes.
 - Presets: "Everything big" with giant islands and ambitious rivals, "Relaxed" without rivers and volcano and with the
   mountains at the coast, "Tough test" with ambitious rivals.
 - Tests: new `tests/test-islands.ps1` (19 checks with the real island files), `tests/test-patcher.ps1` cases AQ–AT.

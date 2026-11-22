@@ -166,6 +166,34 @@ namespace AnnoIslands
             return ms.ToArray();
         }
 
+        // Pieces of another INSELHAUS chunk (a second layer) and writing them back.
+        public List<Entry> ParseLayer(int chunk)
+        {
+            var h = Data[chunk]; var list = new List<Entry>();
+            for (int i = 0; i + 8 <= h.Length; i += 8) list.Add(new Entry { Id = BitConverter.ToUInt16(h, i), X = h[i + 2], Y = h[i + 3], Bits = BitConverter.ToUInt32(h, i + 4) });
+            return list;
+        }
+        public void SetLayer(int chunk, List<Entry> list)
+        {
+            var b = new byte[list.Count * 8]; int o = 0;
+            foreach (var e in list.OrderBy(x => x.Y).ThenBy(x => x.X)) { BitConverter.GetBytes((ushort)e.Id).CopyTo(b, o); b[o + 2] = (byte)e.X; b[o + 3] = (byte)e.Y; BitConverter.GetBytes(e.Bits).CopyTo(b, o + 4); o += 8; }
+            Data[chunk] = b;
+        }
+
+        // Number of empty tiles and of tiles covered more than once (0, 0 for a whole island).
+        public int[] Defects()
+        {
+            var n = new int[W, H];
+            foreach (var e in E)
+            {
+                var s = Houses.Size(e.Id, e.Rot);
+                for (int dx = 0; dx < s[0]; dx++) for (int dy = 0; dy < s[1]; dy++) { int x = e.X + dx, y = e.Y + dy; if (x < W && y < H) n[x, y]++; }
+            }
+            int holes = 0, twice = 0;
+            for (int x = 0; x < W; x++) for (int y = 0; y < H; y++) { if (n[x, y] == 0) holes++; else if (n[x, y] > 1) twice++; }
+            return new[] { holes, twice };
+        }
+
         // Index of the entry that covers each cell; throws if a cell is covered twice or not at all.
         public int[,] Cover(bool strict)
         {
@@ -204,6 +232,7 @@ namespace AnnoIslands
         static readonly HashSet<string> Plain = new HashSet<string> { "BODEN", "WALD" };
         static readonly HashSet<string> Plateau = new HashSet<string> { "FELS", "HANG", "HANGECK", "HANGQUELL" };
         static readonly HashSet<string> River = new HashSet<string> { "FLUSS", "FLUSSECK" };
+        static readonly HashSet<string> Landscape = new HashSet<string> { "MEER", "BRANDUNG", "BRANDECK", "MUENDUNG", "STRAND", "STRANDVARI", "STRANDECKA", "STRANDECKI", "STRANDMUND", "BODEN", "WALD", "FELS", "HANG", "HANGECK", "HANGQUELL", "FLUSS", "FLUSSECK" };
         const int Pyramid = 2211, Bridge = 1601, Road = 411;
         const int Spring = 2311, Slope = 2302, BeachMouth = 1071, StraightBeach = 1013, SeaMouth = 1208, StraightSurf = 1205;
         static readonly int[][] N8 = { new[] { 1, 0 }, new[] { -1, 0 }, new[] { 0, 1 }, new[] { 0, -1 }, new[] { 1, 1 }, new[] { 1, -1 }, new[] { -1, 1 }, new[] { -1, -1 } };
@@ -215,6 +244,7 @@ namespace AnnoIslands
         // under a village file, if that has meadow at the very cell).
         static void FillMeadow(Island f, List<int[]> cells, uint fallbackBits, Island from = null)
         {
+            cells = cells.GroupBy(c => c[0] * 1000 + c[1]).Select(c => c.First()).ToList();   // a tile once, even if two pieces lay on it
             var g = f.Cover(false);
             var gf = from != null ? from.Cover(false) : null;
             var hole = new HashSet<int>(cells.Select(c => c[0] * 1000 + c[1]));
@@ -268,6 +298,30 @@ namespace AnnoIslands
             }
             if (rivers.Count > 0) FillMeadow(f, RemoveEntries(f, rivers), bits, under);
             return changed;
+        }
+
+        // Rivers in a second landscape layer: river pieces become meadow pieces (the meadow of the first layer at that
+        // tile after its rivers are gone, otherwise the first meadow piece of the island).
+        static bool RemoveRiversInLayer(Island f, int chunk)
+        {
+            var list = f.ParseLayer(chunk);
+            var rivers = list.Where(e => River.Contains(Houses.Kind(e.Id)) || e.Id == Spring || e.Id == BeachMouth || e.Id == SeaMouth || e.Id == Bridge).ToList();
+            if (rivers.Count == 0) return false;
+            var g = f.Cover(false);
+            var anyMeadow = f.E.FirstOrDefault(e => Houses.Kind(e.Id) == "BODEN" && Houses.Size(e.Id, 0)[0] == 1 && Houses.Size(e.Id, 0)[1] == 1);
+            foreach (var r in rivers)
+            {
+                list.Remove(r);
+                var s = Houses.Size(r.Id, r.Rot);
+                for (int dx = 0; dx < s[0]; dx++) for (int dy = 0; dy < s[1]; dy++)
+                {
+                    int x = r.X + dx, y = r.Y + dy; if (!In(f, x, y)) continue;
+                    Entry src = g[x, y] >= 0 && Houses.Kind(f.E[g[x, y]].Id) == "BODEN" ? f.E[g[x, y]] : anyMeadow;
+                    list.Add(src != null ? new Entry { Id = src.Id, X = x, Y = y, Bits = src.Bits } : new Entry { Id = 2722, X = x, Y = y, Bits = r.Bits & ~3u });
+                }
+            }
+            f.SetLayer(chunk, list);
+            return true;
         }
 
         // Removes one river system: the river pieces connected to the given cell, and the mouths at its end.
@@ -515,17 +569,33 @@ namespace AnnoIslands
                     if (folder.EndsWith("Nat") && !IsWhole(f)) continue;     // village change files: below
                     bool ch = false; var what = new List<string>();
                     if (o.NoVolcano && RemoveVolcano(f)) { ch = true; what.Add("volcano"); }
-                    // Islands with buildings in a second layer keep their landscape; only those whose pieces cover every
-                    // tile exactly once (as the building table says) are changed.
-                    bool layers = Enumerable.Range(0, f.Names.Count).Count(i => f.Names[i] == "INSELHAUS" && f.Data[i].Length > 0) == 1;
-                    bool whole = true;
-                    try { f.Cover(true); } catch (InvalidDataException ex) { whole = false; log.Add(name + ": landscape kept (" + ex.Message + ")"); }
-                    if (layers && whole)
+                    // Islands with buildings in a second layer keep their landscape. Mountains move only on islands whose
+                    // pieces cover every tile exactly once (as the building table says); rivers also go on the few
+                    // islands of the game with empty or doubly covered tiles (Sued\big52: two river pieces on one tile,
+                    // 7 empty tiles), as long as that adds no empty or doubly covered tile.
+                    // A second layer that holds only landscape (Sued\big52: river corners and meadow, Sued\lit48: forest)
+                    // is treated like the first one for rivers; mountains move only on islands with one layer.
+                    var extra = Enumerable.Range(0, f.Names.Count).Where(i => f.Names[i] == "INSELHAUS" && i != f.HausIndex && f.Data[i].Length > 0).ToList();
+                    bool layers = extra.All(i => f.ParseLayer(i).All(e => Landscape.Contains(Houses.Kind(e.Id))));
+                    var before = f.Defects();
+                    bool whole = before[0] == 0 && before[1] == 0;
+                    if (layers)
                     {
                         HashSet<int> k; keep.TryGetValue(name, out k);
-                        if (o.NoRivers && RemoveRivers(f)) { ch = true; what.Add("rivers"); }
-                        if (o.EdgeMountains && MoveMountains(f, 3, k)) { ch = true; what.Add("mountains"); }
-                        f.Cover(true);
+                        if (o.NoRivers)
+                        {
+                            var backup = f.E.Select(e => e.Copy()).ToList(); var backupData = f.Data.Select(d => (byte[])d.Clone()).ToList();
+                            bool removed = RemoveRivers(f);
+                            foreach (int li in extra) if (RemoveRiversInLayer(f, li)) removed = true;
+                            if (removed)
+                            {
+                                var after = f.Defects();
+                                if (after[0] <= before[0] && after[1] <= before[1]) { ch = true; what.Add("rivers"); }
+                                else { f.E = backup; f.Data = backupData; log.Add(name + ": rivers kept (the file has empty or doubly covered tiles)"); }
+                            }
+                        }
+                        if (o.EdgeMountains && whole && extra.Count == 0 && MoveMountains(f, 3, k)) { ch = true; what.Add("mountains"); }
+                        if (whole) f.Cover(true);
                     }
                     if (!ch) continue;
                     string dst = Path.Combine(outDir, folder); Directory.CreateDirectory(dst);

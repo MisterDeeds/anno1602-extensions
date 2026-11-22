@@ -71,7 +71,7 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 | Fertility | every crop on every island (new endless games) |
 | Free traders | two or three times as many trading ships (24 at most) |
 | Computer rivals | always play like on "Hard", even if you pick an easier level |
-| Rivals' towns | ambitious: the rivals' capitals no longer stop at citizens or merchants; they build church, bathhouse, theatre and college and grow up to aristocrats |
+| Rivals' towns | ambitious (with supplies): the rivals never make liquor, tobacco goods and spices themselves and hardly ever have bricks – so they stop at settlers. The tool supplies luxury goods, bricks and tools to their towns like a trader, and their building plan builds before it moves on – so they get tavern, school, church and so on and grow to citizens and beyond |
 | Pirates | as per difficulty / always attack / strong / none; fleet of up to 12 ships instead of 4 |
 | Disasters | none (no fire, plague, drought or volcano) or more often |
 | Gold | starting gold for you and for the rivals |

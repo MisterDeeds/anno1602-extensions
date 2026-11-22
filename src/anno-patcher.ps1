@@ -81,7 +81,11 @@
                                   their islands completely. -Volcanoes Off also stops eruptions (RVA 0x9E93E).
     Rival growth (-RivalGrowth)   Ambitious (3.4): the main towns of the AI no longer end in the phases without
                                   church/bathhouse (0x22) or theatre/college (0x2C); the wait for merchant goods
-                                  before church and bathhouse is dropped (RVA 0x37517, 0x37B9C, 0x37A7D).
+                                  before church and bathhouse is dropped (RVA 0x37517, 0x37B9C, 0x37A7D); a rich AI
+                                  no longer leaves phases 0x1E/0x20/0x21 on money alone before it has built there
+                                  (RVA 0x36FE2, 0x37302, 0x374F4). While the game runs, this window tops up tools,
+                                  bricks and the luxury goods of their towns (below 20 t -> 30 t), which the AI
+                                  hardly makes itself.
     Resources (-Resources)        Normal: amounts of the template (meant for 17-20 islands). More: ore,
                                   gold, fertility of the plantations and treasures grow with the
                                   island count. Lots: twice as much. Each amount at most as
@@ -1046,10 +1050,17 @@ $RivalGrowthSites = @(
     @{ Name = (Txt 'AI growth (phase 0x21)' 'KI Ausbau (Phase 0x21)'); Rva = 0x37510; Original = '81 78 1C B6 03 00 00 7E 1C'; Target = '81 78 1C B6 03 00 00 90 90' }
     @{ Name = (Txt 'AI growth (phase 0x29)' 'KI Ausbau (Phase 0x29)'); Rva = 0x37B95; Original = '81 78 1C 4C 04 00 00 7E 43'; Target = '81 78 1C 4C 04 00 00 90 90' }
     @{ Name = (Txt 'AI growth (church, bath)' 'KI Ausbau (Kirche, Bad)'); Rva = 0x37A7A; Original = '83 F8 03 7C 1E'; Target = '83 F8 03 90 90' }
+    # Measured in the game (2026-11-22): a rich AI leaves phases 0x1E (plantations), 0x20 (tavern, school, doctor) and
+    # 0x21 on money alone (>= 15001 / 20001 / 25001 gold) before it has built anything there, so its towns never get the
+    # public buildings of the next level. The money-only exits become jumps to the building part ("jle" -> "jmp"); the
+    # town goes on when enough residents of the next level live there (170 settlers / 250 / 340 citizens).
+    @{ Name = (Txt 'AI growth (build first 1E)' 'KI Ausbau (erst bauen 1E)'); Rva = 0x36FDB; Original = '81 79 04 98 3A 00 00 7E 79'; Target = '81 79 04 98 3A 00 00 EB 79' }
+    @{ Name = (Txt 'AI growth (build first 20)' 'KI Ausbau (erst bauen 20)'); Rva = 0x372FB; Original = '81 78 04 20 4E 00 00 7E 5C'; Target = '81 78 04 20 4E 00 00 EB 5C' }
+    @{ Name = (Txt 'AI growth (build first 21)' 'KI Ausbau (erst bauen 21)'); Rva = 0x374EE; Original = '81 F9 A8 61 00 00 7E 7D'; Target = '81 F9 A8 61 00 00 EB 7D' }
 )
 if ($RivalGrowth -eq 'Ambitious') {
     foreach ($g in $RivalGrowthSites) { $Patches += @{ Name = $g.Name.PadRight(28); Rva = $g.Rva; Original = $g.Original; Target = (Bytes $g.Target) } }
-    Write-Host (Txt 'Rival growth: ambitious (the main towns of the rivals go on to merchants and aristocrats)' 'Gegner-Ausbau: ehrgeizig (die Hauptstaedte der Gegner wachsen weiter zu Kaufleuten und Aristokraten)')
+    Write-Host (Txt 'Rival growth: ambitious (the main towns of the rivals go on to merchants and aristocrats; this window supplies the luxury goods they do not make)' 'Gegner-Ausbau: ehrgeizig (die Hauptstaedte der Gegner wachsen weiter zu Kaufleuten und Aristokraten; dieses Fenster liefert ihnen die Luxuswaren nach, die sie nicht herstellen)')
 }
 
 # Pirate fleet: FUN_14003b7e0 (pirates only, called from FUN_14003dc40) compares the number of
@@ -2135,6 +2146,57 @@ function Invoke-EventTick([double]$elapsedMs) {
 
 # Runs the events until the game exits (or, in tests, until the clock reaches -EventTestUntilClock). Restores
 # everything temporary before it returns.
+# --- Supply for ambitious rivals (-RivalGrowth Ambitious, 3.4) ------------------------------------
+# Measured in the game (2026-11-22, docs\FINDINGS.md "Ambitious rivals"): the main towns of the AI wait in phase 0x1F
+# for 2 of the 3 goods spices, tobacco goods and liquor (20 t without an own workshop) and never build those chains, so
+# they stop at 34 settler houses; and they hardly make bricks, so even with the goods the AI's building jobs (tavern,
+# school, ...) stop at the first one it cannot pay - 40 t of bricks given in the game gave every rival capital a tavern
+# and the first citizens within 3 minutes. While the game runs, this window therefore tops up the goods of every town of
+# a computer rival (player kind 0xC) that has settlers or more: a good below 20 t is filled up to 30 t (at most the
+# town's storage limit), at most once per 2000 clock steps (about 4 game minutes): tools, bricks, cloth, liquor, tobacco
+# goods and spices from settlers on, cocoa from citizens, clothes and jewellery from merchants. Their gold is not touched.
+$SupplyGoods = @(@{ Good = 22; Stage = 1 }, @{ Good = 24; Stage = 1 }, @{ Good = 19; Stage = 1 }, @{ Good = 18; Stage = 1 }, @{ Good = 15; Stage = 1 }, @{ Good = 16; Stage = 1 }, @{ Good = 17; Stage = 2 }, @{ Good = 20; Stage = 3 }, @{ Good = 21; Stage = 3 })
+$SupplyBelow = 640; $SupplyTo = 960; $SupplyEveryClock = 2000
+$script:SupplyClock = -1; $script:SupplyTons = 0; $script:SupplyReported = 0
+# One supply round (needs $script:h and $script:base). Returns the tons delivered.
+function Invoke-RivalSupply {
+    $clock = [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0)
+    if ($clock -le 0 -or [BitConverter]::ToInt32((Read-Mem $EventLockRva 4), 0) -ne 0) { return 0 }
+    if ($script:SupplyClock -ge 0 -and $clock -ge $script:SupplyClock -and $clock - $script:SupplyClock -lt $SupplyEveryClock) { return 0 }
+    $script:SupplyClock = $clock
+    $pl = Read-Mem $EventPlayersRva (4 * $PlayerSize)
+    $sb = Read-Mem $EventSettlementRva ($EventSettlementCount * $EventSettlementSize)
+    $tons = 0
+    for ($i = 0; $i -lt $EventSettlementCount; $i++) {
+        $o = $i * $EventSettlementSize
+        if ($sb[$o + 0x18] -eq 0xFF -or $sb[$o] -eq 0) { continue }
+        $owner = [int]$sb[$o + 0x1A]
+        if ($owner -lt 1 -or $owner -gt 3 -or [BitConverter]::ToInt32($pl, $owner * $PlayerSize) -ne 12) { continue }
+        $stage = -1; for ($k = 0; $k -lt 5; $k++) { if ([BitConverter]::ToInt32($sb, $o + 0x220 + 4 * $k) -gt 0) { $stage = $k } }
+        if ($stage -lt 1) { continue }
+        $limit = [BitConverter]::ToInt32($sb, $o + 0x20) - 0x140 + [BitConverter]::ToUInt16($sb, $o + 0x1FA) * 0x140
+        $to = [math]::Min($SupplyTo, $limit)
+        foreach ($gd in $SupplyGoods) {
+            if ($stage -lt $gd.Stage) { continue }
+            $off = $o + 0x2A + $gd.Good * 12; $stock = [int][BitConverter]::ToUInt16($sb, $off)
+            if ($stock -ge $SupplyBelow -or $to -le $stock) { continue }
+            Write-Mem ($EventSettlementRva + $off) ([BitConverter]::GetBytes([uint16]$to)) $false
+            $tons += ($to - $stock) / 32
+        }
+    }
+    $script:SupplyTons += $tons
+    $tons
+}
+# Called by the waiting loops; reports every 50 t delivered.
+function Invoke-RivalSupplyTick {
+    if ($RivalGrowth -ne 'Ambitious') { return }
+    try { [void](Invoke-RivalSupply) } catch { return }
+    if ($script:SupplyTons -ge $script:SupplyReported + 50) {
+        $script:SupplyReported = $script:SupplyTons
+        Write-Host ((Txt 'Supply for the rivals: {0:0} t of luxury goods so far.' 'Nachschub fuer die Gegner: bisher {0:0} t Luxuswaren.') -f $script:SupplyTons)
+    }
+}
+
 function Invoke-EventLoop($proc) {
     $script:h = [AnnoMem]::OpenProcess(0x0008 -bor 0x0010 -bor 0x0020 -bor 0x0400, $false, $proc.Id)
     if ($script:h -eq [IntPtr]::Zero) {
@@ -2163,6 +2225,7 @@ function Invoke-EventLoop($proc) {
             Start-Sleep -Milliseconds $poll
             if (-not (Test-Running)) { break }
             if ($TestProcessId -ne 0 -and ((Get-Date) -gt $script:deadline -or ($EventTestUntilClock -gt 0 -and [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0) -ge $EventTestUntilClock))) { break }
+            Invoke-RivalSupplyTick
             if (-not $on) { continue }
             $now = $sw.ElapsedMilliseconds
             try { Invoke-EventTick ($now - $last); $errors = 0 }
@@ -2411,13 +2474,22 @@ Write-Host (Txt 'Done. Now start a NEW endless game in the game (do not load an 
 
 # --- 6. Protection for "Continue game", events ---------------------------------------------------
 $eventsOn = $Events -ne 'Off'
-if ($TestProcessId -eq 0 -and (-not $NoLastgameProtection -or $eventsOn)) {
-    if ($NoLastgameProtection) { Write-Host (Txt 'This window stays open until the game exits (events).' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Ereignisse).') -ForegroundColor Yellow }
+$supplyOn = $RivalGrowth -eq 'Ambitious'
+if ($TestProcessId -eq 0 -and (-not $NoLastgameProtection -or $eventsOn -or $supplyOn)) {
+    if ($NoLastgameProtection) { Write-Host (Txt 'This window stays open until the game exits (events, supply for the rivals).' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Ereignisse, Nachschub fuer die Gegner).') -ForegroundColor Yellow }
     else { Write-Host (Txt 'This window stays open until the game exits (protection for "Continue game").' 'Dieses Fenster bleibt offen, bis das Spiel beendet ist (Schutz fuer "Spiel fortsetzen").') -ForegroundColor Yellow }
-    # The events run while the game runs; whatever happens to them, the protection below still follows.
+    # The events (and the supply for the rivals) run while the game runs; whatever happens to them, the protection
+    # below still follows.
     if ($eventsOn) {
         try { Invoke-EventLoop $proc }
         catch { Write-Host ((Txt 'Events: stopped ({0}).' 'Ereignisse: beendet ({0}).') -f $_.Exception.Message) -ForegroundColor Yellow }
+    }
+    elseif ($supplyOn) {
+        $script:h = [AnnoMem]::OpenProcess(0x0008 -bor 0x0010 -bor 0x0020 -bor 0x0400, $false, $proc.Id)
+        if ($script:h -ne [IntPtr]::Zero) {
+            try { while (-not $proc.HasExited) { Invoke-RivalSupplyTick; Start-Sleep -Seconds 2; $proc.Refresh() } }
+            finally { [void][AnnoMem]::CloseHandle($script:h) }
+        }
     }
     while (-not $proc.HasExited) { Start-Sleep -Seconds 2; $proc.Refresh() }
     Start-Sleep -Seconds 2

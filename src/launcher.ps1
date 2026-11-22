@@ -114,10 +114,11 @@ $Options = [ordered]@{
     Rivals        = @{ Group = 'Sea'; Label = (Txt 'Computer rivals' 'Computergegner'); Default = 'Difficulty'; Choices = [ordered]@{
             'Difficulty' = New-Choice 'As per difficulty' 'Wie Schwierigkeit'
             'Hard'       = New-Choice 'Always like “Hard”' 'Immer wie „Schwer“' @('-Rivals', 'Hard') } }
-    # 3.4: the main towns of the rivals no longer stop at citizens or merchants (anno-patcher.ps1 -RivalGrowth).
+    # 3.4: the main towns of the rivals no longer stop at settlers, citizens or merchants: no dead ends in their
+    # building plan, and the luxury goods they never make are supplied (anno-patcher.ps1 -RivalGrowth).
     RivalGrowth   = @{ Group = 'Sea'; Label = (Txt "Rivals' towns" 'Städte der Gegner'); Default = 'Default'; Choices = [ordered]@{
             'Default'   = New-Choice 'As in the original' 'Wie im Original'
-            'Ambitious' = New-Choice 'Ambitious (up to aristocrats)' 'Ehrgeizig (bis Aristokraten)' @('-RivalGrowth', 'Ambitious') } }
+            'Ambitious' = New-Choice 'Ambitious (with supplies)' 'Ehrgeizig (mit Nachschub)' @('-RivalGrowth', 'Ambitious') } }
     RivalGold     = @{ Group = 'Sea'; Label = (Txt "Rivals' gold" 'Gold der Gegner'); Default = 'Difficulty'; Choices = [ordered]@{
             'Difficulty' = New-Choice 'As per difficulty' 'Wie Schwierigkeit'
             '30000'      = New-Choice '30,000' '30 000' @('-RivalGold', '30000')

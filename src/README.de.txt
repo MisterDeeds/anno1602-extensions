@@ -46,7 +46,8 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
                        jede Insel des Spiels. Sie wachsen aus den groessten Inseln; ohne Fluesse.
   Fluesse              Keine: Fluesse werden Wiese, ihre Muendung Strand und Brandung, die Quelle Hang
   Berge                Am Rand: Berge mitten auf der Insel ruecken an die Kueste (Fluesse, die dort
-                       entspringen, verschwinden mit); Berge neben einem Ureinwohnerdorf bleiben
+                       entspringen, verschwinden mit); Berge neben einem Ureinwohnerdorf und die
+                       seltenen sehr grossen Gebirge ohne Platz an der Kueste bleiben
   Vulkan               Keiner: der einzige Vulkan des Spiels wird ein normaler Berg, keine Ausbrueche
                        (Fluesse, Berge, Vulkan und Riesen-Inseln: das Werkzeug schreibt einmalig
                        veraenderte Inseldateien nach %LOCALAPPDATA%\Anno1602-Extensions\islands und
@@ -58,9 +59,12 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
   Freie Haendler       Mehr / Viele: doppelt bzw. dreimal so viele Haendlerschiffe (hoechstens 24)
   Computergegner       Immer wie "Schwer": die drei Gegner ruesten und bauen aus wie auf der
                        hoechsten Stufe, auch wenn du leichter spielst (Naturereignisse bleiben)
-  Staedte der Gegner   Ehrgeizig: die Hauptstaedte der Gegner bleiben nicht mehr bei Buergern oder
-                       Kaufleuten stehen; sie bauen Kirche, Badehaus, Theater und Universitaet und
-                       koennen Aristokraten erreichen
+  Staedte der Gegner   Ehrgeizig (mit Nachschub): die Gegner stellen nie Alkohol, Tabakwaren und
+                       Gewuerze her und haben fast nie Ziegel, darum bleiben sie bei Siedlern stehen.
+                       Waehrend des Spiels fuellt das Werkzeugfenster Luxuswaren, Ziegel und Werkzeug
+                       in ihren Staedten auf (wie ein Haendler; ihr Gold bleibt), und ihr Bauplan baut
+                       erst, bevor er weitergeht: sie bekommen Wirtshaus, Schule, Kirche und Co. und
+                       wachsen zu Buergern und weiter
   Piraten              wie Schwierigkeit / greifen immer an / stark / keine
   Piratenflotte        Gross / Riesig: bis 8 bzw. 12 Piratenschiffe statt 4 (nur wenn Piraten angreifen)
   Katastrophen         Keine: kein Feuer, keine Pest, Duerre oder Vulkan. Haeufiger: Feuer und

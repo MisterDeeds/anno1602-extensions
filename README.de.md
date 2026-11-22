@@ -71,7 +71,7 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 | Fruchtbarkeit | jede Pflanze auf jeder Insel (neue Endlosspiele) |
 | Freie Händler | doppelt oder dreimal so viele Händlerschiffe (höchstens 24) |
 | Computergegner | immer wie „Schwer“, auch wenn du leichter spielst |
-| Städte der Gegner | ehrgeizig: die Hauptstädte der Gegner bleiben nicht mehr bei Bürgern oder Kaufleuten stehen, sondern bauen Kirche, Badehaus, Theater und Universität und wachsen bis zu Aristokraten |
+| Städte der Gegner | ehrgeizig (mit Nachschub): die Gegner stellen nie selbst Alkohol, Tabakwaren und Gewürze her und haben fast nie Ziegel – darum bleiben sie bei Siedlern stehen. Das Werkzeug liefert ihren Städten Luxuswaren, Ziegel und Werkzeug nach wie ein Händler, und ihr Bauplan baut erst, bevor er weitergeht – so bekommen sie Wirtshaus, Schule, Kirche und Co. und wachsen zu Bürgern und weiter |
 | Piraten | wie Schwierigkeit / greifen immer an / stark / keine; Flotte bis 12 Schiffe statt 4 |
 | Katastrophen | keine (kein Feuer, keine Pest, Dürre oder Vulkan) oder häufiger |
 | Gold | Startgold für dich und für die Gegner |

@@ -68,24 +68,28 @@ try {
     Write-Host '2  No rivers'
     $r = Invoke-Forge 'rivers' $true $false $false 0
     $files = Get-Written $r
-    $withRiver = 0; $left = 0; $bad = 0; $other = 0; $villages = 0
+    $withRiver = 0; $left = 0; $bad = 0; $other = 0; $villages = 0; $irregular = 0
     foreach ($d in 'Nord', 'Sued', 'NoKlima') {
         foreach ($f in Get-ChildItem -LiteralPath (Join-Path $game $d) -Filter *.scp) {
             $i = [AnnoIslands.Island]::Load($f.FullName)
-            if ([AnnoIslands.Forge]::IsWhole($i) -and @($i.E | Where-Object { (Get-Kind $_.Id) -in 'FLUSS', 'FLUSSECK' }).Count -gt 0) { $withRiver++ }
+            if (@($i.E | Where-Object { (Get-Kind $_.Id) -in 'FLUSS', 'FLUSSECK' }).Count -gt 0) { $withRiver++ }
         }
     }
     foreach ($f in $files) {
         $rel = Get-Rel $r $f; $i = [AnnoIslands.Island]::Load($f.FullName); $o = Get-Original $rel
-        if (@($i.E | Where-Object { $RiverIds -contains $_.Id }).Count -gt 0) { $left++ }
+        $all = @($i.E) + @(0..($i.Names.Count - 1) | Where-Object { $i.Names[$_] -eq 'INSELHAUS' -and $_ -ne $i.HausIndex } | ForEach-Object { $i.ParseLayer($_) })
+        if (@($all | Where-Object { $_ -and $RiverIds -contains $_.Id }).Count -gt 0) { $left++ }
         if ($rel -match 'Nat\\') { $villages++; continue }
-        try { [void]$i.Cover($true) } catch { $bad++ }
+        # Whole islands: every tile once. The few island files of the game with empty or doubly covered tiles: not more of them.
+        $dn = $i.Defects(); $do = $o.Defects()
+        if ($dn[0] -gt $do[0] -or $dn[1] -gt $do[1] -or (($do[0] + $do[1]) -eq 0 -and ($dn[0] + $dn[1]) -ne 0)) { $bad++ }
+        if (($do[0] + $do[1]) -gt 0) { $irregular++ }
         if (-not (Test-OtherChunks $i $o)) { $other++ }
     }
     $wholeWritten = @($files | Where-Object { (Get-Rel $r $_) -notmatch 'Nat\\' }).Count
     Assert-Check "every island with a river written ($wholeWritten written, $withRiver with a river in Nord/Sued/NoKlima)" ($wholeWritten -ge $withRiver -and $withRiver -gt 150)
     Assert-Check "no river piece, spring, mouth or bridge left ($left files with one)" ($left -eq 0)
-    Assert-Check "1 every written island covers each tile once ($bad wrong)" ($bad -eq 0)
+    Assert-Check "1 every written island covers each tile once ($bad wrong; $irregular files of the game with empty or double tiles: not more of them)" ($bad -eq 0)
     Assert-Check "1 other chunks unchanged ($other files differ)" ($other -eq 0)
     Assert-Check "village files without rivers written ($villages)" ($villages -gt 0)
 
@@ -144,7 +148,13 @@ try {
     $f1 = Get-Written $all1; $f2 = Get-Written $all2; $same = $f1.Count -eq $f2.Count
     if ($same) { foreach ($f in $f1) { $o = Join-Path $all2.Dir (Get-Rel $all1 $f); if (-not (Test-Path -LiteralPath $o) -or (Get-FileHash -LiteralPath $f.FullName).Hash -ne (Get-FileHash -LiteralPath $o).Hash) { $same = $false; break } } }
     Assert-Check ("all options: {0} files, two builds byte-identical" -f $f1.Count) ($same -and $f1.Count -gt 300)
-    $bad = 0; foreach ($f in $f1) { if ((Get-Rel $all1 $f) -match 'Nat\\') { continue }; try { [void]([AnnoIslands.Island]::Load($f.FullName)).Cover($true) } catch { $bad++ } }
+    $bad = 0
+    foreach ($f in $f1) {
+        $rel = Get-Rel $all1 $f; if ($rel -match 'Nat\\') { continue }
+        $dn = ([AnnoIslands.Island]::Load($f.FullName)).Defects(); $o = Get-Original $rel
+        $do = if ($o) { $o.Defects() } else { @(0, 0) }   # giant islands: no original, must be whole
+        if ($dn[0] -gt $do[0] -or $dn[1] -gt $do[1] -or (($do[0] + $do[1]) -eq 0 -and ($dn[0] + $dn[1]) -ne 0)) { $bad++ }
+    }
     Assert-Check "all options: every written island covers each tile once ($bad wrong)" ($bad -eq 0)
     Assert-Check ("build time {0:N1} s (all options)" -f $all1.Seconds) ($all1.Seconds -lt 30)
 

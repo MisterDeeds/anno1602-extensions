@@ -1417,8 +1417,26 @@ in the folder still come from the game folder.
 - **Planner (`-IslandSize Giant`):** originals as with Large, but they leave up to 6 of the 10 `lar` places to the
   giant islands; then the giant islands (each file once, the largest first, 2000 random tries each), then copies
   alternately lar/big. Island class 4 in the SZENE entry, explicit file number → the loader opens `Nord|Sued\lar2x.SCP`.
+- Irregular island files (O): `Sued\big52` has 7 empty tiles, a river piece on a river corner and a second
+  `INSELHAUS` with three river corners and meadow; `Sued\lit48` (forest) and `Sued\lit26` (one surf piece) have such a
+  second landscape layer too, five more an empty one. Rivers are removed in both layers as long as that adds no
+  empty or doubly covered tile; mountains move only on islands with one layer that cover every tile once.
+- Very large mountain massifs stay where they are when no free spot near the coast fits them (`Nord\big51`: one
+  connected group of about 20 × 16 tiles in the middle), as do mountains next to a village (`Sued\big17`).
 - Build time (O): about 4 s for rivers + mountains, under 1 s for the giant islands, 11 s for everything in a fresh
   process (C# compile included); afterwards the folder is reused.
+- **In the running game (O), 2026-11-22 08:17–:** repository tool with `-IslandSize Giant -Rivers Off -Mountains Edge
+  -Volcanoes Off -RivalGrowth Ambitious -Rivals Hard -RivalGold 60000 -Resources Lots -Pirates Off -Turbo -TurboLevel 16`,
+  all 30 sites set; new endless game "Durchschnittlich", driven only by window messages (`PostMessage` keys and clicks,
+  `PrintWindow` captures) while the user worked in front of it. **All 50 islands loaded**, among them **6 giant islands**
+  (160 × 140, 155 × 140, 160 × 125, 140 × 140, 150 × 130, 140 × 120, files lar20–lar27) and 4 × 100 × 90.
+  Read from memory (island table 0x62DDC0, tiles at +0x2CB0): **the tiles hold graphic numbers**, not file ids; the
+  table RVA 0x6CBB00 (8 bytes per graphic number) points to the building entry (RVA 0x6BA1C0 + no. × 0x90), whose number
+  leads to the file id (e.g. graphic 758 → no. 171 → sea 1201). With that: no river piece on 49 islands (the 50th was
+  `Sued\big52`, fixed since, see above), 169 of 172 mountain groups at most 3 tiles from the coast (the three others:
+  the massif of `Nord\big51`, next to the village of `Sued\big17`, and `Sued\big52` with its second layer at 4 tiles). A giant island on screen: beach, surf and sea without a gap, speckled forest, mountains
+  near the shore. The game ran at exactly 16 × (160 clock steps per second) also behind other windows; an AI capital
+  grew on a giant island.
 - Tests: `tests/test-islands.ps1` **19 of 19** (every written island covers each tile once, other chunks unchanged, no
   river piece left in 211 islands + 95 village files, rock count unchanged, mountain groups at the coast 68 % → 97 %,
   only `Nord\big25` changed for the volcano, 16 giant islands with only learned coast pieces, two builds byte-identical,
@@ -1443,6 +1461,24 @@ Read-only analysis of the decompiled AI (`analysis/scan/alle-funktionen.c`), the
   aristocrat goods) stays, so those come once the chains run.
 - Correction to "Rivals, pirate fleet …": "AI levels 2/2/4" there are the INFRA unlock bits read by `FUN_1400185f0`;
   **I** level 4 there is a merchant tier, not aristocrats.
+- **In the running game (O), 2026-11-22** (endless game "Durchschnittlich", rivals Hard, 60,000 gold, 16 ×, the three
+  NOPs above set): after 8.4 game hours every rival capital stood at exactly 204 settlers (34 houses) with 100,000+
+  gold; their towns held 0 t of tobacco, sugar, tobacco goods, spices and liquor and **0 t of bricks**; buildings on the
+  capital island: houses, chapel, market, cattle and sheep farm, weaving hut, butcher, forester, sometimes quarry and
+  stonemason – no plantation, no workshop, no tavern. AI context (0x6EC220 + slot × 0x11EC8, town records +0x3EB8, phase
+  +0x10): main towns in **phase 0x1F** (waiting for 2 of spices, tobacco goods, liquor), second towns in 0x17. The
+  islands had their crops (fertility at island +0x5C: north bits 1/3/5, south 2/4/6).
+- **O** Goods written into the rival towns (tool loop, below): the main towns left 0x1F and grew past 204 settlers, but
+  reached phase 0x28 without a tavern: phases 0x1E, 0x20 and 0x21 exit on money alone (`cmp [player+4],15000/20000/25000;
+  jle build`) – a rich AI leaves them before building anything. With those exits patched (`jle` → `jmp`, RVA 0x36FE2,
+  0x37302, 0x374F4) the towns stayed in 0x20 but still built nothing of it: its job chain (`FUN_1400372c0`: first
+  `FUN_140034df0`, then the other build jobs) returns at the first job it cannot pay. **40 t of bricks and tools written
+  into the three capitals → all three built a tavern within 3 game-minutes-worth of real time and two had citizens
+  (38, 45) right after.**
+- **Implementation:** `-RivalGrowth Ambitious` = the 6 code sites (3 NOPs, 3 jumps) plus a supply loop in the tool window
+  (`Invoke-RivalSupply`, every poll, at most once per 2000 clock steps): for every town of a player of kind 0xC with
+  settlers or more, tools, bricks, cloth, liquor, tobacco goods and spices (from settlers), cocoa (from citizens), clothes
+  and jewellery (from merchants) below 20 t are set to 30 t (at most the storage limit of the town). Gold untouched.
 
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
