@@ -32,7 +32,8 @@ Playing
                 daily adventure, "Build your own scenario ..." and the check box "Unlock
                 chapters one by one" (see below).
   "Start original" starts the game without any changes (e.g. for old saves).
-  "Open logbook" opens the logbook window (see below).
+  "Open logbook" opens the logbook window, "Open island map" the island map (see below). The
+  check boxes below open them together with the game (the island map is on unless you untick it).
   The window shows German on a German Windows and English otherwise.
 
 What is changed (only in memory, no game file is modified):
@@ -168,6 +169,23 @@ Logbook
   %APPDATA%\Anno1602-Extensions\logbook.json, the charts of the newest 30 games in the folder
   "history" next to it. The "Adventures" tab shows from logbook.json which chapters you have
   won - so keep the logbook open while you play a chapter.
+
+Island map
+  A window next to the game ("Open island map" in the launcher; it opens with the game unless
+  you untick "Open the island map with the game"). It only READS the game's memory. It shows
+  every island of the running game at a glance - endless games, scenarios and savegames:
+    - every island with its real outline, turned the same way as your view in the game;
+      northern islands green, southern ones olive, mountains grey, buildings light, the
+      territory of every player in its colour from the game,
+    - a gold or grey marker on every gold and ore deposit, right on its mountain,
+    - the island numbers ("home" on the perfect home island), your ships and the spot the
+      game shows right now (pink circle).
+  Point at an island: gold and ore (large/small, tons; a gold mine never uses gold up), the
+  crops that grow at 100 %, the settlements with owner and residents. The list on the right
+  shows every island; tick Gold, Ore, a crop, Free, North or South to see only the islands
+  with all of it (marked on the map). Mouse wheel: zoom, drag: move, double-click: whole map;
+  double-click a row: zoom to that island. "Always on top" keeps it above the game (window
+  mode), or put it on a second monitor. It refreshes every 2 seconds.
 
 Campaigns and challenges (49 own scenarios with a story and a mission)
   In the game: Single Player -> New Game -> at the very bottom of the list, "Own Scenarios"

@@ -180,7 +180,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$nu
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
     if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode|Build-UltraCode|Get-CargoHolds|Build-UltraAccelCode|Get-HomeInfo|Build-HomeShipCode|Build-HomeShipTable)\b') -or
-        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|CargoMaxHolds|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock|UltraCaveRva|UltraHookRva|UltraHookOrig|KeyEndRva|SetSpeedRva|UltraAccelCaveRva|UltraAccelCallRva|UltraAccelCallOrig|AccelIatRva|ModifierFlagsRva|HomeFileNumber|HomeFlagRva|HomeShipTableRva|HomeShipCaveRva|ShipLoaderRva|ShipLoaderOrig|HomeClockMax|HomeDepositKinds|HomeDepositAmounts|HomeCropBits)\b') { . ([scriptblock]::Create($txt)) }
+        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|CargoMaxHolds|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock|UltraCaveRva|UltraHookRva|UltraHookOrig|KeyEndRva|SetSpeedRva|UltraAccelCaveRva|UltraAccelCallRva|UltraAccelCallOrig|AccelIatRva|ModifierFlagsRva|HomeFileNumber|HomeFlagRva|HomeShipTableRva|HomeShipCaveRva|ShipLoaderRva|ShipLoaderOrig|HomeClockMax|HomeDepositWares|HomeDepositKinds|HomeDepositAmounts|HomeCropBits)\b') { . ([scriptblock]::Create($txt)) }
     # Event engine (cases AI-AO): its constants, functions and the two C# types run here in the test process, against
     # the helper process ($script:h / $script:base as in the tool).
     if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Invoke-RivalSupply|Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs|Invoke-Explore|Invoke-Home)\b') -or
@@ -1946,7 +1946,7 @@ try {
         $script:HomeInfo = Get-HomeInfo $hfile; $HomeInfo = $script:HomeInfo
         $a = Start-ImageProcess
         Connect-EventEngine $a
-        $script:HomeDone = @{}
+        $script:HomeDone = @{}; $script:HomeChecked = @{}
         $slot = 7; $rec = $ExploreIslandRva + $slot * $ExploreIslandSize
         $setIsland = { param([long]$tiles, [int]$file) Write-Image $a ($rec + $ExploreTilesOffset) ([BitConverter]::GetBytes([int64]$tiles)); Write-Image $a ($rec + 0xC) (I32 160); Write-Image $a ($rec + 0x10) (I32 140); Write-Image $a ($rec + 0x18) ([BitConverter]::GetBytes([uint16]4)); Write-Image $a ($rec + 0x1A) ([BitConverter]::GetBytes([uint16]$file)); Write-Image $a ($rec + 0x1C) ([byte[]]@(0)); Write-Image $a ($rec + 0x20) ([byte[]](@(2, 5, 5, 0, 0, 0, 0, 0x1E) + @(2, 9, 9, 0, 1, 0, 0, 0x0A) + @(0) * 16)); Write-Image $a ($rec + 0x41) ([byte[]]@(2)); Write-Image $a ($rec + 0x43) ([byte[]]@(0x06)); Write-Image $a ($rec + 0x5C) (I32 0x02) }
         & $setIsland 0x5000 $HomeFileNumber
@@ -1956,8 +1956,8 @@ try {
         $after = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
         $o = $slot * $ExploreIslandSize
         $deps = @(for ($k = 0; $k -lt 4; $k++) { '{0}:{1}/{2} kind {3} {4} t' -f $after[$o + 0x20 + 8 * $k], $after[$o + 0x21 + 8 * $k], $after[$o + 0x22 + 8 * $k], $after[$o + 0x24 + 8 * $k], ([BitConverter]::ToUInt16($after, $o + 0x26 + 8 * $k) / 32) })
-        $wantDeps = @(for ($k = 0; $k -lt 4; $k++) { '2:{0}/{1} kind {2} {3} t' -f $HomeInfo.Ore[$k][0], $HomeInfo.Ore[$k][1], $HomeDepositKinds[$k], ($HomeDepositAmounts[$k] / 32) })
-        Assert-Check ("AY new game (clock 100): set ({0}); deposits {1}" -f $n1, ($deps -join ', ')) ($n1 -eq 1 -and ($deps -join ',') -eq ($wantDeps -join ','))
+        $wantDeps = @(for ($k = 0; $k -lt 4; $k++) { '{0}:{1}/{2} kind {3} {4} t' -f $HomeDepositWares[$k], $HomeInfo.Ore[$k][0], $HomeInfo.Ore[$k][1], $HomeDepositKinds[$k], ($HomeDepositAmounts[$k] / 32) })
+        Assert-Check ("AY new game (clock 100): set ({0}); deposits {1} (ware 2 ore, 3 gold)" -f $n1, ($deps -join ', ')) ($n1 -eq 1 -and ($deps -join ',') -eq ($wantDeps -join ',') -and ($deps -join ',') -match '^2:.* kind 0 240 t,2:.* kind 0 240 t,3:.* kind 1 50 t,3:.* kind 1 50 t$')
         Assert-Check ("AY count +0x41 = {0}, crops +0x5C = 0x{1:X} (all six), explored +0x43 = 0x{2:X} (rivals' bits kept)" -f $after[$o + 0x41], [BitConverter]::ToUInt32($after, $o + 0x5C), $after[$o + 0x43]) ($after[$o + 0x41] -eq 4 -and [BitConverter]::ToUInt32($after, $o + 0x5C) -eq 0x7E -and $after[$o + 0x43] -eq 0x07)
         $diff = @(for ($j = 0; $j -lt $before.Length; $j++) { if ($before[$j] -ne $after[$j]) { $j } })
         Assert-Check "AY only the home island's deposits, count, crops and explored bit changed ($($diff.Count) bytes)" (@($diff | Where-Object { $_ -lt $o + 0x20 -or ($_ -ge $o + 0x40 -and $_ -notin ($o + 0x41), ($o + 0x43), ($o + 0x5C)) -or $_ -ge $o + 0x60 }).Count -eq 0)
@@ -1969,6 +1969,24 @@ try {
         & $setIsland 0x8000 27; Write-Image $a $ClockRva (I32 100)
         $n5 = Invoke-Home
         Assert-Check "AY once per island ($n2), again for a new game ($n3), not in a loaded game with a later clock ($n4), not on another island ($n5)" ($n2 -eq 0 -and $n3 -eq 1 -and $n4 -eq 0 -and $n5 -eq 0)
+        # Repair of a 3.6.0 game: the gold mountains carry small ore deposits (ware 2, kind 1, 0xA00). A small ore deposit
+        # on the second (ore) mountain stays ore; the large ore deposit stays as it is. 4 slots at most (+0x20..+0x3F).
+        $v360 = [byte[]](@(for ($k = 0; $k -lt 4; $k++) { 2, [byte]$HomeInfo.Ore[$k][0], [byte]$HomeInfo.Ore[$k][1], 1, $(if ($k -eq 0) { 0 } else { 1 }), 0, 0, $(if ($k -eq 0) { 0x1E } else { 0x0A }) }))
+        & $setIsland 0x9000 $HomeFileNumber; Write-Image $a ($rec + 0x20) $v360; Write-Image $a ($rec + 0x41) ([byte[]]@(4)); Write-Image $a $ClockRva (I32 9000)
+        $before = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
+        $r1 = Invoke-Home
+        $after = Read-Image $a $ExploreIslandRva (50 * $ExploreIslandSize)
+        $deps = @(for ($k = 0; $k -lt 4; $k++) { '{0}:{1}/{2} kind {3} {4} t' -f $after[$o + 0x20 + 8 * $k], $after[$o + 0x21 + 8 * $k], $after[$o + 0x22 + 8 * $k], $after[$o + 0x24 + 8 * $k], ([BitConverter]::ToUInt16($after, $o + 0x26 + 8 * $k) / 32) })
+        $want = @(for ($k = 0; $k -lt 4; $k++) { if ($k -eq 1) { '2:{0}/{1} kind 1 80 t' -f $HomeInfo.Ore[1][0], $HomeInfo.Ore[1][1] } else { '{0}:{1}/{2} kind {3} {4} t' -f $HomeDepositWares[$k], $HomeInfo.Ore[$k][0], $HomeInfo.Ore[$k][1], $HomeDepositKinds[$k], ($HomeDepositAmounts[$k] / 32) } })
+        $diff = @(for ($j = 0; $j -lt $before.Length; $j++) { if ($before[$j] -ne $after[$j]) { $j } })
+        Assert-Check ("AY game from 3.6.0 (clock 9000): repaired ({0}); deposits {1}; {2} bytes changed, byte +3 kept" -f $r1, ($deps -join ', '), $diff.Count) ($r1 -eq 2 -and ($deps -join ',') -eq ($want -join ',') -and $diff.Count -eq 6 -and $after[$o + 0x23 + 16] -eq 1)
+        $r2 = Invoke-Home
+        Write-Image $a ($rec + 0x20) $v360
+        $r3 = Invoke-Home
+        & $setIsland 0xA000 $HomeFileNumber; Write-Image $a ($rec + 0x20) ([byte[]]@(2, 5, 5, 0, 0, 0, 0, 0x1E) + @(2, 9, 9, 0, 1, 0, 0, 0x0A) + @(0) * 16)
+        $r4 = Invoke-Home
+        $after = Read-Image $a ($rec + 0x20) 16
+        Assert-Check "AY repair once per island ($r2, $r3), an island without the 3.6.0 deposits stays untouched ($r4)" ($r2 -eq 0 -and $r3 -eq 0 -and $r4 -eq 0 -and $after[0] -eq 2 -and $after[8] -eq 2 -and [BitConverter]::ToUInt16($after, 14) -eq 0xA00)
         Stop-ImageProcess $a
         $script:HomeInfo = $null; $HomeInfo = $null
         $script:GiantDims = @{}

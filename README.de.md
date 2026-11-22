@@ -9,7 +9,7 @@ Ein Fan-Projekt für **Anno 1602 History Edition** (Ubisoft Connect): grössere 
 stärkere Gegner, günstigeres Bauen und reichere Städte, Turbo bis 16-fach (mit F8 bis 128-fach), zufällige Ereignisse
 während des Spiels, 49 eigene Szenarien mit Geschichte und Auftrag (sechs Kampagnen – eine davon für die
 Riesenwelt gebaut – und 15 Herausforderungen, einige gegen die Uhr), ein Szenario-Baukasten, Zufalls- und Tagesabenteuer und
-ein Logbuch-Fenster mit Verlaufskurven neben dem Spiel.
+ein Logbuch-Fenster mit Verlaufskurven neben dem Spiel sowie eine Inselkarte, die Erz, Gold, Pflanzen und Besitzer aller Inseln auf einen Blick zeigt.
 
 Das Werkzeug ändert **keine Datei des Spiels**. Es passt nur den Arbeitsspeicher des laufenden
 Spiels an. Wird das Spiel beendet, ist alles wieder wie im Original. Nur für das Einzelspiel.
@@ -129,7 +129,8 @@ Das Startfenster hat drei Registerkarten:
     Kampagne nur bis zum ersten noch nicht gewonnenen Kapitel; das nächste kommt nach einem Sieg dazu.
     Gesperrte Kapitel tragen im Startfenster ein Schloss.
 
-Unter den Registerkarten: **Mit Erweiterungen spielen**, **Original starten** und **Logbuch öffnen**.
+Unter den Registerkarten: **Mit Erweiterungen spielen**, **Original starten**, **Logbuch öffnen** und **Inselkarte öffnen**;
+die Kästchen darunter öffnen Logbuch und Inselkarte zusammen mit dem Spiel (die Inselkarte ist an, bis du sie ausschaltest).
 
 ## Szenario-Baukasten
 
@@ -186,6 +187,27 @@ Erfolge, beendete Aufträge und gespielte Partien stehen in
 `%APPDATA%\Anno1602-Extensions\logbook.json`, die Kurven in `history\`; daraus zeigt die
 Registerkarte „Abenteuer“, welche Kapitel du gewonnen hast. Das Spiel im Fenstermodus oder einen
 zweiten Bildschirm nutzen, um beides zu sehen.
+
+## Inselkarte
+
+<p align="center">
+  <img src="docs/images/islandmap.png" alt="Inselkarte: alle Inseln des laufenden Spiels" width="80%">
+</p>
+
+Das Spiel selbst zeigt nirgends, welche Insel was hat – du musst zu jeder Insel hinfahren. Die Inselkarte zeigt es
+sofort, für jedes Spiel (Endlosspiel, Szenario, Spielstand), und *liest* den Speicher des Spiels nur:
+- jede Insel mit ihrem echten Umriss, **gedreht wie deine Ansicht im Spiel**; Nordinseln grün, Südinseln
+  olivgrün, Berge grau, Gebäude hell; das Gebiet jedes Spielers in seiner Farbe aus dem Spiel,
+- auf jedem Gold- und Erzvorkommen eine **goldene** oder **graue** Marke, genau auf seinem Berg,
+- die Nummern der Inseln, deine Schiffe und die Stelle, die das Spiel gerade zeigt,
+- zeigst du auf eine Insel, steht alles über sie da: Gold und Erz (gross/klein, Tonnen), die Pflanzen, die zu
+  100 % wachsen, die Siedlungen mit Besitzer und Einwohnern,
+- die Liste rechts zeigt jede Insel; mit **Gold**, **Erz**, einer Pflanze, **Frei**, **Nord** oder **Süd** zeigt sie
+  nur die Inseln, die alles Angekreuzte haben (auf der Karte markiert). Mausrad zoomt, Ziehen verschiebt,
+  Doppelklick zeigt die ganze Karte; Doppelklick auf eine Zeile zoomt zu dieser Insel.
+
+Sie aktualisiert sich alle 2 Sekunden und darf vor, während und nach dem Spiel laufen. „Immer im Vordergrund“
+hält sie über dem Spiel (Fenstermodus), oder du legst sie auf einen zweiten Bildschirm.
 
 Im laufenden Spiel geprüft am 12. November 2026: Alle sieben neuen Optionen werden genau wie geplant
 gesetzt (alle 50 Inseln tragen alle sechs Pflanzen; bei 16-fach über 1,5 Spielstunden blieben die
@@ -342,6 +364,7 @@ anno1602-extensions/
 │   ├── island-forge.cs            Inselschmiede: veränderte Inseldateien (Flüsse, Berge, Vulkan) und die Riesen-Inseln
 │   ├── launcher.ps1               das Startfenster (deutsch oder englisch, je nach Windows)
 │   ├── logbook.ps1                das Logbuch-Fenster (liest den Speicher des Spiels nur)
+│   ├── island-map.ps1             das Fenster der Inselkarte (liest den Speicher des Spiels nur)
 │   ├── build-scenarios.ps1        baut die 49 Szenarien deutsch oder englisch
 │   ├── scenario-lib.ps1           Dateiformat .szs und Aufträge AUFTRAG4 (entschlüsselt)
 │   ├── random-adventure.ps1       Generator für Zufalls- und Tagesabenteuer (Nummer + Schwierigkeit)
@@ -349,10 +372,10 @@ anno1602-extensions/
 │   ├── install.ps1                Installer hinter get.ps1, install.cmd, uninstall.cmd und der Apps-Liste
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
-│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (748 Prüfungen)
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (750 Prüfungen)
 │   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln, Heimatinsel (30 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
-│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (43 Prüfungen)
+│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (44 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung
 │   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
 │   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel
@@ -366,8 +389,8 @@ anno1602-extensions/
 ```
 
 Offline-Test starten: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (braucht das installierte
-Spiel; es wird nicht gestartet), Installer-Test: `tests\test-install.ps1`, Logbuch-Test:
-`src\logbook.ps1 -SelfTest`. Änderungen je Version: [CHANGELOG.md](CHANGELOG.md).
+Spiel; es wird nicht gestartet), Installer-Test: `tests\test-install.ps1`, Tests von Logbuch und Inselkarte:
+`src\logbook.ps1 -SelfTest`, `src\island-map.ps1 -SelfTest` (23 Prüfungen). Änderungen je Version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Rechtliches
 

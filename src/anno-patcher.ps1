@@ -2474,16 +2474,21 @@ function Invoke-ExploreTick {
 # --- Perfect home island (-HomeIsland Perfect, 3.6) ------------------------------------------------
 # At the start of a new game (game clock at most $HomeClockMax) the island of the home file (island record +0x18 class 4,
 # +0x1A file 28, +0x1C climate 0) gets: deposits on its four ore mountains (slots of 8 bytes at +0x20, as the SZENE loader
-# FUN_1400d0de0 writes them: +0 = 2, +1 x, +2 y, +4 kind 0 ore / 1 gold, +6 amount x 32: ore 240 t, gold 80 t; count
-# +0x41 = 4), every crop at 100 % (+0x5C bits 1-6 = tobacco, spices, sugar cane, cotton, wine, cocoa; FUN_14009db40) and
-# the local player's explored bit (+0x43). Once per island in a session; loaded games (later clock) stay untouched.
-$HomeClockMax = 3000; $HomeDepositKinds = @(0, 0, 1, 1); $HomeDepositAmounts = @(0x1E00, 0x1E00, 0xA00, 0xA00); $HomeCropBits = 0x7E
-$script:HomeDone = @{}
-# One round (needs $script:h and $script:base). Returns 1 if the home island was set up now, else 0.
+# FUN_1400d0de0 writes them: +0 ware 2 ore / 3 gold (= building +0x21 of the mine; FUN_14009ebb0 only finds a deposit of
+# the mine's ware), +1 x, +2 y, +4 kind 0 large / 1 small or gold, +6 amount x 32: ore 240 t large, gold 50 t kind 1 like
+# the loader - a gold mine never uses it up (FUN_1400b9ed0); count +0x41 = 4), every crop at 100 % (+0x5C bits 1-6 =
+# tobacco, spices, sugar cane, cotton, wine, cocoa; FUN_14009db40) and the local player's explored bit (+0x43). Once per
+# island in a session; loaded games (later clock) only get the repair below.
+# 3.6.0 wrote the two gold deposits as small ore deposits (ware 2, kind 1, 80 t). In a game with a later clock the tool
+# turns exactly these two slots (ware 2, kind 1, 0xA00 on the third or fourth mountain) into gold, once per island.
+$HomeClockMax = 3000; $HomeDepositWares = @(2, 2, 3, 3); $HomeDepositKinds = @(0, 0, 1, 1); $HomeDepositAmounts = @(0x1E00, 0x1E00, 0x640, 0x640); $HomeCropBits = 0x7E
+$script:HomeDone = @{}; $script:HomeChecked = @{}
+# One round (needs $script:h and $script:base). Returns 1 if the home island was set up now, 2 if the gold deposits of a
+# 3.6.0 game were repaired now, else 0.
 function Invoke-Home {
     if (-not $HomeInfo) { return 0 }
     $clock = [BitConverter]::ToInt32((Read-Mem $ClockRva 4), 0)
-    if ($clock -le 0 -or $clock -gt $HomeClockMax) { return 0 }
+    if ($clock -le 0) { return 0 }
     $me = (Read-Mem $EventLocalPlayerRva 1)[0]
     $t = Read-Mem $ExploreIslandRva ($ExploreIslandCount * $ExploreIslandSize)
     for ($i = 0; $i -lt $ExploreIslandCount; $i++) {
@@ -2491,20 +2496,36 @@ function Invoke-Home {
         $tiles = [BitConverter]::ToInt64($t, $o + $ExploreTilesOffset)
         if ($tiles -eq 0 -or [BitConverter]::ToUInt16($t, $o + 0x18) -ne 4 -or [BitConverter]::ToUInt16($t, $o + 0x1A) -ne $HomeFileNumber -or $t[$o + 0x1C] -ne 0) { continue }
         if ([BitConverter]::ToInt32($t, $o + 0xC) -ne $HomeInfo.W -or [BitConverter]::ToInt32($t, $o + 0x10) -ne $HomeInfo.H) { continue }
-        if ($script:HomeDone.ContainsKey([string]$tiles)) { return 0 }
-        $slots = New-Object byte[] 32
-        for ($k = 0; $k -lt 4; $k++) {
-            $slots[$k * 8] = 2; $slots[$k * 8 + 1] = [byte]$HomeInfo.Ore[$k][0]; $slots[$k * 8 + 2] = [byte]$HomeInfo.Ore[$k][1]
-            $slots[$k * 8 + 4] = [byte]$HomeDepositKinds[$k]
-            [Array]::Copy([BitConverter]::GetBytes([uint16]$HomeDepositAmounts[$k]), 0, $slots, $k * 8 + 6, 2)
-        }
+        $key = [string]$tiles
         $rec = $ExploreIslandRva + $o
-        Write-Mem ($rec + 0x20) $slots $false
-        Write-Mem ($rec + 0x41) ([byte[]]@(4)) $false
-        Write-Mem ($rec + 0x5C) ([BitConverter]::GetBytes([uint32]([BitConverter]::ToUInt32($t, $o + 0x5C) -bor $HomeCropBits))) $false
-        if ($me -le 3) { Write-Mem ($rec + $ExploreBitOffset) ([byte[]]@([byte]($t[$o + $ExploreBitOffset] -bor (1 -shl $me)))) $false }
-        $script:HomeDone[[string]$tiles] = $true
-        return 1
+        if ($clock -le $HomeClockMax -and -not $script:HomeDone.ContainsKey($key)) {
+            $slots = New-Object byte[] 32
+            for ($k = 0; $k -lt 4; $k++) {
+                $slots[$k * 8] = [byte]$HomeDepositWares[$k]; $slots[$k * 8 + 1] = [byte]$HomeInfo.Ore[$k][0]; $slots[$k * 8 + 2] = [byte]$HomeInfo.Ore[$k][1]
+                $slots[$k * 8 + 4] = [byte]$HomeDepositKinds[$k]
+                [Array]::Copy([BitConverter]::GetBytes([uint16]$HomeDepositAmounts[$k]), 0, $slots, $k * 8 + 6, 2)
+            }
+            Write-Mem ($rec + 0x20) $slots $false
+            Write-Mem ($rec + 0x41) ([byte[]]@(4)) $false
+            Write-Mem ($rec + 0x5C) ([BitConverter]::GetBytes([uint32]([BitConverter]::ToUInt32($t, $o + 0x5C) -bor $HomeCropBits))) $false
+            if ($me -le 3) { Write-Mem ($rec + $ExploreBitOffset) ([byte[]]@([byte]($t[$o + $ExploreBitOffset] -bor (1 -shl $me)))) $false }
+            $script:HomeDone[$key] = $true; $script:HomeChecked[$key] = $true
+            return 1
+        }
+        if ($script:HomeDone.ContainsKey($key) -or $script:HomeChecked.ContainsKey($key)) { return 0 }
+        $script:HomeChecked[$key] = $true
+        $fixed = 0
+        # At most 4 slots (+0x20 .. +0x3F; +0x40 and the count +0x41 follow).
+        for ($k = 0; $k -lt [math]::Min([int]$t[$o + 0x41], 4); $k++) {
+            $s = $o + 0x20 + 8 * $k
+            if ($t[$s] -ne 2 -or $t[$s + 4] -ne 1 -or [BitConverter]::ToUInt16($t, $s + 6) -ne 0xA00) { continue }
+            if (-not @(2, 3 | Where-Object { $HomeInfo.Ore[$_][0] -eq $t[$s + 1] -and $HomeInfo.Ore[$_][1] -eq $t[$s + 2] }).Count) { continue }
+            Write-Mem ($rec + 0x20 + 8 * $k) ([byte[]]@(3)) $false
+            Write-Mem ($rec + 0x26 + 8 * $k) ([BitConverter]::GetBytes([uint16]0x640)) $false
+            $fixed++
+        }
+        if ($fixed) { return 2 }
+        return 0
     }
     0
 }
@@ -2513,7 +2534,8 @@ function Invoke-HomeTick {
     if ($HomeIsland -ne 'Perfect') { return }
     $n = 0
     try { $n = Invoke-Home } catch { return }
-    if ($n) { Write-Host (Txt 'Home island: 2 ore and 2 gold deposits on its four mountains, every crop at 100 %, explored.' 'Heimatinsel: 2 Erz- und 2 Goldvorkommen auf den vier Bergen, jede Pflanze zu 100 %, erkundet.') -ForegroundColor Green }
+    if ($n -eq 1) { Write-Host (Txt 'Home island: 2 ore and 2 gold deposits on its four mountains, every crop at 100 %, explored.' 'Heimatinsel: 2 Erz- und 2 Goldvorkommen auf den vier Bergen, jede Pflanze zu 100 %, erkundet.') -ForegroundColor Green }
+    elseif ($n -eq 2) { Write-Host (Txt 'Home island: the two gold deposits of a game from version 3.6.0 repaired (they were small ore deposits).' 'Heimatinsel: die zwei Goldvorkommen eines Spiels aus Version 3.6.0 berichtigt (es waren kleine Erzvorkommen).') -ForegroundColor Green }
 }
 
 function Invoke-EventLoop($proc) {

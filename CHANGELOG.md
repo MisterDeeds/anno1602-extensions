@@ -3,6 +3,36 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.7.0 – 2026-11-22
+
+- **Island map** (`src/island-map.ps1`; launcher button "Open island map" and the check box "Open the island map with
+  the game", on by default): a window next to the game with every island of the running game – endless games,
+  scenarios and savegames. It draws each island's real outline from its tile grid, turned like the game's view
+  (the camera's rotation, the game's own projection `FUN_1400c4ba0`), northern islands green, southern ones olive,
+  mountains grey, buildings light and every player's territory in the player's colour from the game; a gold or grey
+  marker sits on every gold and ore deposit, plus the island numbers, your ships and the spot the game shows.
+  Pointing at an island lists its gold and ore (large/small, tons), the crops at 100 % and the settlements; the list
+  on the right can be filtered by gold, ore, each crop, free, north and south. Mouse wheel zooms, dragging moves.
+  It only reads the game's memory (every 2 seconds, on a worker thread) and checks the exe like the logbook.
+- **Fix "Home island": real gold.** 3.6.0 wrote the two gold deposits as small ore deposits (80 t ore), so the home island
+  had ore on all four mountains and no gold. In a deposit slot the first byte is the raw material (2 ore, 3 gold) – the
+  mine looks only for its own raw material (`FUN_14009ebb0` compares it with the mine's building +0x21) – and the byte
+  +4, which 3.6.0 took for "ore or gold", only tells a large deposit from a small one. Now the home island gets 2 ore
+  deposits (240 t) and 2 gold deposits exactly as the game itself creates them (raw material 3, 50 t); a gold mine never
+  uses them up.
+- Games started with 3.6.0: when the tool window runs with "Home island: perfect" it turns the two wrong deposits into
+  gold once, in the running game and after loading a savegame (only the two slots with exactly the 3.6.0 values on the
+  home island's gold mountains).
+- Launcher: the check boxes (logbook, island map, automatic update) moved to a second row below the buttons.
+- Tests: `tests/test-patcher.ps1` 750 checks (case AY: raw materials of the deposits, repair of a 3.6.0 game, once,
+  other islands untouched), `tests/test-islands.ps1` 30, `tests/test-install.ps1` 44 (island map opened with the game
+  and by its button; the automatic update is expected not to start while Anno 1602 runs), new `src/island-map.ps1
+  -SelfTest` 23 (reading, terrain, territory owners, colours, the projection in all four rotations, rendering, filters,
+  hit test, zoom, the refresh thread, German and English). In a running 3.6.0 game the home island's memory now holds
+  2 ore and 2 gold deposits, the gold ones byte for byte like the game's own gold deposit on another island; the
+  island map read the same running game (2000 × 1400, 50 islands): outlines, deposits, territories and colours as in
+  the game, the home island's shape and mountains matching a screenshot of the game.
+
 ## 3.6.0 – 2026-11-22
 
 - **Perfect home island** (option "Home island: perfect, at the start ship", also in the preset "Relaxed"): new endless

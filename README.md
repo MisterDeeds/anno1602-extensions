@@ -8,8 +8,8 @@
 A fan project for **Anno 1602 History Edition** (Ubisoft Connect): a bigger world, more islands,
 tougher rivals, cheaper building and richer towns, up to 16× game speed (128× with F8), random events while you play,
 49 new scenarios with a story and a mission (six campaigns – one of them made for the giant world –
-and 15 challenges, some against the clock), a scenario designer, random and daily adventures, and a logbook window with charts next to
-the game.
+and 15 challenges, some against the clock), a scenario designer, random and daily adventures, a logbook window with charts next to
+the game, and an island map that shows every island's ore, gold, crops and owners at a glance.
 
 The tool **does not change any game file**. It only patches the memory of the running game.
 Quit the game and everything is back to the original. Single player only.
@@ -128,7 +128,8 @@ The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiters
     up to the first chapter you have not won yet; the next one appears after a win. Locked
     chapters carry a lock in the launcher.
 
-Below the tabs: **Play with extensions**, **Start original** and **Open logbook**.
+Below the tabs: **Play with extensions**, **Start original**, **Open logbook** and **Open island map**; the check
+boxes below them open the logbook and the island map together with the game (the island map is on unless you switch it off).
 
 ## Scenario designer
 
@@ -182,6 +183,27 @@ A window next to the game. It only *reads* the game's memory.
 Achievements, finished missions and played games are kept in
 `%APPDATA%\Anno1602-Extensions\logbook.json`, the charts in `history\`; the Adventures tab shows
 from it which chapters you have won. Use the game in window mode or a second monitor to see both.
+
+## Island map
+
+<p align="center">
+  <img src="docs/images/islandmap.png" alt="Island map: every island of the running game (German window)" width="80%">
+</p>
+
+The game itself has no overview of which island has what – you have to sail to every island. The island map shows
+it at once, for every game (endless games, scenarios, savegames), and only *reads* the game's memory:
+- every island with its real outline, **turned like your view in the game**; northern islands green, southern ones
+  olive, mountains grey, buildings light; the territory of every player in its colour from the game,
+- a **gold** or **grey** marker on every gold and ore deposit, exactly on its mountain,
+- the island numbers, your ships and the spot the game shows right now,
+- pointing at an island tells everything about it: gold and ore (large/small, tons), the crops that grow at
+  100 %, the settlements with owner and residents,
+- the list on the right shows every island; tick **Gold**, **Ore**, a crop, **Free**, **North** or **South** to see
+  only the islands with all of it (marked on the map). Mouse wheel zooms, dragging moves, a double-click shows the
+  whole map; a double-click on a row zooms to that island.
+
+It refreshes every 2 seconds and may run before, during and after the game. "Always on top" keeps it above the game
+(window mode), or put it on a second monitor.
 
 Checked in the running game on 12 November 2026: all seven new options are set exactly as planned
 (every one of 50 islands carries all six crops; at 16× over 1.5 game hours the ore deposits stayed
@@ -333,6 +355,7 @@ anno1602-extensions/
 │   ├── island-forge.cs            island forge: changed island files (rivers, mountains, volcano) and the giant islands
 │   ├── launcher.ps1               the launcher window (German or English, following Windows)
 │   ├── logbook.ps1                the logbook window (only reads the game's memory)
+│   ├── island-map.ps1             the island map window (only reads the game's memory)
 │   ├── build-scenarios.ps1        builds the 49 scenarios in German or English
 │   ├── scenario-lib.ps1           .szs file format and AUFTRAG4 missions (decoded)
 │   ├── random-adventure.ps1       random and daily adventure generator (number + difficulty)
@@ -340,10 +363,10 @@ anno1602-extensions/
 │   ├── install.ps1                installer behind get.ps1, install.cmd, uninstall.cmd and the Apps list
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
-│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (748 checks)
+│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (750 checks)
 │   ├── test-islands.ps1           island forge with all island files of the game: rivers, mountains, volcano, giant islands, home island (30 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
-│   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (43 checks)
+│   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (44 checks)
 ├── dev/                           helpers for development
 │   ├── check-game.ps1             shows the patched values in the running game (read only)
 │   ├── check-islands.ps1          islands, ore and fertility of the running game
@@ -357,8 +380,8 @@ anno1602-extensions/
 ```
 
 Run the offline test: `powershell -ExecutionPolicy Bypass -File tests\test-patcher.ps1` (needs the installed
-game; the game is not started), installer test: `tests\test-install.ps1`, logbook test:
-`src\logbook.ps1 -SelfTest`. Changes per version: [CHANGELOG.md](CHANGELOG.md).
+game; the game is not started), installer test: `tests\test-install.ps1`, logbook and island map tests:
+`src\logbook.ps1 -SelfTest`, `src\island-map.ps1 -SelfTest` (23 checks). Changes per version: [CHANGELOG.md](CHANGELOG.md).
 
 ## Legal
 

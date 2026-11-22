@@ -405,6 +405,8 @@ $LogbookFile = Join-Path $DataFolder 'logbook.json'
 $Generator = Join-Path $PSScriptRoot 'random-adventure.ps1'
 $Designer = Join-Path $PSScriptRoot 'scenario-designer.ps1'
 $Logbook = Join-Path $PSScriptRoot 'logbook.ps1'
+# 3.7: the island map, a window next to the game with every island, its deposits, crops and owners.
+$IslandMap = Join-Path $PSScriptRoot 'island-map.ps1'
 # Installed version (written by install.ps1; missing when the launcher runs from the repository). The launcher asks
 # GitHub once per start, in the background, for the newest release and installs it (get.ps1) if it is newer - by
 # itself with "Update automatically", otherwise with the button "Update now".
@@ -961,7 +963,7 @@ function Set-Cell($row, $control, [int]$column) {
     if ($control.Parent -ne $row) { $row.Controls.Add($control) }
     $row.SetCellPosition($control, (New-Object Windows.Forms.TableLayoutPanelCellPosition($column, 0)))
 }
-$buttons = New-WideRow 6 @(3)
+$buttons = New-WideRow 5 @(4)
 $buttonStart = New-Button (Txt 'Play with extensions' 'Mit Erweiterungen spielen') $buttons
 $buttonStart.Margin = New-Object Windows.Forms.Padding(0, 3, 8, 3)
 $buttonOriginal = New-Button (Txt 'Start original' 'Original starten') $buttons
@@ -970,6 +972,11 @@ $buttonLogbook = New-Button (Txt 'Open logbook' 'Logbuch öffnen') $buttons
 $buttonLogbook.Visible = (Test-Path -LiteralPath $Logbook)
 function Start-Logbook { Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Logbook`"") }
 $buttonLogbook.Add_Click({ Start-Logbook })
+# The island map (3.7): every island of the running game with ore, gold, crops and owners (the map allows one window).
+$buttonIslandMap = New-Button (Txt 'Open island map' 'Inselkarte öffnen') $buttons
+$buttonIslandMap.Visible = (Test-Path -LiteralPath $IslandMap)
+function Start-IslandMap { Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$IslandMap`"") }
+$buttonIslandMap.Add_Click({ Start-IslandMap })
 # Open the logbook together with the game (remembered in settings.json; the logbook itself allows only one window).
 $checkLogbook = New-Object Windows.Forms.CheckBox
 $checkLogbook.Text = Txt 'Open the logbook with the game' 'Logbuch mit dem Spiel öffnen'
@@ -981,11 +988,27 @@ $checkLogbook.UseCompatibleTextRendering = $false
 $checkLogbook.Margin = New-Object Windows.Forms.Padding(12, 6, 0, 2)
 $checkLogbook.Checked = ($saved['LogbookWithGame'] -eq '1')
 $checkLogbook.Visible = (Test-Path -LiteralPath $Logbook)
+# Open the island map together with the game (on unless switched off).
+$checkIslandMap = New-Object Windows.Forms.CheckBox
+$checkIslandMap.Text = Txt 'Open the island map with the game' 'Inselkarte mit dem Spiel öffnen'
+$checkIslandMap.AutoSize = $true
+$checkIslandMap.Anchor = 'None'
+$checkIslandMap.UseCompatibleTextRendering = $false
+$checkIslandMap.Margin = New-Object Windows.Forms.Padding(12, 6, 0, 2)
+$checkIslandMap.Checked = ($saved['IslandMapWithGame'] -ne '0')
+$checkIslandMap.Visible = (Test-Path -LiteralPath $IslandMap)
 Set-Cell $buttons $buttonStart 0
 Set-Cell $buttons $buttonOriginal 1
 Set-Cell $buttons $buttonLogbook 2
-Set-Cell $buttons $checkLogbook 4
-function Start-LogbookIfWanted { if ($checkLogbook.Checked -and $checkLogbook.Visible) { Start-Logbook } }
+Set-Cell $buttons $buttonIslandMap 3
+# The check boxes in a second row, flush right (3.7: one row became wider than the tabs).
+$checks = New-WideRow 4 @(0)
+Set-Cell $checks $checkLogbook 1
+Set-Cell $checks $checkIslandMap 2
+function Start-LogbookIfWanted {
+    if ($checkLogbook.Checked -and $checkLogbook.Visible) { Start-Logbook }
+    if ($checkIslandMap.Checked -and $checkIslandMap.Visible) { Start-IslandMap }
+}
 # Install new versions by themselves (settings.json AutoUpdate, on unless switched off; only for an installed copy).
 $checkAutoUpdate = New-Object Windows.Forms.CheckBox
 $checkAutoUpdate.Text = Txt 'Update automatically' 'Automatisch aktualisieren'
@@ -995,10 +1018,12 @@ $checkAutoUpdate.UseCompatibleTextRendering = $false
 $checkAutoUpdate.Margin = New-Object Windows.Forms.Padding(18, 6, 0, 2)
 $checkAutoUpdate.Checked = ($saved['AutoUpdate'] -ne '0')
 $checkAutoUpdate.Visible = [bool]$InstalledVersion
-Set-Cell $buttons $checkAutoUpdate 5
+Set-Cell $checks $checkAutoUpdate 3
 $buttonTips = New-Object Windows.Forms.ToolTip
 $buttonTips.AutoPopDelay = 20000
-$buttonTips.SetToolTip($checkAutoUpdate, (Txt 'At every start the launcher asks GitHub for the newest version. A newer one is installed at once (settings, logbook and saves stay) and the launcher opens again.' 'Bei jedem Start fragt der Starter GitHub nach der neusten Version. Eine neuere wird gleich installiert (Einstellungen, Logbuch und Spielstände bleiben) und der Starter öffnet sich wieder.'))
+$buttonTips.SetToolTip($buttonIslandMap, (Txt 'A window next to the game with every island: where the ore and gold is, which crops grow at 100 %, who has settled where, your ships – turned like the game, also while you play.' 'Ein Fenster neben dem Spiel mit allen Inseln: wo Erz und Gold liegen, welche Pflanzen zu 100 % wachsen, wer wo siedelt, deine Schiffe – gedreht wie im Spiel, auch während du spielst.'))
+$buttonTips.SetToolTip($checkIslandMap, (Txt 'Opens the island map together with the game.' 'Öffnet die Inselkarte zusammen mit dem Spiel.'))
+$buttonTips.SetToolTip($checkAutoUpdate,(Txt 'At every start the launcher asks GitHub for the newest version. A newer one is installed at once (settings, logbook and saves stay) and the launcher opens again.' 'Bei jedem Start fragt der Starter GitHub nach der neusten Version. Eine neuere wird gleich installiert (Einstellungen, Logbuch und Spielstände bleiben) und der Starter öffnet sich wieder.'))
 $form.AcceptButton = $buttonStart
 
 # --- Updates ----------------------------------------------------------------------------------------------------
@@ -1127,6 +1152,7 @@ function Save-Choice {
         New-Item -ItemType Directory -Force -Path (Split-Path $SettingsFile) | Out-Null
         $sel = Get-Selection
         $sel['LogbookWithGame'] = if ($checkLogbook.Checked) { '1' } else { '0' }
+        $sel['IslandMapWithGame'] = if ($checkIslandMap.Checked) { '1' } else { '0' }
         # Without a chapter set the check box is disabled: keep the saved value.
         $sel['UnlockChapters'] = if (-not $checkUnlock.Enabled) { if ($saved['UnlockChapters'] -eq '1') { '1' } else { '0' } } elseif ($checkUnlock.Checked) { '1' } else { '0' }
         $sel['AutoUpdate'] = if ($checkAutoUpdate.Checked) { '1' } else { '0' }
@@ -1210,6 +1236,7 @@ if ($TestClicks) {
             Write-Step 'preset Tough test, Start original'; Invoke-Click $buttonTough; Invoke-Click $buttonOriginal
             Write-Step 'preset Giant world, Play with extensions'; Invoke-Click $buttonGiant; Invoke-Click $buttonStart
             Write-Step 'Open logbook'; Invoke-Click $buttonLogbook
+            Write-Step 'Open island map'; Invoke-Click $buttonIslandMap
             # As a player would: switch to the tab first (the list only reports a selection once it is shown).
             $tabs.SelectedIndex = 1
             foreach ($kind in 'known', 'size', 'original') {

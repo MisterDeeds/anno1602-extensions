@@ -35,7 +35,9 @@ Spielen
                    Zufallsabenteuer, das Tagesabenteuer, "Eigenes Szenario bauen ..." und
                    das Kaestchen "Kapitel nacheinander freischalten" (siehe unten).
   "Original starten" startet das Spiel ohne Aenderungen (z. B. fuer alte Spielstaende).
-  "Logbuch oeffnen" oeffnet das Logbuch-Fenster (siehe unten).
+  "Logbuch oeffnen" oeffnet das Logbuch-Fenster, "Inselkarte oeffnen" die Inselkarte (siehe
+  unten). Die Kaestchen darunter oeffnen sie zusammen mit dem Spiel (die Inselkarte ist an,
+  bis du das Haekchen wegnimmst).
   Das Fenster ist auf einem deutschen Windows deutsch, sonst englisch.
 
 Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
@@ -182,6 +184,25 @@ Logbuch
   %APPDATA%\Anno1602-Extensions\logbook.json, die Kurven der 30 neuesten Partien im Ordner
   "history" daneben. Daraus zeigt die Registerkarte "Abenteuer", welche Kapitel du gewonnen
   hast - also das Logbuch offen haben, waehrend du ein Kapitel spielst.
+
+Inselkarte
+  Ein Fenster neben dem Spiel ("Inselkarte oeffnen" im Starter; sie oeffnet sich mit dem Spiel,
+  ausser du nimmst das Haekchen "Inselkarte mit dem Spiel oeffnen" weg). Sie LIEST den Speicher
+  des Spiels nur. Sie zeigt alle Inseln des laufenden Spiels auf einen Blick - Endlosspiel,
+  Szenario und Spielstand:
+    - jede Insel mit ihrem echten Umriss, gleich gedreht wie deine Ansicht im Spiel;
+      Nordinseln gruen, Suedinseln olivgruen, Berge grau, Gebaeude hell, das Gebiet jedes
+      Spielers in seiner Farbe aus dem Spiel,
+    - auf jedem Gold- und Erzvorkommen eine goldene oder graue Marke, genau auf seinem Berg,
+    - die Nummern der Inseln ("Heimat" auf der perfekten Heimatinsel), deine Schiffe und die
+      Stelle, die das Spiel gerade zeigt (rosa Kreis).
+  Zeigst du auf eine Insel: Gold und Erz (gross/klein, Tonnen; Gold braucht eine Goldmine nie
+  auf), die Pflanzen, die zu 100 % wachsen, die Siedlungen mit Besitzer und Einwohnern. Die
+  Liste rechts zeigt jede Insel; mit Gold, Erz, einer Pflanze, Frei, Nord oder Sued zeigt sie
+  nur die Inseln, die alles Angekreuzte haben (auf der Karte markiert). Mausrad: zoomen,
+  ziehen: verschieben, Doppelklick: ganze Karte; Doppelklick auf eine Zeile: zu dieser Insel.
+  "Immer im Vordergrund" haelt sie ueber dem Spiel (Fenstermodus), oder du legst sie auf einen
+  zweiten Bildschirm. Sie aktualisiert sich alle 2 Sekunden.
 
 Kampagnen und Herausforderungen (49 eigene Szenarien mit Geschichte und Auftrag)
   Im Spiel: Einzelspieler -> Neues Spiel -> in der Liste ganz nach unten zu "Eigene Szenarien".

@@ -186,7 +186,7 @@ else {
 # Repository layout: this script lies in src\, FINDINGS.md in docs\ (optional).
 # The random adventure generator needs the scenario builder, its library and the island planner of the patcher; the
 # scenario designer needs the generator.
-$files = foreach ($n in 'anno-patcher.ps1', 'island-forge.cs', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt') {
+$files = foreach ($n in 'anno-patcher.ps1', 'island-forge.cs', 'launcher.ps1', 'logbook.ps1', 'island-map.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt') {
     $f = Join-Path $PSScriptRoot $n
     if (-not (Test-Path -LiteralPath $f)) { throw (Txt "File missing next to install.ps1: $n" "Datei fehlt neben install.ps1: $n") }
     Get-Item -LiteralPath $f

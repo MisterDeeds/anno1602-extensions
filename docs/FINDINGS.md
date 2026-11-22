@@ -1575,6 +1575,8 @@ island the local player knows with the tiles of +0x2CB0, otherwise +0x2CC0 (ore 
 island +0x20 + k × 8 (count +0x41): +0 = 2, +1 x, +2 y, +4 kind (0 ore, 1 gold), +6 amount ×32 (ore 0x1E00 = 240 t,
 gold 0xA00 = 80 t), set by the SZENE loader on rock tiles that haeuser.cod marks as ore mountains (`ROHSTERZ`:
 1108/1109/1110 "ERZBERG_GROSS", 1103/1107 "ERZBERG_KLEIN"; 1104/1105/1106 never); at most 2 per island from the loader.
+**Wrong, corrected 2026-11-22 (3.7):** +0 is the raw material (2 ore, 3 gold) and +4 only large (0) / small (1); the
+0xA00 entries are small ore deposits – see "Gold on the home island (3.7)".
 
 ### Perfect home island (2026-11-22, version 3.6)
 
@@ -1623,6 +1625,68 @@ tobacco and liquor – and the ship should start there.
   32/29 and 120/29 ore 240 t, 118/110 and 16/115 gold 80 t, each on the origin tile of a rock 1110 (gfx 5680 = base,
   turn 0, building no. 282: kind 0xC, +0x21 '7', +0x3F 0 – exactly what the SZENE loader accepts), crop bits set,
   explored. A regular island with file 28 of another class (big28, south) stayed untouched.
+
+### Gold on the home island (2026-11-22, version 3.7)
+
+**Report (user):** in a new game with 3.6.0 the home island "has no gold at all".
+
+**Findings (O):**
+- Running game (2000 × 1400, giant islands, clock 6632): home island slot 0 at 8/598 with the four deposits
+  `02 20 1D 01 00 00 00 1E`, `02 78 1D 01 00 00 00 1E`, `02 76 6E 01 01 00 00 0A`, `02 10 73 01 01 00 00 0A` – four times
+  raw material 2. In the whole world only one slot starts with 3: island 16 (south, 100 × 90) `03 10 48 00 01 00 40 06`.
+  Other islands also carry slots with first byte 0x3A, amount 1000, y 7 (written by the loader next to the treasure
+  entries; **?** meaning not known, not used by the tool).
+- SZENE loader `FUN_1400d0de0`: for a raw-material entry whose building +0x21 is 2 (ore mine 2401) it writes `+0 = 2` with
+  type 0 → 0x1E00 and +4 = 0 (large), type 1 → 0xA00 and +4 = 1 (small, islands of class 2–4); for building +0x21 = 3
+  (gold mine 2405) it writes `+0 = 3`, +4 = 1, amount 0x640 (50 t). Both on the same rocks (kind 0xC, +0x21 '7', origin
+  tile; the gold branch does not check +0x3F) and without a climate condition.
+- `FUN_14009ebb0(island, x, y, turn, ware)` (used by the mine's work step `FUN_1400b9ed0` case 3 and the building checks)
+  returns a deposit only if its byte +0 equals `ware` = building +0x21 of the mine; so a gold mine needs +0 = 3.
+- `FUN_1400b9ed0` case 3, path 1 (+4 = 1 or amount > 0xEFF): a mine with building +0x21 = 3 (gold) never lowers the amount.
+- Byte +3 of a slot was 1 on the two islands with a settlement of the human (home island and island 23) and 0 elsewhere;
+  the tool writes 0 and the game sets it (**?** meaning).
+
+**Fix:** `$HomeDepositWares` 2/2/3/3, kinds 0/0/1/1, amounts 0x1E00/0x1E00/0x640/0x640 (like the loader). Repair for games
+from 3.6.0 (`Invoke-Home` returns 2): with a clock above 3000 once per island (tiles pointer) the slots with exactly
+`02 x y ? 01 ? 00 0A` on the third or fourth mountain of the home island get +0 = 3 and amount 0x640. In the user's
+running game the same two writes were made once by hand (game clock 11,171): `03 76 6E 01 01 00 40 06`,
+`03 10 73 01 01 00 40 06`.
+
+### Island map (2026-11-22, version 3.7)
+
+**Wish (user):** "I still don't see on which island what is available – neither tobacco etc. nor ore or gold";
+everything uncovered. The game shows deposits only on the mountains of an island the player knows and crops only in
+the island info near a ship – there is no overview.
+
+**What the map reads (O, read only, all RVAs relative to the exe):**
+- World size 0x5EBE40 / 0x5EBE98; local player 0x5F1D60; camera pointer 0xF9A00 → +0x1C/+0x20 world x/y of the view,
+  +0x48 rotation 0–3.
+- Players 0x5F0960 + p × 0x280: +0 kind (0 human, 0xC computer, 0xB natives, 0xD traders, 0xE pirates), +8 name,
+  +0x68 number, **+0x69 colour** (0 red, 1 blue, 2 yellow, 3 white, 4 pirates, 5 natives, 6 traders). In the user's
+  endless game: the human yellow, the rivals "Roter/Blauer/Weißer Spieler" red/blue/white.
+- Islands 0x62DDC0 + i × 0x2CC8: as above, deposits only slots +0x20..+0x3F (4 at most; +0x40 and the count +0x41
+  follow); first byte 2 ore / 3 gold, others (0x3A, amount 1000) are no mine deposits.
+- Tiles: island +0x2CB0 (else +0x2CC0), W × H × 4 bytes row by row; bits 0–12 gfx number, **bits 19–21 territory
+  number** (7 = none). The gfx table 0x6CBB00 points to an entry whose **+4 is the terrain kind**; +0x1C does *not*
+  tell sea from land (9 for meadow and open sea alike – the first map drawn with it showed the sea inside each island's
+  rectangle as land). Kinds counted on three islands of the user's game: 0x13 open sea, 0x14–0x16 surf, 0x17–0x1B
+  beach, 0xB meadow, 0xA forest and crops, 0x1F/0x20 slopes, 0xF rock (with +0x1C 0xC and +0x21 '7' the ore
+  mountains), 0xE buildings, 0x1/0xD roads, 0x4–0x7 walls, 0x1C/0x1E piers, 0x22–0x24 harbour buildings and warehouse.
+- Settlements 0x622DC0 + s × 600: **+0x19 = the town's number on its island = the territory number in the tiles**
+  (island 15: natives' village 0, the blue rival's town 1), +0x1A owner; residents +0x220..+0x230.
+- Ships 0x1D8BB0 + n × 0x328: byte 0 = 0x50, +0x28 owner, +0x296 name, +8 figure → +0x28/+0x2C float position.
+
+**Projection (O):** `FUN_1400c4ba0` (world → scroll) per rotation, u horizontal and v vertical in half tiles (on screen a
+u unit is twice as wide): 0: u = (x − y + H)/2, v = (x + y)/2; 1: u = (W + H − x − y)/2, v = (x − y + H)/2; 2: u = (y − x +
+W)/2, v = (W + H − x − y)/2; 3: u = (x + y)/2, v = (y − x + W)/2. The corner 0/0 of the world moves top → right → bottom →
+left. The map draws every pixel back to its world tile with the inverse.
+
+**Checked (O), 2026-11-22 20:36–20:43, the user's running game (2000 × 1400, 50 islands, read only):** first map with
++0x1C – wrong (see above); with +4: the home island at rotation 0 has the shape, the bay and the four mountains of the
+user's screenshot of the game, gold on the left and the bottom mountain, ore on the top and the right one, the yellow
+territory of the warehouse where the ship landed; territories of all 14 towns in the owners' colours; 2 islands with
+gold (home island, island 17), 43 with ore, 40 free; 4 ships; the camera marker on the island the game showed. The
+refresh reads on a worker thread, so the window stays responsive.
 
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 

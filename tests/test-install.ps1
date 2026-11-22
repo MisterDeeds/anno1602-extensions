@@ -89,7 +89,7 @@ try {
     # --- 2. Install in German ---------------------------------------------------------------------------------------
     "Install (German) into the sandbox $sandbox"
     $out = Invoke-Installer 'de' -StartLauncher
-    $copied = @('anno-patcher.ps1', 'island-forge.cs', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt', 'FINDINGS.md')
+    $copied = @('anno-patcher.ps1', 'island-forge.cs', 'launcher.ps1', 'logbook.ps1', 'island-map.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt', 'FINDINGS.md')
     $expected = $copied + 'version.txt'
     $have = @(Get-ChildItem -LiteralPath $new -File | ForEach-Object Name)
     Test-That "program folder holds exactly the $($expected.Count) files ($($have.Count))" ($have.Count -eq $expected.Count -and -not ($expected | Where-Object { $_ -notin $have }))
@@ -162,11 +162,21 @@ try {
     # The set in the program folder is English now (the last installation).
     Test-That 'chapters off: every chapter of the set back in Own Scenarios, setting saved' ($offLine -match ', 0 locked' -and $offLine -match 'UnlockChapters=0' -and @($titles.en | Where-Object { $_ -match ' \d+ - ' -and -not (Test-Path -LiteralPath (Join-Path $own "$_.szs")) }).Count -eq 0)
     Test-That 'click test: patcher started, no exception' ($clickText -match 'START powershell .*anno-patcher\.ps1' -and $clickText -notmatch 'Exception|Fehler')
+    # 3.7: the island map opens with the game (on by default) and with its button.
+    $mapStarts = @($clicks | Where-Object { $_ -like 'START powershell*-File*island-map.ps1*' }).Count
+    $afterButton = ($clickText -split '--- Open island map', 2)[1]
+    Test-That "island map: opened with the game (on by default) and by its button ($mapStarts starts)" ($mapStarts -ge 3 -and $afterButton -match '^\s*START powershell .*-File .*island-map\.ps1' -and (Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json).IslandMapWithGame -eq '1')
     $v = [regex]::Escape($repoVersion)
     Test-That "after an update: `"Aktualisiert auf Version $repoVersion.`" with the button for the release notes, version saved" ($clickText -match "UPDATED-NOTE visible: True Aktualisiert auf Version $v\. \| news button True" -and (Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json).LastVersion -eq $repoVersion)
     Test-That 'update: nothing for an older release; without "automatically" the notice and the button (download + get.ps1 as a file)' ($clickText -match "UPDATE v1\.0\.0: Aktualisiert auf Version $v\." -and $clickText -match 'UPDATE v99\.0\.0 auto off: Version 99\.0\.0 ist da\., starts 0' -and $clickText -match 'UPDATE button: starts 1' -and $clickText -match 'DOWNLOAD https://raw\.githubusercontent\.com/MisterDeeds/anno1602-extensions/main/get\.ps1' -and $clickText -match 'START powershell -NoProfile -ExecutionPolicy Bypass -File ".*anno1602-extensions-update\.ps1"')
     $today = Get-Date -Format 'yyyy-MM-dd'
-    Test-That 'update automatically: starts by itself, saved, only once per version and day' ($clickText -match "UPDATE auto on: starts 2, Version 99\.0\.0 ist da und wird installiert .*, saved AutoUpdate=1 UpdateTried=99\.0\.0 $today" -and $clickText -match 'UPDATE auto again the same day: starts 2')
+    # The launcher never updates by itself while Anno 1602 runs (the user may be playing during the test).
+    if (Get-Process -Name 'Anno1602' -ErrorAction SilentlyContinue) {
+        Test-That 'update automatically: not while Anno 1602 runs (the game runs now), only the notice' ($clickText -match 'UPDATE auto on: starts 1, Version 99\.0\.0 ist da\., saved AutoUpdate=1' -and $clickText -match 'UPDATE auto again the same day: starts 1')
+    }
+    else {
+        Test-That 'update automatically: starts by itself, saved, only once per version and day' ($clickText -match "UPDATE auto on: starts 2, Version 99\.0\.0 ist da und wird installiert .*, saved AutoUpdate=1 UpdateTried=99\.0\.0 $today" -and $clickText -match 'UPDATE auto again the same day: starts 2')
+    }
 
     # --- 5. Remove ----------------------------------------------------------------------------------------------------
     foreach ($n in 'Abenteuer 4711.szs', 'Adventure 99 Easy.szs', 'Tagesabenteuer 2026-11-14.szs', 'Daily Adventure 2026-11-14.szs', 'Custom - My Island.szs') { Set-Content -LiteralPath (Join-Path $own $n) 'made by the extensions' }
