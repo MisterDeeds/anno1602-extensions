@@ -335,6 +335,7 @@ anno1602-extensions/
 ├── install.cmd, uninstall.cmd     aus einer entpackten Kopie installieren oder entfernen (Doppelklick)
 ├── src/                           alles, was installiert wird (läuft aus einem Ordner)
 │   ├── anno-patcher.ps1           das Werkzeug: prüft die Spielversion und patcht den Speicher
+│   ├── island-forge.cs            Inselschmiede: veränderte Inseldateien (Flüsse, Berge, Vulkan) und die Riesen-Inseln
 │   ├── launcher.ps1               das Startfenster (deutsch oder englisch, je nach Windows)
 │   ├── logbook.ps1                das Logbuch-Fenster (liest den Speicher des Spiels nur)
 │   ├── build-scenarios.ps1        baut die 49 Szenarien deutsch oder englisch
@@ -344,9 +345,10 @@ anno1602-extensions/
 │   ├── install.ps1                Installer hinter get.ps1, install.cmd, uninstall.cmd und der Apps-Liste
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
-│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (655 Prüfungen)
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (702 Prüfungen)
+│   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln (19 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
-│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (42 Prüfungen)
+│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (43 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung
 │   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
 │   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel

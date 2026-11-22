@@ -326,6 +326,7 @@ anno1602-extensions/
 ├── install.cmd, uninstall.cmd     install or remove from an unzipped copy (double-click)
 ├── src/                           everything that gets installed (runs from one folder)
 │   ├── anno-patcher.ps1           the tool: checks the game version and patches memory
+│   ├── island-forge.cs            island forge: changed island files (rivers, mountains, volcano) and the giant islands
 │   ├── launcher.ps1               the launcher window (German or English, following Windows)
 │   ├── logbook.ps1                the logbook window (only reads the game's memory)
 │   ├── build-scenarios.ps1        builds the 49 scenarios in German or English
@@ -335,9 +336,10 @@ anno1602-extensions/
 │   ├── install.ps1                installer behind get.ps1, install.cmd, uninstall.cmd and the Apps list
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
-│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (655 checks)
+│   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (702 checks)
+│   ├── test-islands.ps1           island forge with all island files of the game: rivers, mountains, volcano, giant islands (19 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
-│   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (42 checks)
+│   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (43 checks)
 ├── dev/                           helpers for development
 │   ├── check-game.ps1             shows the patched values in the running game (read only)
 │   ├── check-islands.ps1          islands, ore and fertility of the running game

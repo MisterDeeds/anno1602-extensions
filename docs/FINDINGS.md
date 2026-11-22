@@ -1473,8 +1473,14 @@ Read-only analysis of the decompiled AI (`analysis/scan/alle-funktionen.c`), the
   jle build`) – a rich AI leaves them before building anything. With those exits patched (`jle` → `jmp`, RVA 0x36FE2,
   0x37302, 0x374F4) the towns stayed in 0x20 but still built nothing of it: its job chain (`FUN_1400372c0`: first
   `FUN_140034df0`, then the other build jobs) returns at the first job it cannot pay. **40 t of bricks and tools written
-  into the three capitals → all three built a tavern within 3 game-minutes-worth of real time and two had citizens
-  (38, 45) right after.**
+  into the three capitals → all three built a tavern within 3 minutes (16 ×) and two had citizens (38, 45) right after.**
+- **With the full supply (tools, bricks, luxury goods), clock 507,000 → 863,000 (about 11 game hours) (O):** the capitals
+  went to 465–540 citizens (clock 622,000), then 241–510 merchants (737,000) with great church, bathhouse, tavern, doctor
+  and gallows, then **240 and 449 aristocrats** (863,000) with theatre and college (Hochschule) on two of the three; the
+  rivals spent their gold (190,000 → 11,000–64,000) and founded new towns. Second towns stayed plantation colonies with
+  144 settlers (phase 0x17, by design).
+- The savegame of this game (`lastgame-1000x700-…`, deleted afterwards) holds the six giant islands completely (first
+  `INSELHAUS` of 16,640–21,837 pieces).
 - **Implementation:** `-RivalGrowth Ambitious` = the 6 code sites (3 NOPs, 3 jumps) plus a supply loop in the tool window
   (`Invoke-RivalSupply`, every poll, at most once per 2000 clock steps): for every town of a player of kind 0xC with
   settlers or more, tools, bricks, cloth, liquor, tobacco goods and spices (from settlers), cocoa (from citizens), clothes

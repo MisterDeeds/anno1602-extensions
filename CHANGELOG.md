@@ -3,7 +3,7 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
-## Unreleased
+## 3.4.0 – 2026-11-22
 
 - Island forge: the tool writes changed copies of the game's island files into its own folder (once per set of
   options) and lets the game read them from there; the game files stay untouched, savegames keep their islands.
@@ -19,10 +19,13 @@ All versions are for Anno 1602 History Edition (Ubisoft Connect), single player.
   never make liquor, tobacco goods and spices and hardly ever have bricks; rich rivals also skip the building steps of
   their plan. Now their building plan builds before it moves on (no money shortcuts, no dead ends before church/
   bathhouse and theatre/college), and while the game runs the tool window tops up tools, bricks and luxury goods in their
-  towns like a trader. In the game test their capitals built taverns and got citizens within minutes.
+  towns like a trader. In the game test their capitals went from 204 settlers to citizens, merchants and aristocrats
+  (up to 449) with theatre and college within about 10 game hours, and they founded new towns.
 - Presets: "Everything big" with giant islands and ambitious rivals, "Relaxed" without rivers and volcano and with the
   mountains at the coast, "Tough test" with ambitious rivals.
-- Tests: new `tests/test-islands.ps1` (19 checks with the real island files), `tests/test-patcher.ps1` cases AQ–AT.
+- Tests: new `tests/test-islands.ps1` (19 checks with the real island files), `tests/test-patcher.ps1` cases AQ–AU
+  (702 checks), `tests/test-install.ps1` 43 checks. Checked in the running game: all 50 islands with 6 giant islands,
+  no river left, 169 of 172 mountain groups at the coast, the giant islands stored completely in the savegame.
 
 ## 3.3.1 – 2026-11-16
 
