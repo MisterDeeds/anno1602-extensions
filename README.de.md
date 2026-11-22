@@ -62,12 +62,16 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 |---|---|
 | Kartengrösse | bis 2000 × 1400 Felder (Original 500 × 350) |
 | Inseln | bis 50 Inseln über die ganze Karte verteilt (das Maximum des Spiels) |
-| Inselgrösse | Gross / Riesig: viel mehr grosse Inseln (bis 10 der grössten, 100 × 90) |
+| Inselgrösse | Gross / Riesig: viel mehr grosse Inseln (bis 10 der grössten, 100 × 90); Gigantisch: dazu bis 6 Riesen-Inseln von 135 × 120 bis 160 × 140 – grösser als jede Insel des Spiels |
+| Flüsse | keine: Flüsse werden zu Wiese, Mündung und Quelle zu Strand und Hang (mehr Bauland) |
+| Berge | am Rand: Berge, die mitten auf der Insel stehen, rücken an die Küste; die Inselmitte bleibt frei |
+| Vulkan | keiner: der einzige Vulkan des Spiels wird ein normaler Berg, es gibt keine Ausbrüche |
 | Rohstoffe | Mehr: Erz, Gold, Fruchtbarkeit und Schätze passend zur Inselzahl; Viele: doppelt |
 | Ureinwohner | 4 + 4 oder 7 + 7 Dörfer statt 2 + 2 |
 | Fruchtbarkeit | jede Pflanze auf jeder Insel (neue Endlosspiele) |
 | Freie Händler | doppelt oder dreimal so viele Händlerschiffe (höchstens 24) |
 | Computergegner | immer wie „Schwer“, auch wenn du leichter spielst |
+| Städte der Gegner | ehrgeizig: die Hauptstädte der Gegner bleiben nicht mehr bei Bürgern oder Kaufleuten stehen, sondern bauen Kirche, Badehaus, Theater und Universität und wachsen bis zu Aristokraten |
 | Piraten | wie Schwierigkeit / greifen immer an / stark / keine; Flotte bis 12 Schiffe statt 4 |
 | Katastrophen | keine (kein Feuer, keine Pest, Dürre oder Vulkan) oder häufiger |
 | Gold | Startgold für dich und für die Gegner |
@@ -91,16 +95,16 @@ Das Startfenster hat drei Registerkarten:
   <img src="docs/images/launcher-tab2-de.png" alt="Startfenster: Kampagnen-Fortschritt und Zufallsabenteuer" width="45%">
 </p>
 
-- **Neues Spiel**: alle Optionen zum Anklicken, in vier Gruppen (Welt, Wirtschaft, Gegner und
-  Gefahren – mit den Ereignissen –, Schiffe und Tempo), dazu sechs Vorlagen:
+- **Neues Spiel**: alle Optionen zum Anklicken, in fünf Gruppen (Welt, Wirtschaft, Gegner und
+  Gefahren – mit den Ereignissen –, Schiffe und Tempo, Landschaft der Inseln), dazu sechs Vorlagen:
 
   | Vorlage | Einstellungen |
   |---|---|
-  | **Alles gross** | 1000 × 700, riesige Inseln, viele Rohstoffe, 7 + 7 Dörfer, dreimal so viele Händler, Gegner wie „Schwer“ mit 60 000 Gold, Piraten greifen an mit bis zu 8 Schiffen, Einwohner ×5, Lager ×5, Laderaum ×3, Produktion und Schiffe ×2, Turbo 16-fach, dein Gold 50 000 |
+  | **Alles gross** | 1000 × 700, gigantische Inseln, viele Rohstoffe, 7 + 7 Dörfer, dreimal so viele Händler, Gegner wie „Schwer“ und ehrgeizig mit 60 000 Gold, Piraten greifen an mit bis zu 8 Schiffen, Einwohner ×5, Lager ×5, Laderaum ×3, Produktion und Schiffe ×2, Turbo 16-fach, dein Gold 50 000 |
   | **Für Kampagnen** | grosse Karte und Turbo 16-fach, alles andere wie im Szenario vorgesehen |
   | **Riesenwelt** | 2000 × 1400 für die Karten der [Riesenwelt](#riesenwelt), Schiffe ×2 für die langen Seewege, Turbo 16-fach, alles andere wie im Szenario vorgesehen |
-  | **Gemütlich** | Bau- und Betriebskosten halbiert, Steuern ×2, Radius ×1,5, jede Pflanze überall, unerschöpfliche Minen, keine Piraten, keine Katastrophen, 100 000 Gold, Einwohner ×2, Produktion ×2, Lager ×3, grosse Inseln, viele Rohstoffe, Turbo 16-fach |
-  | **Harte Probe** | Gegner wie „Schwer“ mit 100 000 Gold, starke Piraten mit bis zu 12 Schiffen, mehr Katastrophen, 4 + 4 Dörfer, Turbo 16-fach |
+  | **Gemütlich** | Bau- und Betriebskosten halbiert, Steuern ×2, Radius ×1,5, jede Pflanze überall, unerschöpfliche Minen, keine Piraten, keine Katastrophen, keine Flüsse, Berge am Rand, kein Vulkan, 100 000 Gold, Einwohner ×2, Produktion ×2, Lager ×3, grosse Inseln, viele Rohstoffe, Turbo 16-fach |
+  | **Harte Probe** | Gegner wie „Schwer“ und ehrgeizig mit 100 000 Gold, starke Piraten mit bis zu 12 Schiffen, mehr Katastrophen, 4 + 4 Dörfer, Turbo 16-fach |
   | **Alles auf Standard** | 1000 × 700 mit mehr Inseln und mehr Rohstoffen, sonst wie im Original |
 
 - **Weiterspielen**: deine Spielstände mit den Einstellungen, mit denen sie entstanden sind.

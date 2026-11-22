@@ -62,12 +62,16 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 |---|---|
 | Map size | up to 2000 × 1400 tiles (original 500 × 350) |
 | Islands | up to 50 islands spread over the whole map (the game's maximum) |
-| Island size | Large / Huge: many more large islands (up to 10 of the biggest, 100 × 90) |
+| Island size | Large / Huge: many more large islands (up to 10 of the biggest, 100 × 90); Giant: plus up to 6 giant islands from 135 × 120 to 160 × 140 – larger than any island of the game |
+| Rivers | none: rivers become meadow, mouth and spring become beach and slope (more land to build on) |
+| Mountains | at the coast: mountains in the middle of an island move to the coast; the inland stays free |
+| Volcano | none: the game's only volcano becomes a normal mountain, no eruptions |
 | Resources | More: ore, gold, fertility and treasures scaled to the island count; Lots: double that |
 | Natives | 4 + 4 or 7 + 7 villages instead of 2 + 2 |
 | Fertility | every crop on every island (new endless games) |
 | Free traders | two or three times as many trading ships (24 at most) |
 | Computer rivals | always play like on "Hard", even if you pick an easier level |
+| Rivals' towns | ambitious: the rivals' capitals no longer stop at citizens or merchants; they build church, bathhouse, theatre and college and grow up to aristocrats |
 | Pirates | as per difficulty / always attack / strong / none; fleet of up to 12 ships instead of 4 |
 | Disasters | none (no fire, plague, drought or volcano) or more often |
 | Gold | starting gold for you and for the rivals |
@@ -91,16 +95,16 @@ The launcher window has three tabs (on a German Windows: *Neues Spiel*, *Weiters
   <img src="docs/images/launcher-tab2-en.png" alt="Launcher: campaign progress and random adventures" width="45%">
 </p>
 
-- **New game**: every option as a click, in four groups (World, Economy, Rivals and dangers – with
-  the events –, Ships and speed), plus six presets:
+- **New game**: every option as a click, in five groups (World, Economy, Rivals and dangers – with
+  the events –, Ships and speed, Landscape of the islands), plus six presets:
 
   | Preset | Settings |
   |---|---|
-  | **Everything big** (*Alles gross*) | 1000 × 700, huge islands, lots of resources, 7 + 7 villages, three times as many traders, rivals like "Hard" with 60,000 gold, pirates attack with up to 8 ships, residents ×5, storage ×5, cargo space ×3, production and ships ×2, turbo 16×, your gold 50,000 |
+  | **Everything big** (*Alles gross*) | 1000 × 700, giant islands, lots of resources, 7 + 7 villages, three times as many traders, rivals like "Hard" and ambitious with 60,000 gold, pirates attack with up to 8 ships, residents ×5, storage ×5, cargo space ×3, production and ships ×2, turbo 16×, your gold 50,000 |
   | **For campaigns** (*Für Kampagnen*) | big map and turbo 16×, everything else as the scenario intends |
   | **Giant world** (*Riesenwelt*) | 2000 × 1400 for the [giant world](#giant-world) maps, ships ×2 for the long sea routes, turbo 16×, everything else as the scenario intends |
-  | **Relaxed** (*Gemütlich*) | building costs and running costs halved, taxes ×2, radius ×1.5, every crop everywhere, inexhaustible mines, no pirates, no disasters, 100,000 gold, residents ×2, production ×2, storage ×3, large islands, lots of resources, turbo 16× |
-  | **Tough test** (*Harte Probe*) | rivals like "Hard" with 100,000 gold, strong pirates with up to 12 ships, more disasters, 4 + 4 villages, turbo 16× |
+  | **Relaxed** (*Gemütlich*) | building costs and running costs halved, taxes ×2, radius ×1.5, every crop everywhere, inexhaustible mines, no pirates, no disasters, no rivers, mountains at the coast, no volcano, 100,000 gold, residents ×2, production ×2, storage ×3, large islands, lots of resources, turbo 16× |
+  | **Tough test** (*Harte Probe*) | rivals like "Hard" and ambitious with 100,000 gold, strong pirates with up to 12 ships, more disasters, 4 + 4 villages, turbo 16× |
   | **Reset to defaults** (*Alles auf Standard*) | 1000 × 700 with more islands and more resources, everything else original |
 
 - **Continue**: your savegames with the settings they were made with. *Play with these

@@ -77,6 +77,12 @@
        (unchanged for the limits 1-3, climate ignored for 'FERT'); -StretchOnly/-NoIslandSpread: nothing.
     AF -Mines Infinite: both subtractions NOPs, neighbours unchanged, falsified site -> abort.
     AG -Disasters Off/More: 5 calls NOPs or 10 limits changed; other mode in the same process -> abort.
+    AQ -RivalGrowth Ambitious (3.4): the two phase exits and the goods wait of the AI become NOPs (6 bytes).
+    AR -Volcanoes Off: the volcano call alone a NOP; together with Disasters Off or More.
+    AS Island forge: the folder is built below LOCALAPPDATA (of the test), its path lies at RVA 0x91B200, the five
+       loader instructions point there, a second run reuses the folder, other options replace it.
+    AT -IslandSize Giant: plans at 1000 x 700, 2000 x 1400 and 750 x 525 with the real giant islands: no overlap,
+       everything inside, at most 6 giant islands each once, at most 10 of class "lar" in total.
     AH Everything together: all options, code caves and markers do not overlap, production x2 shortens
        exactly the 125 intervals counted in the game (2026-11-10).
   The event cases run the tool's event engine (functions and C# class loaded via the syntax tree) in this test
@@ -162,7 +168,7 @@ $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$nu
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
     if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode)\b') -or
-        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites)\b') { . ([scriptblock]::Create($txt)) }
+        $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap)\b') { . ([scriptblock]::Create($txt)) }
     # Event engine (cases AI-AO): its constants, functions and the two C# types run here in the test process, against
     # the helper process ($script:h / $script:base as in the tool).
     if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Read-Mem|Write-Mem|Test-Running|Read-Abs|Format-EventNumber|ConvertTo-AsciiGerman|Get-EventRoundHalfUp|Get-EventTaxTarget|Get-EventIntervalTarget|Get-EventTaxes|Get-EventIntervals|Get-EventPage|Test-EventOwnerAlive|Repair-EventLeftovers|Initialize-EventState|New-EventInterval|Get-EventGameState|Get-EventGiftChoices|Test-EventEligible|Add-EventJson|Write-EventJsonList|Set-EventEndedEarly|Write-EventRecord|Invoke-GameEvent|Start-NextEvent|Stop-TemporaryEvents|Invoke-EventTick|Get-SessionArgs)\b') -or
@@ -1766,6 +1772,98 @@ try {
     foreach ($s in $DisasterMoreSites) { $n = (Bytes $s.Target).Length; Assert-Check ("AG More 0x{0:X} = {1}" -f $s.Rva, (Hex (Read-Image $a $s.Rva $n))) ((Hex (Read-Image $a $s.Rva $n)) -eq $s.Target) }
     foreach ($s in $DisasterOffSites) { Assert-Check ("AG More: call 0x{0:X} untouched" -f $s.Rva) ((Hex (Read-Image $a $s.Rva 5)) -eq $s.Original) }
     Stop-ImageProcess $a
+
+    Write-Host 'AQ -RivalGrowth Ambitious'
+    $a = Start-ImageProcess
+    Invoke-SimulatedStart $a
+    foreach ($g in $RivalGrowthSites) { $n = (Bytes $g.Original).Length; Assert-Check ("AQ before {0} = {1}" -f $g.Name, (Hex (Read-Image $a $g.Rva $n))) ((Hex (Read-Image $a $g.Rva $n)) -eq $g.Original) }
+    $r = Invoke-Tool $a @('-RivalGrowth', 'Ambitious') 'de'
+    Assert-Check "AQ exit code $($r.Code), German message" ($r.Code -eq 0 -and $r.Text -cmatch 'Gegner-Ausbau: ehrgeizig')
+    foreach ($g in $RivalGrowthSites) { $n = (Bytes $g.Original).Length; Assert-Check ("AQ {0} = {1}" -f $g.Name, (Hex (Read-Image $a $g.Rva $n))) ((Hex (Read-Image $a $g.Rva $n)) -eq $g.Target) }
+    $diff = 0; foreach ($g in $RivalGrowthSites) { $t = Bytes $g.Target; $o = Bytes $g.Original; for ($k = 0; $k -lt $t.Length; $k++) { if ($t[$k] -ne $o[$k]) { $diff++ } } }
+    Assert-Check "AQ exactly 6 bytes differ from the original (two jumps and one wait become NOPs: $diff)" ($diff -eq 6)
+    $r = Invoke-Tool $a @('-RivalGrowth', 'Ambitious')
+    Assert-Check "AQ second run: exit code $($r.Code)" ($r.Code -eq 0)
+    Stop-ImageProcess $a
+
+    # The island forge writes below LOCALAPPDATA: for these cases a folder of the test.
+    $localBefore = $env:LOCALAPPDATA
+    $env:LOCALAPPDATA = Join-Path $tmp 'localappdata'
+    try {
+        $islandsRoot = Join-Path $env:LOCALAPPDATA 'Anno1602-Extensions\islands'
+        Write-Host 'AR -Volcanoes Off (alone, with Disasters Off, with Disasters More)'
+        $a = Start-ImageProcess
+        Invoke-SimulatedStart $a
+        $r = Invoke-Tool $a @('-Volcanoes', 'Off')
+        Assert-Check "AR alone: exit code $($r.Code), volcano call 0x9E93E = $(Hex (Read-Image $a $VolcanoRva 5)), other disaster calls untouched" ($r.Code -eq 0 -and (Hex (Read-Image $a $VolcanoRva 5)) -eq '0F 1F 44 00 00' -and @($DisasterOffSites | Where-Object { $_.Rva -ne $VolcanoRva -and (Hex (Read-Image $a $_.Rva 5)) -ne $_.Original }).Count -eq 0)
+        if ($r.Code -ne 0) { Write-Host $r.Text }
+        Stop-ImageProcess $a
+        $a = Start-ImageProcess
+        Invoke-SimulatedStart $a
+        $r = Invoke-Tool $a @('-Volcanoes', 'Off', '-Disasters', 'Off')
+        Assert-Check "AR with Disasters Off: exit code $($r.Code), all five calls NOPs" ($r.Code -eq 0 -and @($DisasterOffSites | Where-Object { (Hex (Read-Image $a $_.Rva 5)) -ne '0F 1F 44 00 00' }).Count -eq 0)
+        Stop-ImageProcess $a
+        $a = Start-ImageProcess
+        Invoke-SimulatedStart $a
+        $r = Invoke-Tool $a @('-Volcanoes', 'Off', '-Disasters', 'More')
+        Assert-Check "AR with Disasters More: exit code $($r.Code), volcano NOP, plague limit 25, fire calls untouched" ($r.Code -eq 0 -and (Hex (Read-Image $a $VolcanoRva 5)) -eq '0F 1F 44 00 00' -and (Hex (Read-Image $a 0xBCABB 3)) -eq '83 FA 19' -and (Hex (Read-Image $a 0xBCB07 5)) -eq 'E8 E4 A6 FF FF')
+        Stop-ImageProcess $a
+
+        Write-Host 'AS Island forge: folder, path for the game, the five loaders, reuse'
+        $a = Start-ImageProcess
+        Invoke-SimulatedStart $a
+        foreach ($s in $IslandPathSites) { Assert-Check ("AS before 0x{0:X} = {1}" -f $s.Rva, (Hex (Read-Image $a $s.Rva 7))) ((Hex (Read-Image $a $s.Rva 7)) -eq $s.Original) }
+        Assert-Check "AS before: free end of .pdata at 0x$('{0:X}' -f $IslandPathRva) is empty" ((Hex (Read-Image $a $IslandPathRva 256)) -eq ((@('00') * 256) -join ' '))
+        $r = Invoke-Tool $a @('-Rivers', 'Off', '-Mountains', 'Edge') 'de'
+        Assert-Check "AS exit code $($r.Code), German message" ($r.Code -eq 0 -and $r.Text -cmatch 'Inselschmiede: keine Fluesse, Berge am Rand' -and $r.Text -cmatch 'baue die Inseln')
+        if ($r.Code -ne 0) { Write-Host $r.Text }
+        $dirs = @(Get-ChildItem -LiteralPath $islandsRoot -Directory -ErrorAction SilentlyContinue)
+        $built = if ($dirs.Count -eq 1) { $dirs[0] } else { $null }
+        Assert-Check ("AS one island folder built ({0}) with log and changed islands" -f (($dirs | ForEach-Object Name) -join ', ')) ($built -and $built.Name -match '^[0-9a-f]{8}-r1-m1-v0-g0$' -and (Test-Path -LiteralPath (Join-Path $built.FullName 'forge.log')) -and @(Get-ChildItem -LiteralPath $built.FullName -Recurse -Filter *.scp).Count -gt 300)
+        $want = [byte[]]([Text.Encoding]::Default.GetBytes($built.FullName + '\') + [byte]0)
+        Assert-Check "AS folder path in memory (ANSI, $($want.Length) bytes with the end zero)" ((Hex (Read-Image $a $IslandPathRva $want.Length)) -eq (Hex $want))
+        foreach ($s in $IslandPathSites) {
+            $now = Read-Image $a $s.Rva 7
+            $target = $s.Rva + 7 + [BitConverter]::ToInt32($now, 3)
+            Assert-Check ("AS loader 0x{0:X}: same instruction ({1}), now points to 0x{2:X}" -f $s.Rva, (Hex $now[0..2]), $target) ((Hex $now[0..2]) -eq (Hex (Bytes $s.Original)[0..2]) -and $target -eq $IslandPathRva)
+        }
+        $stamp = (Get-Item -LiteralPath (Join-Path $built.FullName 'forge.log')).LastWriteTimeUtc
+        $r = Invoke-Tool $a @('-Rivers', 'Off', '-Mountains', 'Edge')
+        Assert-Check "AS second run: exit code $($r.Code), folder reused (not built again)" ($r.Code -eq 0 -and $r.Text -notmatch 'building the islands' -and (Get-Item -LiteralPath (Join-Path $built.FullName 'forge.log')).LastWriteTimeUtc -eq $stamp)
+        Stop-ImageProcess $a
+        $a = Start-ImageProcess
+        Invoke-SimulatedStart $a
+        $r = Invoke-Tool $a @('-IslandSize', 'Giant')
+        $dirs = @(Get-ChildItem -LiteralPath $islandsRoot -Directory)
+        Assert-Check ("AS other options: exit code {0}, new folder, the old one removed ({1})" -f $r.Code, (($dirs | ForEach-Object Name) -join ', ')) ($r.Code -eq 0 -and $dirs.Count -eq 1 -and $dirs[0].Name -match '-r0-m0-v0-g8$' -and $r.Text -match '8 giant islands')
+        Stop-ImageProcess $a
+
+        Write-Host 'AT IslandSize Giant: plans with the real giant islands'
+        $gdir = $dirs[0].FullName
+        $script:GiantDims = @{}
+        for ($n = 20; $n -lt 20 + $GiantPerClimate; $n++) { $f = [IO.File]::ReadAllBytes((Join-Path $gdir "Nord\lar$n.scp")); $script:GiantDims[$n] = @([int]$f[21], [int]$f[22]) }
+        $script:GiantMaxPerMap = $GiantMaxPerMap
+        foreach ($geo in @(1000, 700), @(2000, 1400), @(750, 525)) {
+            [void](Build-IslandTable $geo[0] $geo[1] $false 'Giant')
+            foreach ($lay in ($script:IslandPlans.Keys | Sort-Object)) {
+                $plan = $script:IslandPlans[$lay]; $rects = @()
+                foreach ($p in $plan) {
+                    $n = [int][BitConverter]::ToUInt16($p, 4)
+                    $wh = if ($p[1] -eq 4 -and $script:GiantDims.ContainsKey($n)) { $script:GiantDims[$n] } else { @($ClassW[$p[1]], $ClassH[$p[1]]) }
+                    $rects += , @([BitConverter]::ToInt32($p, 8), [BitConverter]::ToInt32($p, 12), $wh[0], $wh[1], $n, $p[1])
+                }
+                $giants = @($rects | Where-Object { $_[5] -eq 4 -and $_[4] -ge 20 -and $_[4] -lt 20 + $GiantPerClimate })
+                $overlap = 0; for ($i = 0; $i -lt $rects.Count; $i++) { for ($j = $i + 1; $j -lt $rects.Count; $j++) { $p = $rects[$i]; $q = $rects[$j]; if ($p[0] -lt $q[0] + $q[2] -and $q[0] -lt $p[0] + $p[2] -and $p[1] -lt $q[1] + $q[3] -and $q[1] -lt $p[1] + $p[3]) { $overlap++ } } }
+                $outside = @($rects | Where-Object { $_[0] -lt 0 -or $_[1] -lt 0 -or $_[0] + $_[2] -gt $geo[0] -or $_[1] + $_[3] -gt $geo[1] }).Count
+                $class4 = @($rects | Where-Object { $_[5] -eq 4 }).Count
+                $unique = @($giants | ForEach-Object { $_[4] } | Sort-Object -Unique).Count -eq $giants.Count
+                $minGiants = if ($geo[0] -ge 1000) { 1 } else { 0 }
+                Assert-Check ("AT {0}x{1} layout {2}: {3} islands, {4} giant, {5} of class lar in total, no overlap ({6}), inside ({7})" -f $geo[0], $geo[1], $lay, $rects.Count, $giants.Count, $class4, $overlap, $outside) ($overlap -eq 0 -and $outside -eq 0 -and $giants.Count -ge $minGiants -and $giants.Count -le $GiantMaxPerMap -and $class4 -le 10 -and $unique)
+            }
+        }
+        $script:GiantDims = @{}
+    }
+    finally { $env:LOCALAPPDATA = $localBefore }
 
     Write-Host 'AH Everything together (real haeuser.cod)'
     $a = Start-ImageProcess -Crt

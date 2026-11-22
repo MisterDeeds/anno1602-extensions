@@ -89,7 +89,7 @@ try {
     # --- 2. Install in German ---------------------------------------------------------------------------------------
     "Install (German) into the sandbox $sandbox"
     $out = Invoke-Installer 'de' -StartLauncher
-    $copied = @('anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt', 'FINDINGS.md')
+    $copied = @('anno-patcher.ps1', 'island-forge.cs', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt', 'FINDINGS.md')
     $expected = $copied + 'version.txt'
     $have = @(Get-ChildItem -LiteralPath $new -File | ForEach-Object Name)
     Test-That "program folder holds exactly the $($expected.Count) files ($($have.Count))" ($have.Count -eq $expected.Count -and -not ($expected | Where-Object { $_ -notin $have }))
@@ -172,6 +172,10 @@ try {
     foreach ($n in 'Abenteuer 4711.szs', 'Adventure 99 Easy.szs', 'Tagesabenteuer 2026-11-14.szs', 'Daily Adventure 2026-11-14.szs', 'Custom - My Island.szs') { Set-Content -LiteralPath (Join-Path $own $n) 'made by the extensions' }
     New-Item -ItemType Directory -Force -Path (Join-Path $app 'Anno1602-Extensions') | Out-Null
     Set-Content -LiteralPath (Join-Path $app 'Anno1602-Extensions\settings.json') '{}'
+    # Islands of the island forge (3.4), as the tool leaves them below LOCALAPPDATA.
+    $forgeFolder = Join-Path $local 'Anno1602-Extensions\islands\0123abcd-r1-m1-v1-g8\Nord'
+    New-Item -ItemType Directory -Force -Path $forgeFolder | Out-Null
+    Set-Content -LiteralPath (Join-Path $forgeFolder 'lar20.scp') 'giant island'
     $before = @(Get-ChildItem -LiteralPath $new -Recurse -File | ForEach-Object { '{0}|{1}' -f $_.FullName, $_.LastWriteTimeUtc.Ticks }) -join "`n"
     $out = Invoke-Installer 'de' -Script (Join-Path $new 'install.ps1')
     Test-That 'the installed copy does not install over itself (only removes)' ($out -match 'installierte Kopie' -and $before -eq (@(Get-ChildItem -LiteralPath $new -Recurse -File | ForEach-Object { '{0}|{1}' -f $_.FullName, $_.LastWriteTimeUtc.Ticks }) -join "`n"))
@@ -181,6 +185,7 @@ try {
     Test-That 'Apps entry removed' (-not (Test-Path -LiteralPath (Join-Path $sandbox 'apps-entry.json')))
     Test-That 'no shortcut left (both names, desktop and start menu)' (-not (Get-ChildItem -LiteralPath $desk, $start -Filter 'Anno 1602 - *.lnk'))
     Test-That 'both settings folders removed' (-not (Test-Path -LiteralPath (Join-Path $app 'Anno1602-Extensions')) -and -not (Test-Path -LiteralPath (Join-Path $app 'Anno1602-Erweiterungen')))
+    Test-That 'islands of the island forge removed (LOCALAPPDATA\Anno1602-Extensions)' (-not (Test-Path -LiteralPath (Join-Path $local 'Anno1602-Extensions')))
     $left = @(Get-ChildItem -LiteralPath $own -Filter '*.szs' | ForEach-Object Name | Sort-Object)
     Test-That "only the player's files are left in Own Scenarios ($($left -join ', '))" (($left -join '|') -eq (($playerFiles | Sort-Object) -join '|'))
     Test-That 'savegame untouched' (Test-Path -LiteralPath (Join-Path $docs 'Savegame\Meine Welt.gam'))

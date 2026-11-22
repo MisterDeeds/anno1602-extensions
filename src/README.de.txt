@@ -41,7 +41,16 @@ Spielen
 Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
   Kartengroesse        bis 2000 x 1400 Felder (Original 500 x 350)
   Inseln               bis 50 Inseln ueber die ganze Karte verteilt (das Maximum des Spiels)
-  Inselgroesse         Gross / Riesig: viel mehr grosse Inseln (bis 10 der groessten, 100 x 90)
+  Inselgroesse         Gross / Riesig: viel mehr grosse Inseln (bis 10 der groessten, 100 x 90);
+                       Gigantisch: dazu bis 6 Riesen-Inseln (135 x 120 bis 160 x 140), groesser als
+                       jede Insel des Spiels. Sie wachsen aus den groessten Inseln; ohne Fluesse.
+  Fluesse              Keine: Fluesse werden Wiese, ihre Muendung Strand und Brandung, die Quelle Hang
+  Berge                Am Rand: Berge mitten auf der Insel ruecken an die Kueste (Fluesse, die dort
+                       entspringen, verschwinden mit); Berge neben einem Ureinwohnerdorf bleiben
+  Vulkan               Keiner: der einzige Vulkan des Spiels wird ein normaler Berg, keine Ausbrueche
+                       (Fluesse, Berge, Vulkan und Riesen-Inseln: das Werkzeug schreibt einmalig
+                       veraenderte Inseldateien nach %LOCALAPPDATA%\Anno1602-Extensions\islands und
+                       laesst das Spiel sie dort lesen; nur fuer neue Spiele, Spielstaende behalten ihre Inseln.)
   Rohstoffe            Mehr: Erz, Gold, Fruchtbarkeit und Schaetze passend zur Inselzahl; Viele: doppelt
   Ureinwohner          Mehr / Viele: 4 + 4 bzw. 7 + 7 Doerfer statt 2 + 2 (Nord + Sued)
   Fruchtbarkeit        "Jede Pflanze auf jeder Insel": in neuen Endlosspielen traegt jede Insel
@@ -49,6 +58,9 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
   Freie Haendler       Mehr / Viele: doppelt bzw. dreimal so viele Haendlerschiffe (hoechstens 24)
   Computergegner       Immer wie "Schwer": die drei Gegner ruesten und bauen aus wie auf der
                        hoechsten Stufe, auch wenn du leichter spielst (Naturereignisse bleiben)
+  Staedte der Gegner   Ehrgeizig: die Hauptstaedte der Gegner bleiben nicht mehr bei Buergern oder
+                       Kaufleuten stehen; sie bauen Kirche, Badehaus, Theater und Universitaet und
+                       koennen Aristokraten erreichen
   Piraten              wie Schwierigkeit / greifen immer an / stark / keine
   Piratenflotte        Gross / Riesig: bis 8 bzw. 12 Piratenschiffe statt 4 (nur wenn Piraten angreifen)
   Katastrophen         Keine: kein Feuer, keine Pest, Duerre oder Vulkan. Haeufiger: Feuer und

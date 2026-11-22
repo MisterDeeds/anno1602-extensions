@@ -70,6 +70,18 @@
     Island size (-IslandSize)     Normal: classes of the template. Large: original islands one class
                                   larger (where there is room), extra islands "lar" (100 x 90) and "big"
                                   (70 x 60). Huge: almost only "lar". Fewer, but much larger islands.
+                                  Giant (3.4): as Large, plus up to 6 giant islands of the island forge
+                                  (135 x 120 to 160 x 140, file numbers lar20-lar27).
+    Island forge (3.4)            -Rivers Off, -Mountains Edge, -Volcanoes Off and -IslandSize Giant: the C#
+                                  code src\island-forge.cs writes changed copies of the game's island files
+                                  (and the giant islands) once into %LOCALAPPDATA%\Anno1602-Extensions\islands;
+                                  five LEA instructions of the island loaders (RVA 0xD13B2, 0xD13CF, 0x9C01A,
+                                  0x9C381, 0x9C42B) point to that folder (path at RVA 0x91B200), files that
+                                  are not there come from the game folder. New games only; savegames hold
+                                  their islands completely. -Volcanoes Off also stops eruptions (RVA 0x9E93E).
+    Rival growth (-RivalGrowth)   Ambitious (3.4): the main towns of the AI no longer end in the phases without
+                                  church/bathhouse (0x22) or theatre/college (0x2C); the wait for merchant goods
+                                  before church and bathhouse is dropped (RVA 0x37517, 0x37B9C, 0x37A7D).
     Resources (-Resources)        Normal: amounts of the template (meant for 17-20 islands). More: ore,
                                   gold, fertility of the plantations and treasures grow with the
                                   island count. Lots: twice as much. Each amount at most as
@@ -193,8 +205,15 @@ param(
     [ValidateRange(0, 9999999)][int]$StartGold = 0,
     # Factor for the residents per house (1 = normal 2/6/15/25/40).
     [ValidateRange(1.0, 5.0)][double]$Residents = 1.0,
-    # Island size in the endless game: Normal (as the template), Large (many large), Huge (almost only the largest).
-    [ValidateSet('Normal', 'Large', 'Huge')][string]$IslandSize = 'Normal',
+    # Island size in the endless game: Normal (as the template), Large (many large), Huge (almost only the largest),
+    # Giant (up to 6 giant islands of the island forge, larger than the largest of the game).
+    [ValidateSet('Normal', 'Large', 'Huge', 'Giant')][string]$IslandSize = 'Normal',
+    # Rivers on the islands of new games: Default (as the island files) or Off (no rivers, the land becomes meadow).
+    [ValidateSet('Default', 'Off')][string]$Rivers = 'Default',
+    # Mountains on the islands of new games: Default (as the island files) or Edge (moved to the coast).
+    [ValidateSet('Default', 'Edge')][string]$Mountains = 'Default',
+    # Volcano: Default or Off (the only volcano of the game is a normal mountain, no eruptions).
+    [ValidateSet('Default', 'Off')][string]$Volcanoes = 'Default',
     # Resources in the endless game: Normal (as the template), More (growing with the island count), Lots (twice as many).
     [ValidateSet('Normal', 'More', 'Lots')][string]$Resources = 'Normal',
     # Factor for the tons per cargo slot of the buildable ships (1 = normal).
@@ -209,6 +228,8 @@ param(
     [ValidateRange(0, 9999999)][int]$RivalGold = 0,
     # Computer rivals: Default (as the difficulty) or Hard (always as the highest level).
     [ValidateSet('Default', 'Hard')][string]$Rivals = 'Default',
+    # Rival growth: Default or Ambitious (their main towns no longer stop at Buerger/Kaufleute).
+    [ValidateSet('Default', 'Ambitious')][string]$RivalGrowth = 'Default',
     # Pirate fleet: Normal, Large (2 times as many ships), Huge (3 times).
     [ValidateSet('Normal', 'Large', 'Huge')][string]$PirateFleet = 'Normal',
     # Native villages per climate zone: Default (2), More (4), Lots (7).
@@ -257,7 +278,7 @@ $ErrorActionPreference = 'Stop'
 $UiGerman = if ($env:ANNO_EXTENSIONS_LANG) { $env:ANNO_EXTENSIONS_LANG -eq 'de' } else { (Get-UICulture).TwoLetterISOLanguageName -eq 'de' }
 function Txt([string]$en, [string]$de) { if ($UiGerman) { $de } else { $en } }
 # German names of the option values (the values themselves are English), for the German messages.
-$GermanValueNames = @{ Default = 'Standard'; Active = 'Aktiv'; Strong = 'Stark'; Off = 'Aus'; Normal = 'Normal'; Large = 'Gross'; Huge = 'Riesig'; More = 'Mehr'; Lots = 'Viele'; Hard = 'Schwer'; Everywhere = 'Ueberall'; Infinite = 'Unendlich'; Rare = 'Selten'; Often = 'Haeufig' }
+$GermanValueNames = @{ Ambitious = 'Ehrgeizig'; Default = 'Standard'; Active = 'Aktiv'; Strong = 'Stark'; Off = 'Aus'; Normal = 'Normal'; Large = 'Gross'; Huge = 'Riesig'; Giant = 'Gigantisch'; Edge = 'Am Rand'; More = 'Mehr'; Lots = 'Viele'; Hard = 'Schwer'; Everywhere = 'Ueberall'; Infinite = 'Unendlich'; Rare = 'Selten'; Often = 'Haeufig' }
 function Get-ValueName([string]$value) { if ($UiGerman) { $GermanValueNames[$value] } else { $value } }
 
 # Every error stops the tool as before; started from the launcher the window then waits for Enter.
@@ -669,8 +690,18 @@ function Read-Ships([string]$path) {
 # $ships: start points of the ships (x, y); enlarged and new islands keep a gap of 2 tiles.
 # (At 1000 x 700 and 2000 x 1400 this does not change the plans; at 750 x 525 Large/Huge
 # start ships were otherwise inside an island.)
+# Giant (3.4): originals as with Large; then the giant islands of the island forge (file numbers 20+ of the class
+# "lar", sizes in $GiantDims, each one once, at most $GiantMaxPerMap), then copies alternately "lar" and "big".
+# Giant islands count towards the limit of "lar" islands per map.
 function Get-IslandPlan($template, [int]$mapW, [int]$mapH, [bool]$stretchOnly, [string]$size = 'Normal', $ships = @()) {
     $shipFree = { param([int]$x, [int]$y, [int]$w, [int]$hh) foreach ($sp in $ships) { if ($sp[0] -ge $x - 2 -and $sp[0] -lt $x + $w + 2 -and $sp[1] -ge $y - 2 -and $sp[1] -lt $y + $hh + 2) { return $false } }; $true }
+    $giantDims = if ($script:GiantDims) { $script:GiantDims } else { @{} }
+    $giantMax = if ($script:GiantMaxPerMap) { $script:GiantMaxPerMap } else { 6 }
+    # Width and height of a plan entry: the giant island of its file number, otherwise its class.
+    $dimW = { param($p) $n = [int][BitConverter]::ToUInt16($p, 4); if ($p[1] -eq 4 -and $giantDims.ContainsKey($n)) { $giantDims[$n][0] } else { $ClassW[$p[1]] } }
+    $dimH = { param($p) $n = [int][BitConverter]::ToUInt16($p, 4); if ($p[1] -eq 4 -and $giantDims.ContainsKey($n)) { $giantDims[$n][1] } else { $ClassH[$p[1]] } }
+    $giant = ($size -eq 'Giant')
+    if ($giant) { $size = 'Large' }
     $plan = New-Object System.Collections.Generic.List[object]
     foreach ($e in $template) {
         $n = [byte[]]$e.Clone()
@@ -686,20 +717,22 @@ function Get-IslandPlan($template, [int]$mapW, [int]$mapH, [bool]$stretchOnly, [
     # Hence at most $LarMax of them per map, otherwise "big" (68 + 64 files).
     $LarMax = 10
     $lar = @($plan | Where-Object { $_[1] -eq 4 }).Count
+    # With giant islands the originals leave their places among the "lar" islands to them.
+    $larCap = if ($giant) { $LarMax - [math]::Min($giantMax, $giantDims.Count) } else { $LarMax }
     if ($size -ne 'Normal' -and -not $stretchOnly) {
         for ($i = 0; $i -lt $plan.Count; $i++) {
             $e = $plan[$i]; $k0 = [int]$e[1]
             $wanted = if ($size -eq 'Huge') { @(4, 3) } else { @([math]::Min(4, $k0 + 1)) }
             foreach ($k in $wanted) {
                 if ($k -le $k0) { continue }
-                if ($k -eq 4 -and $lar -ge $LarMax) { continue }
+                if ($k -eq 4 -and $lar -ge $larCap) { continue }
                 $x = [BitConverter]::ToInt32($e, 8); $y = [BitConverter]::ToInt32($e, 12)
                 if ($x + $ClassW[$k] -gt $mapW - $margin -or $y + $ClassH[$k] -gt $mapH - $margin) { continue }
                 $free = & $shipFree $x $y $ClassW[$k] $ClassH[$k]
                 for ($j = 0; $j -lt $plan.Count -and $free; $j++) {
                     if ($j -eq $i) { continue }
                     $p = $plan[$j]; $px = [BitConverter]::ToInt32($p, 8); $py = [BitConverter]::ToInt32($p, 12)
-                    if ($x -lt $px + $ClassW[$p[1]] + $gap -and $px -lt $x + $ClassW[$k] + $gap -and $y -lt $py + $ClassH[$p[1]] + $gap -and $py -lt $y + $ClassH[$k] + $gap) { $free = $false }
+                    if ($x -lt $px + (& $dimW $p) + $gap -and $px -lt $x + $ClassW[$k] + $gap -and $y -lt $py + (& $dimH $p) + $gap -and $py -lt $y + $ClassH[$k] + $gap) { $free = $false }
                 }
                 if ($free) { $e[1] = [byte]$k; $e[4] = 0xFF; $e[5] = 0xFF; if ($k -eq 4) { $lar++ }; break }
             }
@@ -707,6 +740,31 @@ function Get-IslandPlan($template, [int]$mapW, [int]$mapH, [bool]$stretchOnly, [
     }
     $classSeq = switch ($size) { 'Large' { @(4, 3) } 'Huge' { @(4, 4, 4, 3) } default { $null } }
     $script:rng = [long](($template.Count * 7919 + [BitConverter]::ToInt32($template[0], 8) * 31 + [BitConverter]::ToInt32($template[0], 12)) % 2147483648)
+    # Giant islands first (the largest first), each file once, at random free places (2000 tries each).
+    if ($giant -and -not $stretchOnly) {
+        $placedGiants = 0
+        foreach ($n in @($giantDims.Keys | Sort-Object { - $giantDims[$_][0] * $giantDims[$_][1] }, { $_ })) {
+            if ($placedGiants -ge $giantMax -or $lar -ge $LarMax -or $plan.Count -ge $goal) { break }
+            $w = $giantDims[$n][0]; $hh = $giantDims[$n][1]
+            if ($mapW - 2 * $margin - $w -le 0 -or $mapH - 2 * $margin - $hh -le 0) { continue }
+            for ($t = 0; $t -lt 2000; $t++) {
+                $script:rng = ($script:rng * 1103515245 + 12345) % 2147483648; $x = $margin + [int]($script:rng % ($mapW - 2 * $margin - $w))
+                $script:rng = ($script:rng * 1103515245 + 12345) % 2147483648; $y = $margin + [int]($script:rng % ($mapH - 2 * $margin - $hh))
+                $free = & $shipFree $x $y $w $hh
+                foreach ($p in $plan) {
+                    $px = [BitConverter]::ToInt32($p, 8); $py = [BitConverter]::ToInt32($p, 12)
+                    if ($x -lt $px + (& $dimW $p) + $gap -and $px -lt $x + $w + $gap -and $y -lt $py + (& $dimH $p) + $gap -and $py -lt $y + $hh + $gap) { $free = $false; break }
+                }
+                if ($free) {
+                    $e = New-Object byte[] 16
+                    $e[0] = 2; $e[1] = 4; $e[2] = 0; $e[3] = [byte]$plan.Count
+                    [Array]::Copy([BitConverter]::GetBytes([uint16]$n), 0, $e, 4, 2)
+                    [Array]::Copy([BitConverter]::GetBytes([int32]$x), 0, $e, 8, 4); [Array]::Copy([BitConverter]::GetBytes([int32]$y), 0, $e, 12, 4)
+                    $plan.Add($e); $lar++; $placedGiants++; break
+                }
+            }
+        }
+    }
     $sources = @($template | Sort-Object { - $_[1] }, { $_[3] })
     $qi = 0; $failures = 0
     while ($plan.Count -lt $goal -and $failures -lt $sources.Count) {
@@ -721,7 +779,7 @@ function Get-IslandPlan($template, [int]$mapW, [int]$mapH, [bool]$stretchOnly, [
             $script:rng = ($script:rng * 1103515245 + 12345) % 2147483648; $y = $margin + [int]($script:rng % ($mapH - 2 * $margin - $hh))
             $free = & $shipFree $x $y $w $hh
             foreach ($p in $plan) {
-                $px = [BitConverter]::ToInt32($p, 8); $py = [BitConverter]::ToInt32($p, 12); $pw = $ClassW[$p[1]]; $ph = $ClassH[$p[1]]
+                $px = [BitConverter]::ToInt32($p, 8); $py = [BitConverter]::ToInt32($p, 12); $pw = & $dimW $p; $ph = & $dimH $p
                 if ($x -lt $px + $pw + $gap -and $px -lt $x + $w + $gap -and $y -lt $py + $ph + $gap -and $py -lt $y + $hh + $gap) { $free = $false; break }
             }
             if ($free) {
@@ -758,6 +816,97 @@ function Build-IslandTable([int]$mapW, [int]$mapH, [bool]$stretchOnly, [string]$
     $all = [byte[]]($head + $t.ToArray())
     if ($all.Length -gt $TableMax) { throw (Txt 'Internal error: island table too large.' 'Interner Fehler: Inseltabelle zu gross.') }
     , $all
+}
+
+# --- Island forge (-Rivers, -Mountains, -Volcanoes, -IslandSize Giant) -----------------------------
+# Derivation: docs\FINDINGS.md, section "Island forge". src\island-forge.cs writes changed copies of the game's
+# island files (rivers -> meadow, inland mountains -> coast, the volcano mark of Nord\big25 removed) and the giant
+# islands Nord|Sued\lar20 ... lar27 into %LOCALAPPDATA%\Anno1602-Extensions\islands\<hash>-<options>\, once per
+# version and set of options (reused afterwards, other sets deleted). Both island loaders of the game (the SZENE
+# loader FUN_1400d0de0 and the INSEL3/4/5 loader FUN_14009bdd0, which reads the island under a village file and the
+# ground of savegame islands) first try the same relative path ("Nord\lar20.SCP") below a second folder (normally
+# Loca\<language>\, which holds no island files) and fall back to the game folder. Five LEA instructions that load that
+# folder point to our folder instead; its path (ANSI, at most 255 bytes) lies in the free end of .pdata (RVA 0x91B200,
+# readable, in memory only). Island files that are not in our folder still come from the game folder; savegames
+# contain their islands completely and do not depend on the folder.
+$GiantPerClimate = 8; $GiantMaxPerMap = 6
+$IslandForgeUsed = ($Rivers -eq 'Off' -or $Mountains -eq 'Edge' -or $Volcanoes -eq 'Off' -or $IslandSize -eq 'Giant')
+$GiantDims = @{}   # giant file number -> @(width, height), only numbers that exist for both climates
+$IslandPathRva = 0x91B200; $IslandPathMax = 0x100
+$IslandPathSites = @(
+    @{ Rva = 0xD13B2; Original = '4C 8D 05 E7 41 4F 00' }   # SZENE loader: lea r8 (source of strncpy_s)
+    @{ Rva = 0xD13CF; Original = '48 8D 0D CA 41 4F 00' }   # SZENE loader: lea rcx (its length)
+    @{ Rva = 0x9C01A; Original = '4C 8D 2D 7F 95 52 00' }   # INSEL4/5 loader: lea r13 (first island)
+    @{ Rva = 0x9C381; Original = '4C 8D 2D 18 92 52 00' }   # INSEL4/5 loader: lea r13 (next island)
+    @{ Rva = 0x9C42B; Original = '4C 8D 2D 6E 91 52 00' }   # INSEL3 loader: lea r13
+)
+function Get-IslandFolder {
+    $root = Join-Path $env:LOCALAPPDATA 'Anno1602-Extensions\islands'
+    $forge = Join-Path $PSScriptRoot 'island-forge.cs'
+    if (-not (Test-Path -LiteralPath $forge)) { throw (Txt "island-forge.cs is missing next to the tool ($forge)." "island-forge.cs fehlt neben dem Werkzeug ($forge).") }
+    $giants = if ($IslandSize -eq 'Giant') { $GiantPerClimate } else { 0 }
+    $hash = (Get-FileHash -LiteralPath $forge -Algorithm SHA256).Hash.Substring(0, 8).ToLower()
+    $sig = '{0}-r{1}-m{2}-v{3}-g{4}' -f $hash, [int]($Rivers -eq 'Off'), [int]($Mountains -eq 'Edge'), [int]($Volcanoes -eq 'Off'), $giants
+    $dir = Join-Path $root $sig
+    if (-not (Test-Path -LiteralPath (Join-Path $dir 'forge.log'))) {
+        Write-Host (Txt 'Island forge: building the islands for these options (once) ...' 'Inselschmiede: baue die Inseln fuer diese Optionen (einmalig) ...')
+        if (-not ('AnnoIslands.Forge' -as [type])) { Add-Type -Path $forge -ReferencedAssemblies System.Core }
+        $tmp = "$dir.tmp$PID"
+        if (Test-Path -LiteralPath $tmp) { Remove-Item -LiteralPath $tmp -Recurse -Force }
+        $o = New-Object AnnoIslands.Options
+        $o.NoRivers = ($Rivers -eq 'Off'); $o.EdgeMountains = ($Mountains -eq 'Edge'); $o.NoVolcano = ($Volcanoes -eq 'Off'); $o.GiantPerClimate = $giants
+        $log = [AnnoIslands.Forge]::Build($GameFolder, $tmp, $o)
+        New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+        $log | Set-Content -LiteralPath (Join-Path $tmp 'forge.log') -Encoding UTF8
+        if (Test-Path -LiteralPath $dir) { Remove-Item -LiteralPath $dir -Recurse -Force }
+        Move-Item -LiteralPath $tmp -Destination $dir
+    }
+    # Folders of other options or older versions are no longer needed.
+    foreach ($old in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -ne $sig })) {
+        try { Remove-Item -LiteralPath $old.FullName -Recurse -Force -ErrorAction Stop } catch { }
+    }
+    $dir
+}
+# Size of a giant island from its file header (INSEL5: width +1, height +2 of the chunk data).
+function Get-IslandFileSize([string]$path) {
+    if (-not (Test-Path -LiteralPath $path)) { return $null }
+    $b = [IO.File]::ReadAllBytes($path)
+    if ($b.Length -lt 23 -or [Text.Encoding]::ASCII.GetString($b, 0, 5) -ne 'INSEL') { return $null }
+    , @([int]$b[21], [int]$b[22])
+}
+if ($IslandForgeUsed) {
+    # -CheckOnly writes nothing: the sites are checked with the path of the folder, which is not built.
+    if ($CheckOnly) { $IslandFolder = Join-Path $env:LOCALAPPDATA 'Anno1602-Extensions\islands\check'; $summary = @('SUMMARY (not built with -CheckOnly)') }
+    else {
+        $IslandFolder = Get-IslandFolder
+        $summary = @(Get-Content -LiteralPath (Join-Path $IslandFolder 'forge.log') | Where-Object { $_ -match '^SUMMARY' })
+    }
+    for ($n = 20; $n -lt 20 + $GiantPerClimate; $n++) {
+        $a = Get-IslandFileSize (Join-Path $IslandFolder "Nord\lar$n.scp"); $b = Get-IslandFileSize (Join-Path $IslandFolder "Sued\lar$n.scp")
+        if ($a -and $b -and $a[0] -eq $b[0] -and $a[1] -eq $b[1]) { $GiantDims[$n] = $a }
+    }
+    # Path of the folder for the game (ANSI; if a character cannot be written so, the short 8.3 name).
+    $islandPath = $IslandFolder.TrimEnd('\') + '\'
+    $ansi = [Text.Encoding]::Default
+    if (-not $CheckOnly -and $ansi.GetString($ansi.GetBytes($islandPath)) -ne $islandPath) {
+        try { $islandPath = (New-Object -ComObject Scripting.FileSystemObject).GetFolder($IslandFolder).ShortPath.TrimEnd('\') + '\' } catch { }
+    }
+    $pathBytes = [byte[]]($ansi.GetBytes($islandPath) + [byte]0)
+    if ($pathBytes.Length -gt $IslandPathMax -or (-not $CheckOnly -and $ansi.GetString($ansi.GetBytes($islandPath)) -ne $islandPath)) {
+        throw (Txt "The folder of the island forge cannot be handed to the game ($islandPath)." "Der Ordner der Inselschmiede kann dem Spiel nicht uebergeben werden ($islandPath).")
+    }
+    # Order: first the path, then the five loaders (rollback in reverse order).
+    $Patches += @{ Name = (Txt 'Island forge (folder)       ' 'Inselschmiede (Ordner)      '); Rva = $IslandPathRva; Original = ((@('00') * $pathBytes.Length) -join ' '); Target = $pathBytes; MemoryOnly = $true }
+    foreach ($s in $IslandPathSites) {
+        $Patches += @{ Name = (Txt 'Island forge (loader)       ' 'Inselschmiede (Lader)       '); Rva = $s.Rva; Original = $s.Original; Target = [byte[]]((Bytes $s.Original)[0..2] + (Rel32 $IslandPathRva ($s.Rva + 7))) }
+    }
+    $parts = @()
+    if ($Rivers -eq 'Off') { $parts += (Txt 'no rivers' 'keine Fluesse') }
+    if ($Mountains -eq 'Edge') { $parts += (Txt 'mountains at the coast' 'Berge am Rand') }
+    if ($Volcanoes -eq 'Off') { $parts += (Txt 'no volcano' 'kein Vulkan') }
+    if ($IslandSize -eq 'Giant') { $parts += ((Txt '{0} giant islands' '{0} Riesen-Inseln') -f $GiantDims.Count) }
+    Write-Host ((Txt 'Island forge: {0} ({1})' 'Inselschmiede: {0} ({1})') -f ($parts -join ', '), (($summary -join ' ') -replace '^SUMMARY ', ''))
+    if ($IslandSize -eq 'Giant' -and $GiantDims.Count -eq 0 -and -not $CheckOnly) { Write-Host (Txt 'Island forge: no giant island could be built; the map uses the largest islands of the game instead.' 'Inselschmiede: keine Riesen-Insel gebaut; die Karte nimmt stattdessen die groessten Inseln des Spiels.') -ForegroundColor Yellow }
 }
 
 if (-not $NoIslandSpread) {
@@ -886,6 +1035,22 @@ if ($Rivals -eq 'Hard') {
     foreach ($g in $RivalSites) { $Patches += @{ Name = $g.Name.PadRight(28); Rva = $g.Rva; Original = $g.Original; Target = (Bytes 'B8 03 00 00 00 90') } }
     Write-Host (Txt 'Computer rivals: always as on Hard' 'Computergegner: immer wie Schwer')
 }
+# Rival growth Ambitious (3.4): the AI builds each town along a phase machine (dispatcher FUN_1400393e0, phase at
+# city record +0x10). Two exits lead into phases that never build the next public buildings: at the end of phase
+# 0x21 (FUN_1400374b0) a free island area below 951 leads to phase 0x22 (no church, no bathhouse: the town stays at
+# Buerger), at the end of phase 0x29 (FUN_140037b50) below 1101 to phase 0x2C (no theatre, no college: Kaufleute).
+# Both jumps become NOPs, so the main town always goes on to 0x28 and 0x32. In phase 0x28 church and bathhouse wait for
+# 3 of 4 merchant goods in stock (FUN_140036100); that wait is dropped too. The goods gate before theatre and college
+# (phase 0x32, 4 of 6 goods) stays, so those come only once the chains run. Secondary towns stay plantation colonies.
+$RivalGrowthSites = @(
+    @{ Name = (Txt 'AI growth (phase 0x21)' 'KI Ausbau (Phase 0x21)'); Rva = 0x37510; Original = '81 78 1C B6 03 00 00 7E 1C'; Target = '81 78 1C B6 03 00 00 90 90' }
+    @{ Name = (Txt 'AI growth (phase 0x29)' 'KI Ausbau (Phase 0x29)'); Rva = 0x37B95; Original = '81 78 1C 4C 04 00 00 7E 43'; Target = '81 78 1C 4C 04 00 00 90 90' }
+    @{ Name = (Txt 'AI growth (church, bath)' 'KI Ausbau (Kirche, Bad)'); Rva = 0x37A7A; Original = '83 F8 03 7C 1E'; Target = '83 F8 03 90 90' }
+)
+if ($RivalGrowth -eq 'Ambitious') {
+    foreach ($g in $RivalGrowthSites) { $Patches += @{ Name = $g.Name.PadRight(28); Rva = $g.Rva; Original = $g.Original; Target = (Bytes $g.Target) } }
+    Write-Host (Txt 'Rival growth: ambitious (the main towns of the rivals go on to merchants and aristocrats)' 'Gegner-Ausbau: ehrgeizig (die Hauptstaedte der Gegner wachsen weiter zu Kaufleuten und Aristokraten)')
+}
 
 # Pirate fleet: FUN_14003b7e0 (pirates only, called from FUN_14003dc40) compares the number of
 # pirate ships (+0x1076c) with FUN_1400185f0 (highest civilisation level of human and AI, 0-4)
@@ -999,6 +1164,7 @@ $DisasterMoreSites = @(
 )
 # Each mode also checks the sites of the other mode for their original bytes (target = original), so a
 # second run with the other mode in the same game process aborts instead of mixing both.
+$VolcanoRva = 0x9E93E
 if ($Disasters -eq 'Off') {
     foreach ($s in $DisasterOffSites) { $Patches += @{ Name = $s.Name.PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes '0F 1F 44 00 00') } }
     foreach ($s in $DisasterMoreSites) { $Patches += @{ Name = (Txt 'Disasters (check)' 'Katastrophen (Kontrolle)').PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes $s.Original) } }
@@ -1006,8 +1172,13 @@ if ($Disasters -eq 'Off') {
 }
 elseif ($Disasters -eq 'More') {
     foreach ($s in $DisasterMoreSites) { $Patches += @{ Name = (Txt 'Disasters more' 'Katastrophen mehr').PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes $s.Target) } }
-    foreach ($s in $DisasterOffSites) { $Patches += @{ Name = (Txt 'Disasters (check)' 'Katastrophen (Kontrolle)').PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes $s.Original) } }
+    foreach ($s in $DisasterOffSites) { if ($Volcanoes -eq 'Off' -and $s.Rva -eq $VolcanoRva) { continue }; $Patches += @{ Name = (Txt 'Disasters (check)' 'Katastrophen (Kontrolle)').PadRight(28); Rva = $s.Rva; Original = $s.Original; Target = (Bytes $s.Original) } }
     Write-Host ((Txt 'Disasters: {0} (fire and plague twice as likely, droughts on Demanding/Hard twice as often)' 'Katastrophen: {0} (Feuer und Pest doppelt so wahrscheinlich, Duerre bei Fordernd/Schwer doppelt so oft)') -f (Get-ValueName $Disasters))
+}
+# Volcano off (3.4): no eruption (the call in FUN_14009e390 becomes a NOP, as with Disasters Off), and the island
+# forge removes the volcano mark of the only volcano island (Nord\big25: count +23, volcano mountains +60..+91).
+if ($Volcanoes -eq 'Off' -and $Disasters -ne 'Off') {
+    $Patches += @{ Name = (Txt 'Volcano off' 'Vulkan aus').PadRight(28); Rva = $VolcanoRva; Original = 'E8 6D 2C FD FF'; Target = (Bytes '0F 1F 44 00 00') }
 }
 
 # --- Residents, cargo, production ----------------------------------------------------------------

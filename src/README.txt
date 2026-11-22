@@ -38,7 +38,16 @@ Playing
 What is changed (only in memory, no game file is modified):
   Map size             up to 2000 x 1400 tiles (original 500 x 350)
   Islands              up to 50 islands spread over the whole map (the game's maximum)
-  Island size          Large / Huge: many more large islands (up to 10 of the largest, 100 x 90)
+  Island size          Large / Huge: many more large islands (up to 10 of the largest, 100 x 90);
+                       Giant: plus up to 6 giant islands (135 x 120 to 160 x 140), larger than any
+                       island of the game. They grow from the game's largest islands; no rivers.
+  Rivers               None: rivers become meadow, their mouths beach and surf, the spring a slope
+  Mountains            At the coast: mountains in the middle of an island move to the coast (rivers
+                       that spring from them go too); mountains next to a native village stay
+  Volcano              None: the game's only volcano becomes a normal mountain, no eruptions
+                       (Rivers, mountains, volcano and giant islands: the tool writes changed island
+                       files to %LOCALAPPDATA%\Anno1602-Extensions\islands once and lets the game read
+                       them from there; for new games only, savegames keep their islands.)
   Resources            More: ore, gold, fertility and treasures to match the island count;
                        Lots: double that
   Natives              More / Lots: 4 + 4 or 7 + 7 villages instead of 2 + 2 (north + south)
@@ -47,6 +56,8 @@ What is changed (only in memory, no game file is modified):
   Free traders         More / Lots: two or three times as many trading ships (at most 24)
   Computer rivals      Always like "Hard": the three rivals arm and expand as on the
                        highest level, even if you play an easier one (natural events stay)
+  Rivals' towns        Ambitious: the rivals' capitals no longer stop at citizens or merchants;
+                       they build church, bathhouse, theatre and college and can reach aristocrats
   Pirates              as per difficulty / always attack / strong / none
   Pirate fleet         Large / Huge: up to 8 or 12 pirate ships instead of 4 (only if pirates attack)
   Disasters            None: no fire, plague, drought or volcano. More often: fire and plague

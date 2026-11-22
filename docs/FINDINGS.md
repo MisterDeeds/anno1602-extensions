@@ -1354,6 +1354,96 @@ Contents (sections above): mission time limits through the patcher, campaigns "D
 - Tests: `tests/test-install.ps1` **42 of 42**.
 - **Real run (O), 2026-11-16:** release 3.3.1 published; the open 3.3.0 launcher closed and the desktop shortcut started. The 3.3.0 launcher updated itself (version.txt 3.3.1 after 9 s) and the new launcher was open after 17 s; installed `launcher.ps1` equal to the repository, settings.json `LastVersion=3.3.1`, `UpdateTried=3.3.1 2026-11-16` (the green note was shown), Apps entry 3.3.1, nothing left in %TEMP%, `lastgame.gam` unchanged.
 
+### Island forge: rivers, mountains, volcano, giant islands (2026-11-22, version 3.4)
+
+**Island files (O):** `Nord`, `Sued` (whole islands), `NordNat`, `SuedNat` (islands with a native village), `NoKlima`
+(5 files) – 677 `.scp` files. Chunks: `INSEL3` (40-byte header, 73 old small islands) or `INSEL4/5` (116 bytes:
++0 number, +1 width, +2 height, +3 flags, +23 volcano count, +28 ore mountains 4 × 8, +60 volcano mountains 4 × 8,
++92 fertility, +96 file number, +98 class, +100 climate, +101 "original" flag), `INSELHAUS` (8 bytes per piece: id =
+haeuser.cod `Id` − 20000, x, y, then bits: turn 0–1, animation 2–5, island number 6–13, town 14–16 (7 = none),
+random 17–21, player 22–25 (7 = none)), `HIRSCH2` (deer: island, x, y, …). A piece covers its size from
+haeuser.cod (turned if the turn is odd); in a whole island every tile is covered exactly once (checked for all).
+- Landscape pieces: sea `MEER` 1201–1259 (depth by distance), surf `BRANDUNG`/`BRANDECK` 1205–1207/1214–1221, beach
+  `STRAND*` 1011–1090 (straight, inner and outer corners, rocky), meadow `BODEN` (27xx), forest `WALD` (13xx north,
+  28xx palms), **mountains = rock `FELS` 1103–1110 (2 × 2 to 6 × 6) with a ring of slope pieces `HANG`/`HANGECK`
+  2301–2350**, rivers `FLUSS` 901–903 and `FLUSSECK` 904/905 (2 × 2), springing from `HANGQUELL` 2311 in the slope,
+  ending in `STRANDMUND` 1071 on the beach and `MUENDUNG` 1208 in the surf; bridges 1601 in village files.
+- Rivers in 210 of 431 Nord/Sued islands; mountains at most 3 tiles from the coast: 68 % of all mountain groups.
+  `lar` has no island whose mountains all stand at the coast, so choosing islands is not enough – they are changed.
+- **The volcano (O):** the only one is `Nord\big25` (70 × 60): volcano count 1, volcano mountain (+60) = the rock
+  1108 at 9/6. In memory the count is island +0x40 with the places from +0x31; `FUN_14009e390` lets a random one erupt
+  (`FUN_1400715b0`, the call at RVA 0x9E93E, already a NOP with Disasters Off).
+- **Village files** (`NordNat`/`SuedNat`, 241): 111 hold only the changes of the village (148 pieces in `BIG01`) and
+  have the original flag 0 with file number/class/climate of the island below; 128 are whole islands; 2 are neither
+  (left as they are).
+
+**How the game finds island files (O):** both loaders – the SZENE loader `FUN_1400d0de0` (new games) and the
+INSEL3/4/5 loader `FUN_14009bdd0` (reads the island under a village file and, for savegame islands with the original
+flag 0, the island file before the savegame's own complete `INSELHAUS` chunks overwrite it) – build
+`<game>\Nord\lar05.SCP` (`"%s%s%s%02d.SCP"`, folders `Nord\`/`Sued\`/`NordNat\`/`SuedNat\`/`NoKlima\`, classes from
+the table 0x1400EA200) and then first try the same relative path below `DAT_1405c55a0` = `<game>\Loca\<language>\`
+(set with `"%sLoca\%s\"`; it holds no island files), falling back to the game folder. The second folder is loaded by
+five LEA instructions: RVA 0xD13B2 (`lea r8`, source of `strncpy_s`), 0xD13CF (`lea rcx`, its length), 0x9C01A /
+0x9C381 (`lea r13`, INSEL4/5) and 0x9C42B (`lea r13`, INSEL3). **Savegames (O)** store every island completely (the
+first `INSELHAUS` of an island in `lastgame-1000x700-20261111-183442.gam` has exactly the size of the island file),
+so they never depend on the island files.
+
+**Implementation:** `src/island-forge.cs` (C# 5, compiled by the tool with `Add-Type`) reads haeuser.cod (sizes and
+kinds, same parser rules as the game: constants, `@Nummer`/`@Id` relative, values carried over) and writes only
+changed files into `%LOCALAPPDATA%\Anno1602-Extensions\islands\<hash of the forge>-r<0|1>-m<0|1>-v<0|1>-g<n>\` (once per
+set of options; other sets are deleted). The tool writes this path (ANSI, ≤ 255 bytes, otherwise the 8.3 name) into
+the free end of `.pdata` (RVA 0x91B200, readable, not in the file) and points the five LEAs there. Files that are not
+in the folder still come from the game folder.
+- **No rivers:** river pieces become meadow (a copy of the nearest meadow piece of the same island, so the local kind
+  of grass stays), the spring a plain slope 2302 with the same turn, the beach mouth straight beach 1013 (same turn –
+  checked: 547 of 547 neighbouring straight beach pieces have it), the sea mouth straight surf 1205 with turn + 1 (all
+  422 neighbours differ by exactly 1), bridges road 411. Village change files get the same treatment, their meadow
+  from the changed island below.
+- **Mountains at the edge:** groups of rock and slope (8-connected, not the Aztec pyramid 2211) further than 3 tiles
+  from the coast (distance from the open sea and its beach; lakes do not count) move as a whole to the free spot (only
+  meadow and forest under and around it, one tile of land left before the beach) closest to the coast, of those the
+  closest to the old place, if that is nearer to the coast; the old place becomes meadow, a river springing from it is
+  removed (pieces connected to the spring, then its mouths), deer on the new spot are dropped. Mountains under or
+  next to a village (3 tiles around every piece of a village change file) stay, nothing moves there.
+- **Giant islands:** 8 per climate (`lar20`–`lar27`; sizes 150 × 130, 140 × 140, 160 × 125, 135 × 120, 155 × 140,
+  145 × 125, 160 × 140, 140 × 120, the same in `Nord` and `Sued` because climate 2 is chosen by position) from the
+  game's `lar` islands in the INSEL5 format (then `big`): the model's land is blurred, enlarged, given a little noise and
+  cut at 0.5; coast and water are laid with rules learned from all whole islands of the game: for every beach tile the
+  piece and turn the game uses for the same 8 neighbours (only shapes with one clear answer), for water by the distance
+  to land and the direction of the nearer neighbours, deep water by distance; the outline is cleaned until every coast
+  tile has a rule. Forest by the density of the model's forest around the enlarged spot (keeps the speckled look),
+  meadow and forest pieces from the model, the model's mountains at their enlarged place plus once more per area
+  factor at random places, deer enlarged. No rivers. Header: width, height, file number 20+, class 4, climate.
+- **Planner (`-IslandSize Giant`):** originals as with Large, but they leave up to 6 of the 10 `lar` places to the
+  giant islands; then the giant islands (each file once, the largest first, 2000 random tries each), then copies
+  alternately lar/big. Island class 4 in the SZENE entry, explicit file number → the loader opens `Nord|Sued\lar2x.SCP`.
+- Build time (O): about 4 s for rivers + mountains, under 1 s for the giant islands, 11 s for everything in a fresh
+  process (C# compile included); afterwards the folder is reused.
+- Tests: `tests/test-islands.ps1` **19 of 19** (every written island covers each tile once, other chunks unchanged, no
+  river piece left in 211 islands + 95 village files, rock count unchanged, mountain groups at the coast 68 % → 97 %,
+  only `Nord\big25` changed for the volcano, 16 giant islands with only learned coast pieces, two builds byte-identical,
+  game folder unchanged: 1738 files compared by hash).
+
+### Ambitious rivals (2026-11-22, version 3.4)
+
+Read-only analysis of the decompiled AI (`analysis/scan/alle-funktionen.c`), the key jumps checked in Ghidra.
+- **O** The AI builds each town along a phase machine: dispatcher `FUN_1400393e0` (AI job 5), phase at +0x10 of the
+  town record (AI context 0x1406EC220 + slot × 0x11EC8, records from +0x3EB8, 0x298 each), jump table index bytes at
+  RVA 0x39A4C + phase. Only the town with the largest free island area becomes the main town (`FUN_1400368d0`); the
+  others end in phases 0x17/0x18 (no tavern, no school: settlers – matches the measured 144 Siedler of AI second towns).
+- **O** Main town, end of phase 0x21 (`FUN_1400374b0`, RVA 0x37510 `cmp [rax+0x1C],0x3B6 / jle`): free area < 951 →
+  phase 0x22, which never builds church or bathhouse → the town stays at Bürger. End of phase 0x29 (RVA 0x37B95,
+  `cmp …,0x44C / jle`): < 1101 → phase 0x2C without theatre and college → Kaufleute. In phase 0x28 church and bathhouse
+  wait for 3 of 4 merchant goods in stock (RVA 0x37A7A `cmp eax,3 / jl`, `FUN_140036100`).
+- **O** The "expansion level" of `FUN_140035220` (`FUN_14002e2c0(ctx, 1/2/3)`) only caps small ore mines; no
+  explicit cap on AI house levels (house advance treats AI and human towns alike). Every 36,000 clock steps
+  `FUN_140018c00` clears the whole AI context (phases, counters) – left alone.
+- **Implementation `-RivalGrowth Ambitious`:** the three jumps become NOPs (6 bytes; the sites are checked with the
+  instruction before them). The goods gate before theatre and college (phase 0x32, RVA 0x37FDB `cmp eax,4 / jl`, 4 of 6
+  aristocrat goods) stays, so those come once the chains run.
+- Correction to "Rivals, pirate fleet …": "AI levels 2/2/4" there are the INFRA unlock bits read by `FUN_1400185f0`;
+  **I** level 4 there is a merchant tier, not aristocrats.
+
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
 - Tool with `-Pirates Strong -ShipSpeed 2 -StartGold 50000 -Storage 3`, 1000 × 700, layout 0 (43 islands). The test session then broke off with a connection error of the Claude app; the tool ended with exit 4 without renaming `lastgame.gam`.

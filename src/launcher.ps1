@@ -97,7 +97,8 @@ $Options = [ordered]@{
     IslandSize    = @{ Group = 'World'; Label = (Txt 'Island size' 'Inselgrösse'); Default = 'Normal'; Choices = [ordered]@{
             'Normal' = New-Choice 'Normal' 'Normal'
             'Large'  = New-Choice 'Large (many large islands)' 'Gross (viele grosse Inseln)' @('-IslandSize', 'Large')
-            'Huge'   = New-Choice 'Huge (almost only the largest)' 'Riesig (fast nur die grössten)' @('-IslandSize', 'Huge') } }
+            'Huge'   = New-Choice 'Huge (almost only the largest)' 'Riesig (fast nur die grössten)' @('-IslandSize', 'Huge')
+            'Giant'  = New-Choice 'Giant (larger than the largest)' 'Gigantisch (grösser als die grössten)' @('-IslandSize', 'Giant') } }
     Resources     = @{ Group = 'World'; Label = (Txt 'Resources' 'Rohstoffe'); Default = 'More'; Choices = [ordered]@{
             'Template' = New-Choice 'As in the template' 'Wie in der Vorlage'
             'More'     = New-Choice 'More (to match the islands)' 'Mehr (passend zur Inselzahl)' @('-Resources', 'More')
@@ -113,6 +114,10 @@ $Options = [ordered]@{
     Rivals        = @{ Group = 'Sea'; Label = (Txt 'Computer rivals' 'Computergegner'); Default = 'Difficulty'; Choices = [ordered]@{
             'Difficulty' = New-Choice 'As per difficulty' 'Wie Schwierigkeit'
             'Hard'       = New-Choice 'Always like “Hard”' 'Immer wie „Schwer“' @('-Rivals', 'Hard') } }
+    # 3.4: the main towns of the rivals no longer stop at citizens or merchants (anno-patcher.ps1 -RivalGrowth).
+    RivalGrowth   = @{ Group = 'Sea'; Label = (Txt "Rivals' towns" 'Städte der Gegner'); Default = 'Default'; Choices = [ordered]@{
+            'Default'   = New-Choice 'As in the original' 'Wie im Original'
+            'Ambitious' = New-Choice 'Ambitious (up to aristocrats)' 'Ehrgeizig (bis Aristokraten)' @('-RivalGrowth', 'Ambitious') } }
     RivalGold     = @{ Group = 'Sea'; Label = (Txt "Rivals' gold" 'Gold der Gegner'); Default = 'Difficulty'; Choices = [ordered]@{
             'Difficulty' = New-Choice 'As per difficulty' 'Wie Schwierigkeit'
             '30000'      = New-Choice '30,000' '30 000' @('-RivalGold', '30000')
@@ -180,23 +185,34 @@ $Options = [ordered]@{
             'Off'   = New-Choice 'Off' 'Aus'
             'Rare'  = New-Choice 'Rare' 'Selten' @('-Events', 'Rare')
             'Often' = New-Choice 'Often' 'Häufig' @('-Events', 'Often') } }
+    # 3.4: the island forge changes the islands of new games (anno-patcher.ps1 -Rivers, -Mountains, -Volcanoes).
+    Rivers        = @{ Group = 'Landscape'; Label = (Txt 'Rivers' 'Flüsse'); Default = 'Default'; Choices = [ordered]@{
+            'Default' = New-Choice 'As on the island' 'Wie auf der Insel'
+            'Off'     = New-Choice 'None (more building land)' 'Keine (mehr Bauland)' @('-Rivers', 'Off') } }
+    Mountains     = @{ Group = 'Landscape'; Label = (Txt 'Mountains' 'Berge'); Default = 'Default'; Choices = [ordered]@{
+            'Default' = New-Choice 'As on the island' 'Wie auf der Insel'
+            'Edge'    = New-Choice 'At the coast (free inland)' 'Am Rand (Inselmitte frei)' @('-Mountains', 'Edge') } }
+    Volcanoes     = @{ Group = 'Landscape'; Label = (Txt 'Volcano' 'Vulkan'); Default = 'Default'; Choices = [ordered]@{
+            'Default' = New-Choice 'As in the original' 'Wie im Original'
+            'Off'     = New-Choice 'None (no eruptions)' 'Keiner (keine Ausbrüche)' @('-Volcanoes', 'Off') } }
 }
-# Groups in the window (order: left column top, right column top, left bottom, right bottom).
+# Groups in the window (order: left column top, right column top, left bottom, right bottom, right below that).
 $Groups = [ordered]@{
-    World   = Txt 'World' 'Welt'
-    Economy = Txt 'Economy' 'Wirtschaft'
-    Sea     = Txt 'Rivals and dangers' 'Gegner und Gefahren'
-    Ships   = Txt 'Ships and speed' 'Schiffe und Tempo'
+    World     = Txt 'World' 'Welt'
+    Economy   = Txt 'Economy' 'Wirtschaft'
+    Sea       = Txt 'Rivals and dangers' 'Gegner und Gefahren'
+    Ships     = Txt 'Ships and speed' 'Schiffe und Tempo'
+    Landscape = Txt 'Landscape of the islands' 'Landschaft der Inseln'
 }
 
 # "Everything big": big world with huge islands, lots of resources, big towns and a fast game.
 # 1000 x 700 instead of 2000 x 1400 because the game knows at most 50 islands; on 2000 x 1400 almost everything would be sea.
 # Plus more life and more rivals: natives and traders "Lots", AI always "Hard", pirates attack
-# and keep a fleet twice as big.
+# and keep a fleet twice as big. Since 3.4 the giant islands of the island forge and ambitious rivals.
 $EverythingBig = @{
-    World = '1000x700'; Islands = 'More'; IslandSize = 'Huge'
+    World = '1000x700'; Islands = 'More'; IslandSize = 'Giant'
     Resources = 'Lots'; Natives = 'Lots'; Traders = 'Lots'
-    Rivals = 'Hard'; RivalGold = '60000'; Pirates = 'Active'; PirateFleet = 'Large'
+    Rivals = 'Hard'; RivalGrowth = 'Ambitious'; RivalGold = '60000'; Pirates = 'Active'; PirateFleet = 'Large'
     StartGold = '50000'; Residents = '5'; Turbo = '16'; Production = '2'; Storage = '5'; ShipSpeed = '2'; Cargo = '3'
 }
 
@@ -216,17 +232,20 @@ $GiantWorld = @{
     ShipSpeed = '2'; Turbo = '16'
 }
 
-# "Relaxed": build in peace - cheap buildings, more taxes, every crop everywhere, no pirates and no disasters.
+# "Relaxed": build in peace - cheap buildings, more taxes, every crop everywhere, no pirates and no disasters; since
+# 3.4 islands without rivers, with the mountains at the coast and without the volcano (more room to build).
 $Relaxed = @{
     World = '1000x700'; Islands = 'More'; IslandSize = 'Large'; Resources = 'Lots'; Fertility = 'Everywhere'; Mines = 'Infinite'
     Pirates = 'Off'; Disasters = 'Off'; StartGold = '100000'; Residents = '2'; Production = '2'; Storage = '3'
     BuildCost = '0.5'; Upkeep = '0.5'; Taxes = '2'; Radius = '1.5'; Turbo = '16'
+    Rivers = 'Off'; Mountains = 'Edge'; Volcanoes = 'Off'
 }
 
-# "Tough test": the rivals at their strongest with lots of gold, strong pirates with a huge fleet, more disasters.
+# "Tough test": the rivals at their strongest (since 3.4 also ambitious) with lots of gold, strong pirates with a huge
+# fleet, more disasters.
 $Tough = @{
     World = '1000x700'; Islands = 'More'; Resources = 'More'; Natives = 'More'
-    Rivals = 'Hard'; RivalGold = '100000'; Pirates = 'Strong'; PirateFleet = 'Huge'; Disasters = 'More'; Turbo = '16'
+    Rivals = 'Hard'; RivalGrowth = 'Ambitious'; RivalGold = '100000'; Pirates = 'Strong'; PirateFleet = 'Huge'; Disasters = 'More'; Turbo = '16'
 }
 
 # Load the last choice (option id -> value key). Missing or broken file: defaults.
@@ -581,7 +600,7 @@ $columns = foreach ($i in 0, 1) {
     $groupGrid.Controls.Add($c)
     $c
 }
-$GroupColumn = @{ World = 0; Sea = 0; Economy = 1; Ships = 1 }
+$GroupColumn = @{ World = 0; Sea = 0; Economy = 1; Ships = 1; Landscape = 1 }
 
 $combos = @{}
 # All labels as wide as the widest one, so that the four groups line up.
@@ -648,11 +667,11 @@ $buttonRelaxed = New-Button (Txt 'Relaxed' 'Gemütlich') $presetRow
 $buttonTough = New-Button (Txt 'Tough test' 'Harte Probe') $presetRow
 $buttonDefaults = New-Button (Txt 'Reset to defaults' 'Alles auf Standard') $presetRow
 $presetTips = New-Object Windows.Forms.ToolTip
-$presetTips.SetToolTip($buttonBig, (Txt 'Big world, huge islands, lots of everything, strong rivals, turbo 16×' 'Grosse Welt, riesige Inseln, von allem viel, starke Gegner, Turbo 16-fach'))
+$presetTips.SetToolTip($buttonBig, (Txt 'Big world, giant islands, lots of everything, strong and ambitious rivals, turbo 16×' 'Grosse Welt, gigantische Inseln, von allem viel, starke und ehrgeizige Gegner, Turbo 16-fach'))
 $presetTips.SetToolTip($buttonCampaigns, (Txt 'Big campaign maps and turbo; everything else as the scenario intends' 'Grosse Kampagnenkarten und Turbo; alles andere wie im Szenario vorgesehen'))
 $presetTips.SetToolTip($buttonGiant, (Txt 'Giant world 2000 × 1400 for the World Empire campaign: five island realms, ships twice as fast, turbo; everything else as the scenario intends' 'Riesenwelt 2000 × 1400 für die Kampagne Weltreich: fünf Inselreiche, Schiffe doppelt so schnell, Turbo; alles andere wie im Szenario vorgesehen'))
-$presetTips.SetToolTip($buttonRelaxed, (Txt 'Build in peace: cheap buildings, more taxes, every crop everywhere, no pirates, no disasters' 'In Ruhe bauen: günstige Gebäude, mehr Steuern, jede Pflanze überall, keine Piraten, keine Katastrophen'))
-$presetTips.SetToolTip($buttonTough, (Txt 'Rivals at their strongest, strong pirates with a huge fleet, more disasters' 'Gegner in Höchstform, starke Piraten mit riesiger Flotte, mehr Katastrophen'))
+$presetTips.SetToolTip($buttonRelaxed, (Txt 'Build in peace: cheap buildings, more taxes, every crop everywhere, no pirates, no disasters, no rivers, mountains at the coast' 'In Ruhe bauen: günstige Gebäude, mehr Steuern, jede Pflanze überall, keine Piraten, keine Katastrophen, keine Flüsse, Berge am Rand'))
+$presetTips.SetToolTip($buttonTough, (Txt 'Rivals at their strongest and ambitious, strong pirates with a huge fleet, more disasters' 'Gegner in Höchstform und ehrgeizig, starke Piraten mit riesiger Flotte, mehr Katastrophen'))
 $buttonBig.Add_Click({ Set-Selection (Complete-Choice $EverythingBig) })
 $buttonCampaigns.Add_Click({ Set-Selection (Complete-Choice $ForCampaigns) })
 $buttonGiant.Add_Click({ Set-Selection (Complete-Choice $GiantWorld) })

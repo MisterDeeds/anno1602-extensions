@@ -3,6 +3,24 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## Unreleased
+
+- Island forge: the tool writes changed copies of the game's island files into its own folder (once per set of
+  options) and lets the game read them from there; the game files stay untouched, savegames keep their islands.
+  New options in the launcher group "Landschaft der Inseln / Landscape of the islands":
+  - Rivers "None": rivers become meadow, mouths become beach and surf, the spring a slope.
+  - Mountains "At the coast": mountains in the middle of an island move to the coast, the inland stays free
+    (mountains next to native villages stay).
+  - Volcano "None": the game's only volcano (Nord\big25) becomes a normal mountain, no eruptions.
+- Island size "Giant": up to 6 giant islands of 135 × 120 to 160 × 140 tiles – larger than the largest islands of
+  the game (100 × 90). They grow from the game's large islands; coast, beach and surf are laid with the pieces the game
+  itself uses for each shape.
+- Rivals' towns "Ambitious": the rivals' capitals no longer get stuck at citizens or merchants (two dead ends and a
+  wait in the AI's building plan removed); they build church, bathhouse, theatre and college.
+- Presets: "Everything big" with giant islands and ambitious rivals, "Relaxed" without rivers and volcano and with the
+  mountains at the coast, "Tough test" with ambitious rivals.
+- Tests: new `tests/test-islands.ps1` (19 checks with the real island files), `tests/test-patcher.ps1` cases AQ–AT.
+
 ## 3.3.1 – 2026-11-16
 
 - Launcher: the update notice is a coloured bar as wide as the tabs, with symbol, text and button in the middle –

@@ -136,6 +136,9 @@ if ($Remove) {
         foreach ($s in $SettingsFolders) {
             if (Test-Path -LiteralPath $s) { Remove-Item -LiteralPath $s -Recurse -Force; Write-Host (Txt "Removed: $s" "Entfernt: $s") }
         }
+        # Islands of the island forge (built by the tool from the game files, 3.4).
+        $islandCache = Join-Path $LocalAppData 'Anno1602-Extensions'
+        if (Test-Path -LiteralPath $islandCache) { Remove-Item -LiteralPath $islandCache -Recurse -Force; Write-Host (Txt "Removed: $islandCache" "Entfernt: $islandCache") }
         if (Test-Path -LiteralPath $OwnScenarios) {
             Get-ChildItem -LiteralPath $OwnScenarios -Filter '*.szs' -File | Where-Object { $_.Name -match $ScenarioNames -or $ourNames.ContainsKey($_.Name) } | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force; Write-Host (Txt "Removed: $($_.Name)" "Entfernt: $($_.Name)") }
         }
@@ -183,7 +186,7 @@ else {
 # Repository layout: this script lies in src\, FINDINGS.md in docs\ (optional).
 # The random adventure generator needs the scenario builder, its library and the island planner of the patcher; the
 # scenario designer needs the generator.
-$files = foreach ($n in 'anno-patcher.ps1', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt') {
+$files = foreach ($n in 'anno-patcher.ps1', 'island-forge.cs', 'launcher.ps1', 'logbook.ps1', 'random-adventure.ps1', 'scenario-designer.ps1', 'build-scenarios.ps1', 'scenario-lib.ps1', 'install.ps1', 'README.txt', 'README.de.txt') {
     $f = Join-Path $PSScriptRoot $n
     if (-not (Test-Path -LiteralPath $f)) { throw (Txt "File missing next to install.ps1: $n" "Datei fehlt neben install.ps1: $n") }
     Get-Item -LiteralPath $f
