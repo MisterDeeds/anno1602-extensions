@@ -42,9 +42,10 @@ What is changed (only in memory, no game file is modified):
                        Giant: plus up to 6 giant islands (135 x 120 to 160 x 140), larger than any
                        island of the game. They grow from the game's largest islands; no rivers.
   Rivers               None: rivers become meadow, their mouths beach and surf, the spring a slope
-  Mountains            At the coast: mountains in the middle of an island move to the coast (rivers
-                       that spring from them go too); mountains next to a native village and the
-                       rare very large massifs without room at the coast stay
+  Mountains            At the coast: mountains in the middle of an island move to the coast, long
+                       ranges as single mountains (rivers that spring from them go too); mountains
+                       that are part of a native village and the rare ranges without room at the
+                       coast stay
   Volcano              None: the game's only volcano becomes a normal mountain, no eruptions
                        (Rivers, mountains, volcano and giant islands: the tool writes changed island
                        files to %LOCALAPPDATA%\Anno1602-Extensions\islands once and lets the game read

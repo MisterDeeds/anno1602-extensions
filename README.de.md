@@ -64,7 +64,7 @@ Du brauchst Windows 10 oder 11 und Anno 1602 History Edition, installiert über 
 | Inseln | bis 50 Inseln über die ganze Karte verteilt (das Maximum des Spiels) |
 | Inselgrösse | Gross / Riesig: viel mehr grosse Inseln (bis 10 der grössten, 100 × 90); Gigantisch: dazu bis 6 Riesen-Inseln von 135 × 120 bis 160 × 140 – grösser als jede Insel des Spiels |
 | Flüsse | keine: Flüsse werden zu Wiese, Mündung und Quelle zu Strand und Hang (mehr Bauland) |
-| Berge | am Rand: Berge, die mitten auf der Insel stehen, rücken an die Küste; die Inselmitte bleibt frei |
+| Berge | am Rand: Berge, die mitten auf der Insel stehen, rücken an die Küste – lange Gebirgszüge als einzelne Berge; die Inselmitte bleibt frei |
 | Vulkan | keiner: der einzige Vulkan des Spiels wird ein normaler Berg, es gibt keine Ausbrüche |
 | Rohstoffe | Mehr: Erz, Gold, Fruchtbarkeit und Schätze passend zur Inselzahl; Viele: doppelt |
 | Ureinwohner | 4 + 4 oder 7 + 7 Dörfer statt 2 + 2 |
@@ -346,7 +346,7 @@ anno1602-extensions/
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
 │   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (702 Prüfungen)
-│   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln (19 Prüfungen)
+│   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln (21 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
 │   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (43 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung

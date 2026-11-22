@@ -9,8 +9,10 @@
        header, the landscape and the deer are byte-identical with the original.
     2  No rivers: no river piece, spring, river mouth or bridge is left in any written island; every island of the
        game with a river is written; the islands under village files and the village files themselves too.
-    3  Mountains at the edge: no rock-and-slope group lies further than 3 tiles from the coast unless it touches a
-       village or has no free place closer to the coast; the number of rock pieces of every island stays the same.
+    3  Mountains at the edge: a rock-and-slope group lies completely at the coast (nearest tile at most 3, farthest at
+       most 10 tiles from it) unless it is part of a village or has no free place at the coast; ranges are split
+       into single mountains; the rock pieces of every island stay the same (number and kind); on the giant islands
+       every group lies at the coast.
     4  No volcano: only Nord\big25 is written, its volcano count and volcano mountains are 0.
     5  Giant islands: 8 per climate (lar20-lar27), larger than "lar" (100 x 90), the same size in Nord and Sued, no
        river, at least one mountain, coast and water only from pieces the game itself uses for the same shape.
@@ -100,16 +102,20 @@ try {
     foreach ($f in $files) {
         $rel = Get-Rel $m $f; $i = [AnnoIslands.Island]::Load($f.FullName); $o = Get-Original $rel
         try { [void]$i.Cover($true) } catch { $bad++ }
-        $ri = @($i.E | Where-Object { (Get-Kind $_.Id) -eq 'FELS' }).Count; $ro = @($o.E | Where-Object { (Get-Kind $_.Id) -eq 'FELS' }).Count
+        $ri = (@($i.E | Where-Object { (Get-Kind $_.Id) -eq 'FELS' } | ForEach-Object { $_.Id }) | Sort-Object) -join ','
+        $ro = (@($o.E | Where-Object { (Get-Kind $_.Id) -eq 'FELS' } | ForEach-Object { $_.Id }) | Sort-Object) -join ','
         if ($ri -ne $ro) { $rockDiff++ }
         $moved++
     }
     Assert-Check "islands with moved mountains written ($moved)" ($moved -gt 100)
     Assert-Check "1 every written island covers each tile once ($bad wrong)" ($bad -eq 0)
-    Assert-Check "number of rock pieces unchanged in every island ($rockDiff differ)" ($rockDiff -eq 0)
-    # Statistic: share of mountain groups at most 3 tiles from the coast, before and after (all whole islands).
+    Assert-Check "rock pieces unchanged in every island, number and kind ($rockDiff differ)" ($rockDiff -eq 0)
+    # Statistic: share of mountain groups at most 3 tiles from the coast, and completely at the coast (farthest tile
+    # at most 10 tiles), before and after (all whole islands).
     $near = [AnnoIslands.Forge]::MountainShare($game, $null); $nearAfter = [AnnoIslands.Forge]::MountainShare($game, $m.Dir)
     Assert-Check ("mountain groups near the coast: {0:P0} before, {1:P0} after" -f $near, $nearAfter) ($nearAfter -gt 0.9 -and $nearAfter -gt $near + 0.2)
+    $whole = [AnnoIslands.Forge]::MountainShare($game, $null, $true); $wholeAfter = [AnnoIslands.Forge]::MountainShare($game, $m.Dir, $true)
+    Assert-Check ("mountain groups completely at the coast (no range into the inland): {0:P0} before, {1:P0} after" -f $whole, $wholeAfter) ($wholeAfter -gt 0.9 -and $wholeAfter -gt $whole + 0.25)
 
     Write-Host '4  No volcano'
     $v = Invoke-Forge 'volcano' $false $false $true 0
@@ -156,6 +162,11 @@ try {
         if ($dn[0] -gt $do[0] -or $dn[1] -gt $do[1] -or (($do[0] + $do[1]) -eq 0 -and ($dn[0] + $dn[1]) -ne 0)) { $bad++ }
     }
     Assert-Check "all options: every written island covers each tile once ($bad wrong)" ($bad -eq 0)
+    $groups = 0; $inland = 0
+    foreach ($f in $f1 | Where-Object { $_.Name -match '^lar2\d\.scp$' }) {
+        foreach ($gr in [AnnoIslands.Forge]::MountainGroups([AnnoIslands.Island]::Load($f.FullName))) { $groups++; if ($gr[2] -gt 3 -or $gr[3] -gt [AnnoIslands.Forge]::EdgeBand) { $inland++ } }
+    }
+    Assert-Check "all options: every mountain of the giant islands completely at the coast ($groups groups, $inland not)" ($groups -gt 100 -and $inland -eq 0)
     Assert-Check ("build time {0:N1} s (all options)" -f $all1.Seconds) ($all1.Seconds -lt 30)
 
     $after = Get-GameHashes

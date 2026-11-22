@@ -1442,6 +1442,47 @@ in the folder still come from the game folder.
   only `Nord\big25` changed for the volcano, 16 giant islands with only learned coast pieces, two builds byte-identical,
   game folder unchanged: 1738 files compared by hash).
 
+### Mountains completely at the coast (2026-11-22, version 3.4.1)
+
+**Report (O):** a game at 2000 × 1400 with "Gigantisch", rivers none, mountains at the coast, no volcano showed a
+giant island with two long mountain ranges through the middle. The user's forge folder
+(`a515df47-r1-m1-v1-g8`) explains it: `Nord\lar22` (160 × 125) had two groups of 21 rocks / 443 tiles with the
+nearest tile 2 and the **farthest 41** tiles from the coast. 3.4.0 only looked at the nearest tile ("at most 3 from
+the coast"), so a range that touches the coast at one end counted as "at the coast" and stayed; the giant islands
+copy the model's ranges enlarged and add more of them, so they had many such ranges (d 2–10 … 2–41).
+
+**Change:** a group (rock + slopes, 8-connected) lies at the coast only if its nearest tile is at most 3 and its
+farthest at most `EdgeBand` = 10 tiles from the coast. Others, the largest first:
+- as a whole to the free spot whose **farthest** tile is closest to the coast (before: nearest tile), of those the
+  closest to the old place; accepted if that is within 10 tiles; a group that touches the coast only moves if it then
+  lies there completely (otherwise it could slide further inland);
+- otherwise **split**: the range becomes meadow (its rivers go), and every rock comes back as a **single mountain of
+  the game** with the same rock – the smallest group with exactly one rock and no spring on the whole Nord resp. Sued
+  islands (library: rocks 1103, 1104, 1106–1110 in both climates, 5–39 pieces; rock 1105 has none and takes the 2 × 2
+  one of 1104 with its rock replaced) – placed the same way, the largest rock first, with island/town/owner bits of the
+  old rock. If any rock finds no spot within 10 tiles, the island stays as it was (number and kind of the rocks are
+  checked per island).
+- Villages: a group stays only if a piece of the village change file lies on it, or a slope or rock of the village next
+  to it (before: everything within 3 tiles of any village piece); no mountain moves to 3 tiles or less from a village
+  piece (unchanged). Freed by this: `Nord\big08` (9 rocks, d 8–18), `big18`, `big26`, `med04`, `med13`, `Sued\big17`.
+
+**Result (O, offline with all island files):** groups completely at the coast 62 % (game) → **96 %** (3.4.0 had the
+long ranges as before), at most 3 tiles 68 % → 97 %; the giant islands: **238 of 238** groups (`Nord\lar22`: 44 single
+mountains and small groups along the coast, d ≤ 10, the middle free). Left inland: mountains that belong to a village
+(`Nord\big07`, `med18`, `Sued\big11`, `big12`, `med05`), `Sued\big52` (second layer) and single small mountains in the
+files without a number (`lar.scp`, `med.scp` in `Nord`/`NoKlima`; whether random maps ever use them: **?**). Build time with all options 10.6 s (before 11 s).
+Tests: `tests/test-islands.ps1` **21 of 21** (new: groups completely at the coast 62 % → 96 %, rocks unchanged by
+number and kind, every group of the giant islands at the coast).
+
+**In the running game (O), 2026-11-22 10:57–11:02:** repository tool with the user's options `-Width 2000 -Height 1400
+-IslandSize Giant -Rivers Off -Mountains Edge -Volcanoes Off -Turbo -TurboLevel 16`, new endless game, driven only by
+window messages behind the user's windows. All **50 islands** loaded (6 giant islands 160 × 140, 155 × 140, 160 × 125,
+140 × 140, 150 × 130, 145 × 125), no river piece, no unknown tile. Read from memory: the giant islands hold 121
+mountain groups, **all completely at the coast** (farthest tile ≤ 10; `lar22` 160 × 125: 46 groups); of all 50 islands
+only two groups reach further (`Sued\med10` and `Nord\big02`, d 7–13 and 3–13: village pieces lie on them, so they stay
+by design). On screen: single mountains with their own slopes along the shore of a giant island, the inland forest and
+meadow.
+
 ### Ambitious rivals (2026-11-22, version 3.4)
 
 Read-only analysis of the decompiled AI (`analysis/scan/alle-funktionen.c`), the key jumps checked in Ghidra.

@@ -374,17 +374,121 @@ namespace AnnoIslands
             return dist;
         }
 
-        // Mountains (rock pieces with their slopes) further than 'edge' tiles from the coast move to the coast:
-        // to the free spot (only meadow and forest, one tile of land left before the beach) that is closest to the
-        // coast, of those the one closest to the old place. The old place becomes meadow. A river that springs from a
-        // moved mountain is removed with it. Deer on the new spot are removed from HIRSCH2.
-        // 'keep': cells that village files change on this island (with a margin) - mountains there stay, none move there.
-        public static bool MoveMountains(Island f, int edge, HashSet<int> keep = null)
+        // A mountain group lies "at the coast" when its nearest tile is at most 'edge' tiles and its farthest tile at
+        // most EdgeBand tiles from the coast (3.4.1: before only the nearest tile counted, so long ranges that touch
+        // the coast at one end still crossed the island).
+        public const int EdgeBand = 10;
+
+        // Single mountains of the game (one rock with its own ring of slopes, from the whole islands of a climate
+        // folder), by rock id; the smallest one per id. Used to split ranges that do not fit at the coast as a whole.
+        static readonly Dictionary<string, Dictionary<int, List<Entry>>> rockLibrary = new Dictionary<string, Dictionary<int, List<Entry>>>(StringComparer.OrdinalIgnoreCase);
+        public static Dictionary<int, List<Entry>> RockLibrary(string gameDir, string folder)
+        {
+            Dictionary<int, List<Entry>> lib;
+            if (rockLibrary.TryGetValue(folder, out lib)) return lib;
+            lib = new Dictionary<int, List<Entry>>();
+            string src = Path.Combine(gameDir, folder);
+            if (Directory.Exists(src))
+                foreach (var file in Directory.GetFiles(src, "*.scp").OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+                {
+                    Island f; try { f = Island.Load(file); } catch (Exception) { continue; }
+                    if (f.HausCount != 1 || !IsWhole(f)) continue;
+                    var g = f.Cover(true); var seen = new bool[f.W, f.H];
+                    for (int x = 0; x < f.W; x++) for (int y = 0; y < f.H; y++)
+                    {
+                        if (seen[x, y] || !IsPlateau(f, g, x, y)) continue;
+                        var idx = new HashSet<int>(); var q = new Queue<int[]>(); q.Enqueue(new[] { x, y }); seen[x, y] = true; var cells = new List<int[]>();
+                        while (q.Count > 0)
+                        {
+                            var c = q.Dequeue(); cells.Add(c); idx.Add(g[c[0], c[1]]);
+                            foreach (var d in N8) { int nx = c[0] + d[0], ny = c[1] + d[1]; if (In(f, nx, ny) && !seen[nx, ny] && IsPlateau(f, g, nx, ny)) { seen[nx, ny] = true; q.Enqueue(new[] { nx, ny }); } }
+                        }
+                        var ents = idx.Select(i => f.E[i]).ToList();
+                        var rocks = ents.Where(e => Houses.Kind(e.Id) == "FELS").ToList();
+                        if (rocks.Count != 1 || ents.Any(e => e.Id == Spring) || ents.Count < 2) continue;
+                        // Every piece inside the group.
+                        bool inside = ents.All(e => { var s = Houses.Size(e.Id, e.Rot); for (int dx = 0; dx < s[0]; dx++) for (int dy = 0; dy < s[1]; dy++) { int cx = e.X + dx, cy = e.Y + dy; if (!In(f, cx, cy) || !cells.Any(c => c[0] == cx && c[1] == cy)) return false; } return true; });
+                        if (!inside) continue;
+                        int x0 = cells.Min(c => c[0]), y0 = cells.Min(c => c[1]);
+                        var rel = ents.Select(e => new Entry { Id = e.Id, X = e.X - x0, Y = e.Y - y0, Bits = e.Bits }).ToList();
+                        List<Entry> have;
+                        if (!lib.TryGetValue(rocks[0].Id, out have) || CellCount(rel) < CellCount(have)) lib[rocks[0].Id] = rel;
+                    }
+                }
+            rockLibrary[folder] = lib;
+            return lib;
+        }
+        // The single mountain for a rock: the game's one with this rock, otherwise one with a rock of the same size
+        // (its slopes fit the same way) with the rock replaced (Nord/Sued have no single mountain with rock 1105).
+        static List<Entry> RockTemplate(Dictionary<int, List<Entry>> library, int rockId)
+        {
+            List<Entry> tpl;
+            if (library.TryGetValue(rockId, out tpl)) return tpl;
+            var size = Houses.Size(rockId, 0);
+            foreach (var kv in library.OrderBy(kv => kv.Key))
+            {
+                var s = Houses.Size(kv.Key, 0);
+                if (s[0] == size[0] && s[1] == size[1]) return kv.Value.Select(e => { var c = e.Copy(); if (c.Id == kv.Key) c.Id = rockId; return c; }).ToList();
+            }
+            return null;
+        }
+        static int CellCount(List<Entry> ents) { return ents.Sum(e => { var s = Houses.Size(e.Id, e.Rot); return s[0] * s[1]; }); }
+        static List<int[]> CellsOf(List<Entry> ents)
+        {
+            var cells = new List<int[]>();
+            foreach (var e in ents) { var s = Houses.Size(e.Id, e.Rot); for (int dx = 0; dx < s[0]; dx++) for (int dy = 0; dy < s[1]; dy++) cells.Add(new[] { e.X + dx, e.Y + dy }); }
+            return cells;
+        }
+
+        // Best spot for a group of cells (relative to 0/0): only meadow and forest under it and around it (the group
+        // itself may lie around it), at least 2 tiles from the coast, not in 'keep'. Score = farthest tile from the
+        // coast (the whole group close to the coast); ties: closest to (px, py). Returns false if there is none.
+        static bool FindSpot(Island f, int[,] g, int[,] dist, List<int[]> rel, Func<int, int, bool> self, HashSet<int> keep, int px, int py, out int bestOx, out int bestOy, out int bestScore)
+        {
+            int bw = rel.Max(c => c[0]) + 1, bh = rel.Max(c => c[1]) + 1;
+            bestOx = -1; bestOy = -1; bestScore = int.MaxValue; long bestMove = long.MaxValue;
+            for (int ox = 0; ox + bw <= f.W; ox++) for (int oy = 0; oy + bh <= f.H; oy++)
+            {
+                int score = 0; bool ok = true;
+                foreach (var c in rel)
+                {
+                    int x = c[0] + ox, y = c[1] + oy;
+                    int i = g[x, y];
+                    if (i < 0 || !Plain.Contains(Houses.Kind(f.E[i].Id)) || dist[x, y] < 2 || keep.Contains(x * 1000 + y)) { ok = false; break; }
+                    foreach (var d in N8)
+                    {
+                        int nx = x + d[0], ny = y + d[1];
+                        if (!In(f, nx, ny)) { ok = false; break; }
+                        int j = g[nx, ny]; string kk = j < 0 ? "" : Houses.Kind(f.E[j].Id);
+                        if (!(Plain.Contains(kk) || self(nx, ny))) { ok = false; break; }
+                    }
+                    if (!ok) break;
+                    score = Math.Max(score, dist[x, y]);
+                    if (score > bestScore) { ok = false; break; }
+                }
+                if (!ok) continue;
+                long move = (long)(ox - px) * (ox - px) + (long)(oy - py) * (oy - py);
+                if (score < bestScore || (score == bestScore && move < bestMove)) { bestScore = score; bestMove = move; bestOx = ox; bestOy = oy; }
+            }
+            return bestOx >= 0;
+        }
+
+        // Mountains (rock pieces with their slopes) that are not at the coast (nearest tile further than 'edge', or
+        // farthest tile further than EdgeBand) move to the coast: as a whole to the free spot (only meadow and forest,
+        // one tile of land left before the beach) whose farthest tile is closest to the coast, of those the one closest
+        // to the old place. A range that fits nowhere at the coast as a whole is split: every rock of it becomes a single
+        // mountain (a single mountain of the game with the same rock, from 'library') placed at the coast the same way.
+        // The old place becomes meadow; a river that springs from a moved mountain is removed with it; deer on the new
+        // spots are removed from HIRSCH2. 'keep': cells that village files change on this island (with a margin) - no
+        // mountain moves there. 'block': cells that village files change, and those next to their slopes - mountains
+        // there stay (default: 'keep').
+        public static bool MoveMountains(Island f, int edge, HashSet<int> keep = null, Dictionary<int, List<Entry>> library = null, HashSet<int> block = null)
         {
             if (keep == null) keep = new HashSet<int>();
+            if (block == null) block = keep;
             bool changed = false;
             var done = new HashSet<int>();
-            for (int round = 0; round < 40; round++)
+            for (int round = 0; round < 400; round++)
             {
                 var g = f.Cover(false); var dist = CoastDistance(f, g);
                 // Components of plateau cells (8-connected).
@@ -401,48 +505,34 @@ namespace AnnoIslands
                     }
                     comps.Add(list);
                 }
-                int pick = -1, bestKey = -1; int minDistPick = 0;
+                int pick = -1, bestKey = -1, maxDistPick = 0, minDistPick = 0;
                 for (int ci = 0; ci < comps.Count; ci++)
                 {
                     int key = comps[ci].Min(c => c[0] * 1000 + c[1]);
                     if (done.Contains(key)) continue;
-                    int md = comps[ci].Min(c => dist[c[0], c[1]]);
-                    if (md <= edge || comps[ci].Any(c => keep.Contains(c[0] * 1000 + c[1]))) { done.Add(key); continue; }
+                    int md = comps[ci].Min(c => dist[c[0], c[1]]), mx = comps[ci].Max(c => dist[c[0], c[1]]);
+                    if ((md <= edge && mx <= EdgeBand) || comps[ci].Any(c => block.Contains(c[0] * 1000 + c[1]))) { done.Add(key); continue; }
                     // Every entry of the component must lie completely inside it.
                     bool whole = comps[ci].All(c => { var e = f.E[g[c[0], c[1]]]; var s = Houses.Size(e.Id, e.Rot); for (int dx = 0; dx < s[0]; dx++) for (int dy = 0; dy < s[1]; dy++) { int x = e.X + dx, y = e.Y + dy; if (!In(f, x, y) || comp[x, y] != ci) return false; } return true; });
                     if (!whole) { done.Add(key); continue; }
-                    if (pick < 0 || comps[ci].Count > comps[pick].Count) { pick = ci; bestKey = key; minDistPick = md; }
+                    if (pick < 0 || comps[ci].Count > comps[pick].Count) { pick = ci; bestKey = key; maxDistPick = mx; minDistPick = md; }
                 }
                 if (pick < 0) break;
                 done.Add(bestKey);
                 var cells = comps[pick];
-                int bx = cells.Min(c => c[0]), by = cells.Min(c => c[1]), bw = cells.Max(c => c[0]) - bx + 1, bh = cells.Max(c => c[1]) - by + 1;
-                int bestScore = int.MaxValue, bestOx = -1, bestOy = -1; long bestMove = long.MaxValue;
-                for (int ox = 0; ox + bw <= f.W; ox++) for (int oy = 0; oy + bh <= f.H; oy++)
-                {
-                    int score = int.MaxValue; bool ok = true;
-                    foreach (var c in cells)
-                    {
-                        int x = c[0] - bx + ox, y = c[1] - by + oy;
-                        int i = g[x, y];
-                        if (i < 0 || !Plain.Contains(Houses.Kind(f.E[i].Id)) || dist[x, y] < 2 || keep.Contains(x * 1000 + y)) { ok = false; break; }
-                        foreach (var d in N8)
-                        {
-                            int nx = x + d[0], ny = y + d[1];
-                            if (!In(f, nx, ny)) { ok = false; break; }
-                            int j = g[nx, ny]; string kk = j < 0 ? "" : Houses.Kind(f.E[j].Id);
-                            if (!(Plain.Contains(kk) || (comp[nx, ny] == pick))) { ok = false; break; }
-                        }
-                        if (!ok) break;
-                        score = Math.Min(score, dist[x, y]);
-                    }
-                    if (!ok) continue;
-                    long move = (long)(ox - bx) * (ox - bx) + (long)(oy - by) * (oy - by);
-                    if (score < bestScore || (score == bestScore && move < bestMove)) { bestScore = score; bestMove = move; bestOx = ox; bestOy = oy; }
-                }
-                if (bestOx < 0 || bestScore >= minDistPick) continue;
-                // Move: entries of the component (origin cells inside), spring -> plain slope.
+                int bx = cells.Min(c => c[0]), by = cells.Min(c => c[1]);
+                int pickId = pick;
+                var rel = cells.Select(c => new[] { c[0] - bx, c[1] - by }).ToList();
+                int bestOx, bestOy, bestScore;
+                bool found = FindSpot(f, g, dist, rel, (x, y) => comp[x, y] == pickId, keep, bx, by, out bestOx, out bestOy, out bestScore);
                 var idx = cells.Select(c => g[c[0], c[1]]).Distinct().ToList();
+                var rocks = idx.Where(i => Houses.Kind(f.E[i].Id) == "FELS").ToList();
+                bool improve = found && bestScore < maxDistPick, fits = improve && bestScore <= EdgeBand;
+                // Too big for the coast as a whole: split into single mountains, if the game has one for every rock.
+                if (!fits && maxDistPick > EdgeBand && library != null && rocks.Count > 1 && rocks.All(i => RockTemplate(library, f.E[i].Id) != null) && SplitRange(f, idx, library, keep)) { changed = true; continue; }
+                // A range that touches the coast moves only if it then lies at the coast completely.
+                if (!improve || (!fits && minDistPick <= edge)) continue;
+                // Move: entries of the component (origin cells inside), spring -> plain slope.
                 var moved = idx.Select(i => { var e = f.E[i].Copy(); e.X += bestOx - bx; e.Y += bestOy - by; return e; }).ToList();
                 var springs = idx.Where(i => f.E[i].Id == Spring).Select(i => new[] { f.E[i].X, f.E[i].Y }).ToList();
                 foreach (var e in moved) if (e.Id == Spring) e.Id = Slope;
@@ -457,6 +547,47 @@ namespace AnnoIslands
                 changed = true;
             }
             return changed;
+        }
+
+        // Splits a mountain range (entries 'idx', every piece inside it) into single mountains of the game: the range
+        // becomes meadow (a river from its springs goes with it), then every rock of it, the largest first, comes back
+        // as the single mountain of 'library' with the same rock, at the free spot closest to the coast (see FindSpot).
+        // Bits of the new pieces: those of the game's single mountain, with island, town and owner of the old rock.
+        // If a rock finds no spot within EdgeBand tiles of the coast, the island stays as it was (no mountain is lost,
+        // none lands further inland).
+        static bool SplitRange(Island f, List<int> idx, Dictionary<int, List<Entry>> library, HashSet<int> keep)
+        {
+            var backup = f.E.Select(e => e.Copy()).ToList(); var backupData = f.Data.Select(d => (byte[])d.Clone()).ToList();
+            var rocks = idx.Where(i => Houses.Kind(f.E[i].Id) == "FELS").Select(i => f.E[i].Copy())
+                .OrderByDescending(e => { var s = Houses.Size(e.Id, e.Rot); return s[0] * s[1]; }).ThenBy(e => e.X).ThenBy(e => e.Y).ToList();
+            var springs = idx.Where(i => f.E[i].Id == Spring).Select(i => new[] { f.E[i].X, f.E[i].Y }).ToList();
+            uint bits = f.E[idx[0]].Bits;
+            FillMeadow(f, RemoveEntries(f, idx), bits);
+            foreach (var s in springs) RemoveRiverAt(f, s[0], s[1]);
+            const uint own = (0xFFu << 6) | (7u << 14) | (0xFu << 22);
+            var placedAll = new HashSet<int>();
+            foreach (var rock in rocks)
+            {
+                var tpl = RockTemplate(library, rock.Id);
+                var tplRock = tpl.First(e => e.Id == rock.Id);
+                var rel = CellsOf(tpl);
+                var g = f.Cover(false); var dist = CoastDistance(f, g);
+                int ox, oy, score;
+                if (!FindSpot(f, g, dist, rel, (x, y) => false, keep, rock.X - tplRock.X, rock.Y - tplRock.Y, out ox, out oy, out score) || score > EdgeBand)
+                {
+                    f.E = backup; f.Data = backupData;
+                    return false;
+                }
+                var target = new HashSet<int>(rel.Select(c => (c[0] + ox) * 1000 + (c[1] + oy)));
+                var covered = target.Select(t => g[t / 1000, t % 1000]).Distinct().ToList();
+                uint cb = f.E[covered[0]].Bits;
+                var old = RemoveEntries(f, covered);
+                f.E.AddRange(tpl.Select(e => new Entry { Id = e.Id, X = e.X + ox, Y = e.Y + oy, Bits = (e.Bits & ~own) | (rock.Bits & own) }));
+                FillMeadow(f, old.Where(c => !target.Contains(c[0] * 1000 + c[1])).ToList(), cb);
+                placedAll.UnionWith(target);
+            }
+            DropDeer(f, placedAll);
+            return true;
         }
 
         static bool IsPlateau(Island f, int[,] g, int x, int y)
@@ -487,9 +618,32 @@ namespace AnnoIslands
         public static readonly string[] Folders = { "Nord", "Sued", "NordNat", "SuedNat", "NoKlima" };
         public static readonly string[] Classes = { "lit", "mit", "med", "big", "lar" };
 
-        // For the tests: share of the mountain groups (rock with slopes) of all whole Nord/Sued islands that lie at most
-        // 3 tiles from the coast; with 'overrideDir' the files written there replace the game's.
-        public static double MountainShare(string gameDir, string overrideDir)
+        // For the tests: the mountain groups (rock with slopes, 8-connected) of an island: rock pieces, tiles, nearest
+        // and farthest tile from the coast.
+        public static List<int[]> MountainGroups(Island f)
+        {
+            var res = new List<int[]>();
+            var g = f.Cover(false); var dist = CoastDistance(f, g);
+            var seen = new bool[f.W, f.H];
+            for (int x = 0; x < f.W; x++) for (int y = 0; y < f.H; y++)
+            {
+                if (seen[x, y] || !IsPlateau(f, g, x, y)) continue;
+                int md = int.MaxValue, mx = 0, n = 0; var rocks = new HashSet<int>(); var q = new Queue<int[]>(); q.Enqueue(new[] { x, y }); seen[x, y] = true;
+                while (q.Count > 0)
+                {
+                    var c = q.Dequeue(); md = Math.Min(md, dist[c[0], c[1]]); mx = Math.Max(mx, dist[c[0], c[1]]); n++;
+                    if (K(f, g, c[0], c[1]) == "FELS") rocks.Add(g[c[0], c[1]]);
+                    foreach (var d in N8) { int nx = c[0] + d[0], ny = c[1] + d[1]; if (In(f, nx, ny) && !seen[nx, ny] && IsPlateau(f, g, nx, ny)) { seen[nx, ny] = true; q.Enqueue(new[] { nx, ny }); } }
+                }
+                res.Add(new[] { rocks.Count, n, md, mx });
+            }
+            return res;
+        }
+
+        // For the tests: share of the mountain groups of all whole Nord/Sued islands that lie at most 3 tiles from the
+        // coast ('whole': and with their farthest tile at most EdgeBand tiles); with 'overrideDir' the files written
+        // there replace the game's.
+        public static double MountainShare(string gameDir, string overrideDir, bool whole = false)
         {
             if (Houses.All.Count == 0) Houses.Load(Path.Combine(gameDir, "haeuser.cod"));
             int near = 0, total = 0;
@@ -500,19 +654,7 @@ namespace AnnoIslands
                     if (overrideDir != null) { var o = Path.Combine(overrideDir, folder, Path.GetFileName(file)); if (File.Exists(o)) path = o; }
                     Island f; try { f = Island.Load(path); } catch (Exception) { continue; }
                     if (!IsWhole(f)) continue;
-                    var g = f.Cover(true); var dist = CoastDistance(f, g);
-                    var seen = new bool[f.W, f.H];
-                    for (int x = 0; x < f.W; x++) for (int y = 0; y < f.H; y++)
-                    {
-                        if (seen[x, y] || !IsPlateau(f, g, x, y)) continue;
-                        int md = int.MaxValue; var q = new Queue<int[]>(); q.Enqueue(new[] { x, y }); seen[x, y] = true;
-                        while (q.Count > 0)
-                        {
-                            var c = q.Dequeue(); md = Math.Min(md, dist[c[0], c[1]]);
-                            foreach (var d in N8) { int nx = c[0] + d[0], ny = c[1] + d[1]; if (In(f, nx, ny) && !seen[nx, ny] && IsPlateau(f, g, nx, ny)) { seen[nx, ny] = true; q.Enqueue(new[] { nx, ny }); } }
-                        }
-                        total++; if (md <= 3) near++;
-                    }
+                    foreach (var gr in MountainGroups(f)) { total++; if (gr[2] <= 3 && (!whole || gr[3] <= EdgeBand)) near++; }
                 }
             return total == 0 ? 0 : (double)near / total;
         }
@@ -536,9 +678,11 @@ namespace AnnoIslands
             var log = new List<string>(); int changedFiles = 0, giants = 0;
             // Village files (NordNat, SuedNat) only hold the changes of a village; the game loads the island under it
             // from Nord/Sued (header: file number +96, class +98, climate +100, original flag +101 = 0). Mountains under
-            // or next to a village stay where they are; nothing moves there.
+            // a village or next to the slopes of a village stay where they are; no mountain moves to 3 tiles or less
+            // from a piece of a village.
             var villages = new Dictionary<string, List<KeyValuePair<string, Island>>>(StringComparer.OrdinalIgnoreCase);
             var keep = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
+            var block = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
             foreach (var folder in new[] { "NordNat", "SuedNat" })
             {
                 string src = Path.Combine(gameDir, folder); if (!Directory.Exists(src)) continue;
@@ -547,12 +691,13 @@ namespace AnnoIslands
                     Island v; try { v = Island.Load(file); } catch (Exception) { continue; }
                     string under = UnderName(v); if (under == null || IsWhole(v)) continue;
                     List<KeyValuePair<string, Island>> list;
-                    if (!villages.TryGetValue(under, out list)) { list = new List<KeyValuePair<string, Island>>(); villages[under] = list; keep[under] = new HashSet<int>(); }
+                    if (!villages.TryGetValue(under, out list)) { list = new List<KeyValuePair<string, Island>>(); villages[under] = list; keep[under] = new HashSet<int>(); block[under] = new HashSet<int>(); }
                     list.Add(new KeyValuePair<string, Island>(folder + "\\" + Path.GetFileName(file), v));
                     foreach (var e in v.E)
                     {
-                        var s = Houses.Size(e.Id, e.Rot);
+                        var s = Houses.Size(e.Id, e.Rot); int m = Plateau.Contains(Houses.Kind(e.Id)) ? 1 : 0;
                         for (int dx = -3; dx < s[0] + 3; dx++) for (int dy = -3; dy < s[1] + 3; dy++) keep[under].Add((e.X + dx) * 1000 + (e.Y + dy));
+                        for (int dx = -m; dx < s[0] + m; dx++) for (int dy = -m; dy < s[1] + m; dy++) block[under].Add((e.X + dx) * 1000 + (e.Y + dy));
                     }
                 }
             }
@@ -581,7 +726,7 @@ namespace AnnoIslands
                     bool whole = before[0] == 0 && before[1] == 0;
                     if (layers)
                     {
-                        HashSet<int> k; keep.TryGetValue(name, out k);
+                        HashSet<int> k, b; keep.TryGetValue(name, out k); block.TryGetValue(name, out b);
                         if (o.NoRivers)
                         {
                             var backup = f.E.Select(e => e.Copy()).ToList(); var backupData = f.Data.Select(d => (byte[])d.Clone()).ToList();
@@ -594,7 +739,7 @@ namespace AnnoIslands
                                 else { f.E = backup; f.Data = backupData; log.Add(name + ": rivers kept (the file has empty or doubly covered tiles)"); }
                             }
                         }
-                        if (o.EdgeMountains && whole && extra.Count == 0 && MoveMountains(f, 3, k)) { ch = true; what.Add("mountains"); }
+                        if (o.EdgeMountains && whole && extra.Count == 0 && MoveMountains(f, 3, k, RockLibrary(gameDir, folder.StartsWith("Sued") ? "Sued" : "Nord"), b)) { ch = true; what.Add("mountains"); }
                         if (whole) f.Cover(true);
                     }
                     if (!ch) continue;
@@ -962,7 +1107,7 @@ namespace AnnoIslands
                     var size = Sizes[k % Sizes.Length]; string why;
                     var g = Make(model, size[0], size[1], 1602 + k * 31 + (folder == "Sued" ? 7 : 0), out why);
                     if (g == null) { log.Add(folder + "\\" + mname + ": no giant (" + why + ")"); continue; }
-                    if (o.EdgeMountains) Forge.MoveMountains(g, 3);
+                    if (o.EdgeMountains) Forge.MoveMountains(g, 3, null, Forge.RockLibrary(gameDir, folder));
                     var h = g.Header; if (h.Length >= 102) { BitConverter.GetBytes((ushort)(Forge.GiantFirstNumber + k)).CopyTo(h, 96); h[100] = (byte)(folder == "Sued" ? 1 : 0); }
                     string name = "lar" + (Forge.GiantFirstNumber + k) + ".scp";
                     string dst = Path.Combine(outDir, folder); Directory.CreateDirectory(dst);

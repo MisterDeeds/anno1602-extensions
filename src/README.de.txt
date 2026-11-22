@@ -45,9 +45,10 @@ Was geaendert wird (nur im Arbeitsspeicher, keine Spieldatei wird veraendert):
                        Gigantisch: dazu bis 6 Riesen-Inseln (135 x 120 bis 160 x 140), groesser als
                        jede Insel des Spiels. Sie wachsen aus den groessten Inseln; ohne Fluesse.
   Fluesse              Keine: Fluesse werden Wiese, ihre Muendung Strand und Brandung, die Quelle Hang
-  Berge                Am Rand: Berge mitten auf der Insel ruecken an die Kueste (Fluesse, die dort
-                       entspringen, verschwinden mit); Berge neben einem Ureinwohnerdorf und die
-                       seltenen sehr grossen Gebirge ohne Platz an der Kueste bleiben
+  Berge                Am Rand: Berge mitten auf der Insel ruecken an die Kueste, lange
+                       Gebirgszuege als einzelne Berge (Fluesse, die dort entspringen, verschwinden
+                       mit); Berge, die zu einem Ureinwohnerdorf gehoeren, und die seltenen
+                       Gebirge ohne Platz an der Kueste bleiben
   Vulkan               Keiner: der einzige Vulkan des Spiels wird ein normaler Berg, keine Ausbrueche
                        (Fluesse, Berge, Vulkan und Riesen-Inseln: das Werkzeug schreibt einmalig
                        veraenderte Inseldateien nach %LOCALAPPDATA%\Anno1602-Extensions\islands und

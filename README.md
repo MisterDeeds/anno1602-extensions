@@ -64,7 +64,7 @@ You need Windows 10 or 11 and Anno 1602 History Edition installed through Ubisof
 | Islands | up to 50 islands spread over the whole map (the game's maximum) |
 | Island size | Large / Huge: many more large islands (up to 10 of the biggest, 100 × 90); Giant: plus up to 6 giant islands from 135 × 120 to 160 × 140 – larger than any island of the game |
 | Rivers | none: rivers become meadow, mouth and spring become beach and slope (more land to build on) |
-| Mountains | at the coast: mountains in the middle of an island move to the coast; the inland stays free |
+| Mountains | at the coast: mountains in the middle of an island move to the coast – long ranges as single mountains; the inland stays free |
 | Volcano | none: the game's only volcano becomes a normal mountain, no eruptions |
 | Resources | More: ore, gold, fertility and treasures scaled to the island count; Lots: double that |
 | Natives | 4 + 4 or 7 + 7 villages instead of 2 + 2 |
@@ -337,7 +337,7 @@ anno1602-extensions/
 │   └── README.txt, README.de.txt  player guide, installed next to the tool
 ├── tests/
 │   ├── test-patcher.ps1           offline test: maps the game's exe as an image, checks every patch site and the events (702 checks)
-│   ├── test-islands.ps1           island forge with all island files of the game: rivers, mountains, volcano, giant islands (19 checks)
+│   ├── test-islands.ps1           island forge with all island files of the game: rivers, mountains, volcano, giant islands (21 checks)
 │   ├── check-scenarios.ps1        checks built scenarios, random and daily adventures (-Reproduce)
 │   └── test-install.ps1           installs and removes for real, in a sandbox, also through get.ps1 (43 checks)
 ├── dev/                           helpers for development

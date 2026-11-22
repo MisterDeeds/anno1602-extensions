@@ -3,6 +3,22 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.4.1 – 2026-11-22
+
+- Mountains "At the coast" now really leave the inland free, also on giant islands: in 3.4.0 a mountain range counted
+  as "at the coast" as soon as one end touched it, so long ranges still crossed the island (reported with a giant
+  island 160 × 125 whose two ranges reached 41 tiles inland). Now a mountain group must lie completely in a strip of
+  at most 10 tiles along the coast. A range that does not fit there as a whole is split into single mountains – each
+  one the game's own single mountain with the same rock and its ring of slopes – and every one of them goes to the
+  coast on its own; if one of them finds no place at the coast, the range stays as it is. Mountains that are part of a
+  native village stay; mountains that only lie near a village may now move too.
+- All whole islands of the game: 96 % of the mountain groups lie completely at the coast (62 % without the option,
+  3.4.0 left the long ranges); on the giant islands all of them (238 groups).
+- Tests: `tests/test-islands.ps1` 21 checks (new: groups completely at the coast, rocks unchanged by number and kind,
+  every mountain of the giant islands at the coast), `tests/test-patcher.ps1` 702, `tests/test-install.ps1` 43.
+  Checked in the running game at 2000 × 1400 with giant islands: all 50 islands loaded, no river, all 121 mountain
+  groups of the 6 giant islands completely at the coast.
+
 ## 3.4.0 – 2026-11-22
 
 - Island forge: the tool writes changed copies of the game's island files into its own folder (once per set of
