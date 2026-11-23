@@ -40,7 +40,9 @@ param(
     [Parameter(DontShow)][switch]$Dump,
     # For testing only: attach to this process (an exe image loaded by a test) instead of Anno1602.exe.
     [Parameter(DontShow)][int]$TestProcessId = 0,
-    [Parameter(DontShow)][long]$TestBase = 0
+    [Parameter(DontShow)][long]$TestBase = 0,
+    # For testing only: the normal window (own single-instance lock), off-screen, closes itself after this many seconds.
+    [Parameter(DontShow)][int]$TestShowSeconds = 0
 )
 $ErrorActionPreference = 'Stop'
 
@@ -83,6 +85,36 @@ namespace AnnoIslandMap
         private static extern bool GetExitCodeProcess(IntPtr h, out uint code);
         [DllImport("user32.dll")]
         public static extern bool SetProcessDPIAware();
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr h, int cmd);
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr h);
+        [StructLayout(LayoutKind.Sequential)]
+        private struct STARTUPINFO
+        {
+            public int cb; public IntPtr lpReserved, lpDesktop, lpTitle;
+            public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+            public short wShowWindow, cbReserved2; public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+        }
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern void GetStartupInfo(ref STARTUPINFO si);
+
+        // Started hidden (the launcher starts the map with a hidden console): Windows applies that "hidden" to the first
+        // window the process shows, so the map would never appear. Hiding the console (hidden anyway) uses it up, as
+        // "powershell -WindowStyle Hidden" does. True if it was needed.
+        public static bool UseUpHiddenStart()
+        {
+            STARTUPINFO si = new STARTUPINFO();
+            si.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+            GetStartupInfo(ref si);
+            if ((si.dwFlags & 1) == 0 || si.wShowWindow != 0) return false;
+            IntPtr console = GetConsoleWindow();
+            if (console == IntPtr.Zero || IsWindowVisible(console)) return false;
+            ShowWindow(console, 0);
+            return true;
+        }
 
         public static byte[] Read(IntPtr h, long address, int size)
         {
@@ -1392,10 +1424,17 @@ if ($Dump -or $Snapshot) {
 
 # Normal start: one window only.
 $created = $false
-$mutex = New-Object Threading.Mutex($true, 'Local\AnnoIslandMap', [ref]$created)
+$mutex = New-Object Threading.Mutex($true, $(if ($TestShowSeconds -gt 0) { 'Local\AnnoIslandMapTest' } else { 'Local\AnnoIslandMap' }), [ref]$created)
 if (-not $created) { exit 0 }
 try {
+    # The launcher starts the map with a hidden console; without this the window stays invisible (see UseUpHiddenStart).
+    [void][AnnoIslandMap.Native]::UseUpHiddenStart()
     $form = New-MapForm
+    if ($TestShowSeconds -gt 0) {
+        $form.StartPosition = 'Manual'; $form.Location = New-Object Drawing.Point(-10000, -10000)
+        $closer = New-Object Windows.Forms.Timer; $closer.Interval = 1000 * $TestShowSeconds
+        $closer.Add_Tick({ $closer.Stop(); $form.Close() }); $closer.Start()
+    }
     [Windows.Forms.Application]::Run($form)
 }
 finally { $mutex.ReleaseMutex(); $mutex.Dispose() }

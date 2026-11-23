@@ -3,6 +3,23 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.7.1 – 2026-11-23
+
+- **Fix: the island map and the logbook did not appear when the launcher opened them.** The launcher starts both with
+  a hidden console (no black window). Windows then applies "hidden" also to the first window the process shows, so the
+  windows were created but never shown – with the buttons "Open island map" and "Open logbook" and with the check
+  boxes "… with the game". Affected: the island map of 3.7.0 and the logbook (the launcher has started it this way
+  since 2.0). Now the launcher also passes `-WindowStyle Hidden` to PowerShell itself, and both scripts use up a hidden
+  start before their window opens, so they appear even when an older launcher starts them.
+- Game test of 3.7.0 with the launcher's saved choice (2000 × 1400, giant islands, perfect home island, all islands
+  explored): in a new endless game the home island has 2 ore deposits (240 t) and 2 gold deposits, byte for byte like
+  the gold deposit the game itself created on another island; all 50 islands explored; the island map read the running
+  game (2 islands with gold, 46 with ore), and zoom, dragging, selecting an island, the gold filter and the 2-second
+  refresh worked in the real window.
+- Tests: `tests/test-install.ps1` 47 checks (the installed logbook and island map really appear when started with a
+  hidden console – as the launcher does now and as launchers up to 3.7.0 did; without the fix both stay hidden), new
+  test switch `-TestShowSeconds` for both windows; island map `-SelfTest` 23, logbook `-SelfTest` 147.
+
 ## 3.7.0 – 2026-11-22
 
 - **Island map** (`src/island-map.ps1`; launcher button "Open island map" and the check box "Open the island map with

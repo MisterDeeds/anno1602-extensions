@@ -1688,6 +1688,34 @@ territory of the warehouse where the ship landed; territories of all 14 towns in
 gold (home island, island 17), 43 with ore, 40 free; 4 ships; the camera marker on the island the game showed. The
 refresh reads on a worker thread, so the window stays responsive.
 
+### Game test of 3.7.0 and the invisible windows (2026-11-23, version 3.7.1)
+
+**New endless game (O), 06:05–06:11, installed 3.7.0 with the launcher's saved choice** (2000 × 1400, giant islands,
+resources lots, perfect home island, all explored; game started in the background, menus by window messages): at
+clock 436 the home island (island 0, class 4, file 28, north, 160 × 140) has the slots `02 20 1D 00 00 00 00 1E`,
+`02 78 1D 00 00 00 00 1E` (ore, 240 t, top corners) and `03 76 6E 00 01 00 40 06`, `03 10 73 00 01 00 40 06` (gold, 50 t,
+bottom corners); the only other gold deposit of the world, made by the game itself on island 6 (number 7 on the map), is `03 0E 24 00 01 00 40
+06` – the same bytes. Crops +0x5C = 0xFF, all 50 islands explored, the tool printed its home island line once.
+
+**Island map window (O):** started like the launcher, the window was **created but never visible** (`IsWindowVisible`
+false, no taskbar button). Cause: `Start-Process -WindowStyle Hidden` sets `STARTF_USESHOWWINDOW` with `SW_HIDE` in the
+new process's STARTUPINFO; Windows applies it to the first `ShowWindow` of an unowned top-level window – the console
+is created hidden by conhost, so the first such call is the form's. A test form started four ways: hidden console
+only → hidden; plus `-WindowStyle Hidden` for PowerShell (PowerShell hides its console with `ShowWindow` first) →
+visible; the script hides its (already hidden) console before the form → visible; the form shows itself again in
+`Shown` → visible. The logbook (same start since 2.0) was hidden as well. Its `-TestTicks` mode had missed it:
+`ShowInTaskbar = false` gives the form a hidden owner, and owned windows are not affected. Fix 3.7.1: the launcher
+passes `-WindowStyle Hidden` to PowerShell too; both scripts call `UseUpHiddenStart` (only if STARTUPINFO says
+`SW_HIDE` and the console is invisible: `ShowWindow(console, SW_HIDE)`). Control: the same test without that call →
+hidden, with it → visible after 0.6 s.
+
+With the window visible (behind the user's windows): status "2000 × 1400, 50 Inseln: 2 mit Gold, 46 mit Erz, 47
+frei", refreshed every 2 s; mouse wheel zooms around the pointer, dragging moves, a click selects the home island
+(frame, details "Gold: 2 × (50 t, 50 t, …) · Erz: 2 × (gross 240 t, gross 240 t) · alle 6 Pflanzen · frei"), the gold
+filter leaves islands 1 and 7 in the list and outlines island 7. Hover and double-click cannot be checked with window
+messages: WinForms asks Windows for the leave of the real mouse at once, and a click counts only if
+`WindowFromPoint` is the window itself (it lay behind other windows).
+
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
 - Tool with `-Pirates Strong -ShipSpeed 2 -StartGold 50000 -Storage 3`, 1000 × 700, layout 0 (43 islands). The test session then broke off with a connection error of the Claude app; the tool ended with exit 4 without renaming `lastgame.gam`.

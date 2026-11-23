@@ -375,7 +375,7 @@ anno1602-extensions/
 │   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (750 Prüfungen)
 │   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln, Heimatinsel (30 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
-│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (44 Prüfungen)
+│   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (47 Prüfungen)
 ├── dev/                           Hilfen für die Entwicklung
 │   ├── check-game.ps1             zeigt die gepatchten Werte im laufenden Spiel (nur lesend)
 │   ├── check-islands.ps1          Inseln, Erz und Fruchtbarkeit im laufenden Spiel

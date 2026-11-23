@@ -17,7 +17,8 @@
      Scenarios and the list shows it, the daily adventure is built, chapters on shows locks, off copies every chapter back.
      Updates: after an update (settings LastVersion older) the launcher says so once; an older release changes nothing;
      a newer one shows the notice and its button downloads get.ps1 and starts it as a file; with "Update automatically"
-     the update starts by itself, but only once per version and day.
+     the update starts by itself, but only once per version and day. The installed logbook and island map really
+     appear when started with a hidden console like the launcher (also as launchers up to 3.7.0 started them).
   5. Adventures, daily adventures and designer scenarios appear (both languages); then -Remove through the installed
      copy, as the Windows "Apps" list does it: program folders, both shortcut names, both settings folders, the Apps
      entry and all our scenarios are gone, the player's files stay.
@@ -53,6 +54,43 @@ $titles = @{ de = @($definitions | ForEach-Object { $_.Title.de }); en = @($defi
 $chapterCount = @($titles.de | Where-Object { $_ -match '^(.+?) (\d+) - ' }).Count
 # Chapter title in a language: campaign of the given title, chapter number n.
 function Get-Chapter([string]$lang, [string]$campaign, [int]$n) { @($titles[$lang] | Where-Object { $_ -like "$campaign $n - *" })[0] }
+
+# Starts a companion window script (logbook, island map) with a hidden console as the launcher does (-PsHidden: also
+# "-WindowStyle Hidden" for PowerShell itself) and -TestShowSeconds 4 (off-screen, closes itself). Result: 'visible',
+# 'hidden' (the window exists but Windows never showed it) or 'no window'.
+Add-Type -TypeDefinition @'
+using System; using System.Text; using System.Runtime.InteropServices;
+namespace InstallTest {
+    public static class Windows {
+        private delegate bool EnumProc(IntPtr h, IntPtr l);
+        [DllImport("user32.dll")] private static extern bool EnumWindows(EnumProc f, IntPtr l);
+        [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr h);
+        [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+        // 0 no window of the process whose title contains the text, 1 hidden, 2 visible.
+        public static int State(int pid, string part)
+        {
+            int r = 0;
+            EnumWindows(delegate (IntPtr h, IntPtr l) {
+                uint p; GetWindowThreadProcessId(h, out p);
+                if (p != (uint)pid) return true;
+                StringBuilder t = new StringBuilder(256); GetWindowText(h, t, 256);
+                if (!t.ToString().Contains(part)) return true;
+                r = IsWindowVisible(h) ? 2 : 1; return false;
+            }, IntPtr.Zero);
+            return r;
+        }
+    }
+}
+'@
+function Get-CompanionWindow([string]$script, [string[]]$more, [switch]$PsHidden) {
+    $a = @('-NoProfile', '-ExecutionPolicy', 'Bypass') + $(if ($PsHidden) { @('-WindowStyle', 'Hidden') } else { @() }) + @('-File', "`"$script`"", '-TestShowSeconds', '4') + $more
+    $p = Start-Process powershell -WindowStyle Hidden -ArgumentList $a -PassThru
+    $best = 0; $sw = [Diagnostics.Stopwatch]::StartNew()
+    while ($sw.Elapsed.TotalSeconds -lt 40 -and -not $p.HasExited -and $best -lt 2) { Start-Sleep -Milliseconds 200; $best = [math]::Max($best, [InstallTest.Windows]::State($p.Id, 'Anno 1602')) }
+    if (-not $p.WaitForExit(30000)) { Stop-Process -Id $p.Id -Force }
+    @('no window', 'hidden', 'visible')[$best]
+}
 
 # Fingerprint of the real installation, so that the test can prove it does not touch it.
 function Get-RealState {
@@ -166,6 +204,17 @@ try {
     $mapStarts = @($clicks | Where-Object { $_ -like 'START powershell*-File*island-map.ps1*' }).Count
     $afterButton = ($clickText -split '--- Open island map', 2)[1]
     Test-That "island map: opened with the game (on by default) and by its button ($mapStarts starts)" ($mapStarts -ge 3 -and $afterButton -match '^\s*START powershell .*-File .*island-map\.ps1' -and (Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json).IslandMapWithGame -eq '1')
+    # 3.7.1: logbook and island map really appear. Up to 3.7.0 the launcher started them with a hidden console only;
+    # Windows applied that to their first window, and both stayed invisible. Now the launcher also passes
+    # "-WindowStyle Hidden" to PowerShell, and both scripts use a hidden start up themselves (also with an old launcher).
+    $companions = @($clicks | Where-Object { $_ -match '^START powershell .*-File .*(logbook|island-map)\.ps1' })
+    $lbStarts = @($companions | Where-Object { $_ -match 'logbook\.ps1' }).Count
+    Test-That "launcher: logbook ($lbStarts) and island map ($mapStarts) started with -WindowStyle Hidden for PowerShell too" ($lbStarts -ge 1 -and $mapStarts -ge 1 -and @($companions | Where-Object { $_ -notmatch ' -WindowStyle Hidden -File ' }).Count -eq 0)
+    $lbMore = @('-AppDataFolder', "`"$app`"", '-DocumentsFolder', "`"$(Join-Path $sandbox 'Documents')`"")
+    $m1 = Get-CompanionWindow (Join-Path $new 'island-map.ps1') @() -PsHidden; $l1 = Get-CompanionWindow (Join-Path $new 'logbook.ps1') $lbMore -PsHidden
+    Test-That "windows appear when started like the launcher: island map $m1, logbook $l1" ($m1 -eq 'visible' -and $l1 -eq 'visible')
+    $m2 = Get-CompanionWindow (Join-Path $new 'island-map.ps1') @(); $l2 = Get-CompanionWindow (Join-Path $new 'logbook.ps1') $lbMore
+    Test-That "windows appear also when started like the launcher up to 3.7.0 (hidden console only): island map $m2, logbook $l2" ($m2 -eq 'visible' -and $l2 -eq 'visible')
     $v = [regex]::Escape($repoVersion)
     Test-That "after an update: `"Aktualisiert auf Version $repoVersion.`" with the button for the release notes, version saved" ($clickText -match "UPDATED-NOTE visible: True Aktualisiert auf Version $v\. \| news button True" -and (Get-Content -LiteralPath $settingsPath -Raw | ConvertFrom-Json).LastVersion -eq $repoVersion)
     Test-That 'update: nothing for an older release; without "automatically" the notice and the button (download + get.ps1 as a file)' ($clickText -match "UPDATE v1\.0\.0: Aktualisiert auf Version $v\." -and $clickText -match 'UPDATE v99\.0\.0 auto off: Version 99\.0\.0 ist da\., starts 0' -and $clickText -match 'UPDATE button: starts 1' -and $clickText -match 'DOWNLOAD https://raw\.githubusercontent\.com/MisterDeeds/anno1602-extensions/main/get\.ps1' -and $clickText -match 'START powershell -NoProfile -ExecutionPolicy Bypass -File ".*anno1602-extensions-update\.ps1"')

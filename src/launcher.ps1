@@ -970,12 +970,16 @@ $buttonOriginal = New-Button (Txt 'Start original' 'Original starten') $buttons
 # The logbook: a small window next to the game with mission progress, statistics and milestones.
 $buttonLogbook = New-Button (Txt 'Open logbook' 'Logbuch öffnen') $buttons
 $buttonLogbook.Visible = (Test-Path -LiteralPath $Logbook)
-function Start-Logbook { Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$Logbook`"") }
+# Logbook and island map: a hidden console, and "-WindowStyle Hidden" for PowerShell itself too. Without it Windows
+# applies the hidden start to the first window of the process, and the window never appeared (logbook 2.0 to 3.7.0,
+# island map 3.7.0).
+function Start-Companion([string]$path) { Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', "`"$path`"") }
+function Start-Logbook { Start-Companion $Logbook }
 $buttonLogbook.Add_Click({ Start-Logbook })
 # The island map (3.7): every island of the running game with ore, gold, crops and owners (the map allows one window).
 $buttonIslandMap = New-Button (Txt 'Open island map' 'Inselkarte öffnen') $buttons
 $buttonIslandMap.Visible = (Test-Path -LiteralPath $IslandMap)
-function Start-IslandMap { Start-Process powershell -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', "`"$IslandMap`"") }
+function Start-IslandMap { Start-Companion $IslandMap }
 $buttonIslandMap.Add_Click({ Start-IslandMap })
 # Open the logbook together with the game (remembered in settings.json; the logbook itself allows only one window).
 $checkLogbook = New-Object Windows.Forms.CheckBox

@@ -51,7 +51,9 @@ param(
     [Parameter(DontShow)][string]$DocumentsFolder = [Environment]::GetFolderPath('MyDocuments'),
     # For testing only: run the window off-screen for this many refreshes (1 per second) and log each one.
     [Parameter(DontShow)][int]$TestTicks = 0,
-    [Parameter(DontShow)][string]$TestLog
+    [Parameter(DontShow)][string]$TestLog,
+    # For testing only: the normal window (own single-instance lock), off-screen, closes itself after this many seconds.
+    [Parameter(DontShow)][int]$TestShowSeconds = 0
 )
 $ErrorActionPreference = 'Stop'
 
@@ -124,6 +126,36 @@ namespace AnnoLogbook
         private static extern bool GetExitCodeProcess(IntPtr h, out uint code);
         [DllImport("user32.dll")]
         public static extern bool SetProcessDPIAware();
+        [DllImport("kernel32.dll")]
+        private static extern IntPtr GetConsoleWindow();
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr h, int cmd);
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr h);
+        [StructLayout(LayoutKind.Sequential)]
+        private struct STARTUPINFO
+        {
+            public int cb; public IntPtr lpReserved, lpDesktop, lpTitle;
+            public int dwX, dwY, dwXSize, dwYSize, dwXCountChars, dwYCountChars, dwFillAttribute, dwFlags;
+            public short wShowWindow, cbReserved2; public IntPtr lpReserved2, hStdInput, hStdOutput, hStdError;
+        }
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+        private static extern void GetStartupInfo(ref STARTUPINFO si);
+
+        // Started hidden (the launcher starts the logbook with a hidden console): Windows applies that "hidden" to the
+        // first window the process shows, so the logbook would never appear. Hiding the console (hidden anyway) uses it
+        // up, as "powershell -WindowStyle Hidden" does. True if it was needed.
+        public static bool UseUpHiddenStart()
+        {
+            STARTUPINFO si = new STARTUPINFO();
+            si.cb = Marshal.SizeOf(typeof(STARTUPINFO));
+            GetStartupInfo(ref si);
+            if ((si.dwFlags & 1) == 0 || si.wShowWindow != 0) return false;
+            IntPtr console = GetConsoleWindow();
+            if (console == IntPtr.Zero || IsWindowVisible(console)) return false;
+            ShowWindow(console, 0);
+            return true;
+        }
 
         // Reads size bytes at the address; null if the read fails or is incomplete.
         public static byte[] Read(IntPtr h, long address, int size)
@@ -3517,13 +3549,15 @@ if ($PreviewImage) {
 }
 
 # Only one logbook at a time; a second start brings the first one to the front.
-$mutex = New-Object Threading.Mutex($false, 'Local\Anno1602-Extensions-Logbook')
+$mutex = New-Object Threading.Mutex($false, $(if ($TestShowSeconds -gt 0) { 'Local\Anno1602-Extensions-LogbookTest' } else { 'Local\Anno1602-Extensions-Logbook' }))
 $owned = $false
 try { $owned = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $owned = $true }
 if (-not $owned) {
     try { Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::AppActivate((Txt 'Logbook – Anno 1602' 'Logbuch – Anno 1602')) } catch { }
     exit 0
 }
+# The launcher starts the logbook with a hidden console; without this the window stays invisible (see UseUpHiddenStart).
+[void][AnnoLogbook.Native]::UseUpHiddenStart()
 
 $LB = New-LogbookState
 $UI = New-LogbookForm $LB
@@ -3631,6 +3665,13 @@ if ($TestTicks -gt 0) {
     $Timer.Interval = 1000
     $UI.Form.ShowInTaskbar = $false
     $UI.Form.Location = New-Object Drawing.Point(-10000, -10000)
+}
+if ($TestShowSeconds -gt 0) {
+    # Unlike -TestTicks the window stays a normal one: without a taskbar button the form gets a hidden owner, and owned
+    # windows escape the rule that hid the logbook when the launcher started it (UseUpHiddenStart).
+    $UI.Form.Location = New-Object Drawing.Point(-10000, -10000)
+    $Closer = New-Object Windows.Forms.Timer; $Closer.Interval = 1000 * $TestShowSeconds
+    $Closer.Add_Tick({ $script:Closer.Stop(); $script:UI.Form.Close() }); $Closer.Start()
 }
 
 $UI.TopBox.Add_CheckedChanged({ $script:UI.Form.TopMost = $script:UI.TopBox.Checked })
