@@ -1716,6 +1716,46 @@ filter leaves islands 1 and 7 in the list and outlines island 7. Hover and doubl
 messages: WinForms asks Windows for the leave of the real mouse at once, and a click counts only if
 `WindowFromPoint` is the window itself (it lay behind other windows).
 
+### Game test of 3.7.1 with the real mouse, gold mine in operation (2026-11-23)
+
+**Everything worked; no new bug.** Installed 3.7.1, 08:35–09:15, while the user was away (allowed by the user). Clicks
+on the game and the map used the real mouse (`SetCursorPos` / `mouse_event`), only after 45 s without user input,
+cursor put back afterwards.
+
+**Whole chain (O):** desktop shortcut opened through `explorer.exe` (not elevated, like a double-click) → launcher
+"Aktualisiert auf Version 3.7.1." → "Mit Erweiterungen spielen" → tool with the saved choice (incl. `-HomeIsland
+Perfect -Radius 2 -BuildCost 0`), game and island map; the map **visible at once**, no logbook (switched off in the
+settings, correct). The launcher's WinForms buttons offer no UI Automation patterns to another process
+("Nicht unterstütztes Muster"); `PostMessage(BM_CLICK)` to the button's window works.
+
+**Island map with the real mouse (O)** – the part 3.7.0 could not check: hovering an island shows its details and
+they stay while the pointer rests there, over the sea the hint comes back; the wheel zooms (53.5 % of the pixels
+changed); a double-click on the map gives the whole map back (0 % difference to the start); a double-click on row 1
+zooms to the home island (58.4 % changed).
+
+**Gold mine on the home island (O):** new endless game (2000 × 1400, giant islands, perfect home island).
+- Ship: a **left** click on water moves the selected ship; the right click (`WM_RBUTTONUP` → `FUN_1400124a0`) only
+  cancels or deselects. While the game is in front it reads the real cursor, so `PostMessage` clicks work only while
+  it is in the background.
+- Warehouse: `FUN_140098fb0` needs a straight row of 3 coast tiles (kinds 0x17–0x1B or 0x1D/0x1E) along the long side,
+  then `FUN_1400949b0`; the ship menu shows the button only while the ship lies right at such a coast. A valid build
+  ghost shows the pier graphic, an invalid one only a yellow footprint. Ghost tile: RVA 0x5A3FBC / 0x5A3FC0. Built at
+  local 121–123 / 90–91 in the bay next to the gold mountain.
+- Unlock: player 0x5F0960 + p × 0x280, **+0x6C = building-level bits**, mask `1 << (Bauinfra − 1)`. Building 399
+  (Id 22405, kind 0x22, 1 × 2, ware 3, Bauinfra 24 → 0x800000, `haeuser.cod`: INFRA_STUFE_3B = 150 residents,
+  Maxlager 4 t, Interval 80, ERZBERG_KLEIN). The bit was set **in the test game only**; "Goldmine" then appeared at
+  cost 0 (`-BuildCost 0`).
+- Mine tile: `FUN_1400985a0` needs **exactly one** 4-neighbour of terrain kind 0xF (it gives the turn: north 1, east 2,
+  south 3, west 0); `FUN_14009ebb0` steps to that neighbour, takes the rock's origin (`FUN_140093610`: gfx entry +0x8C
+  base gfx, +0x10/+0x14 size, tile bits 13–14 turn) and needs origin = slot x/y and slot byte 0 = ware. 24 tiles qualify
+  for the gold deposit at 118/110; the mine stands on 121/116 – 122/116.
+- Result: 4 t in the mine (its store full) at turbo 8; with a field path to the warehouse (carts need a road) the gold
+  in the warehouse (town 0x622DC0 + i × 600, goods +0x2A + good × 12, u16 / 32 t, gold = good 3) rose from 4 to 20 t in
+  about 75 s. The slot stayed `03 76 6E 00 01 00 40 06` (50 t, never lowered).
+
+Cleanup: game, tool and map ended; the test `lastgame` in the recycle bin; `saves.json` restored (same hash), the
+savegames unchanged. The test used up the launcher's update note (`LastVersion` 3.7.1).
+
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
 - Tool with `-Pirates Strong -ShipSpeed 2 -StartGold 50000 -Storage 3`, 1000 × 700, layout 0 (43 islands). The test session then broke off with a connection error of the Claude app; the tool ended with exit 4 without renaming `lastgame.gam`.
