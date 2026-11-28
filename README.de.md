@@ -372,7 +372,7 @@ anno1602-extensions/
 │   ├── install.ps1                Installer hinter get.ps1, install.cmd, uninstall.cmd und der Apps-Liste
 │   └── README.txt, README.de.txt  Anleitung, wird neben dem Werkzeug installiert
 ├── tests/
-│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (750 Prüfungen)
+│   ├── test-patcher.ps1           Prüfung ohne Spiel: lädt die exe als Abbild, prüft jede Patchstelle und die Ereignisse (755 Prüfungen)
 │   ├── test-islands.ps1           Inselschmiede mit allen Inseldateien des Spiels: Flüsse, Berge, Vulkan, Riesen-Inseln, Heimatinsel (30 Prüfungen)
 │   ├── check-scenarios.ps1        prüft gebaute Szenarien, Zufalls- und Tagesabenteuer (-Reproduce)
 │   └── test-install.ps1           installiert und entfernt echt, in einer Testumgebung, auch über get.ps1 (47 Prüfungen)

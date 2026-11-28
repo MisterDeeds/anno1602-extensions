@@ -3,6 +3,18 @@
 All versions are for Anno 1602 History Edition (Ubisoft Connect), single player. Details, addresses and test runs:
 [docs/FINDINGS.md](docs/FINDINGS.md).
 
+## 3.7.2 – 2026-11-28
+
+- **Fix: the tool sometimes stopped right after "Now start Anno 1602 …" with "You cannot call a method on a
+  null-valued expression"**, and the game then ran without the extensions (the next start usually worked). If the
+  tool spotted the game in its very first milliseconds, Windows had not yet listed the game's exe in the new process;
+  .NET then reports the main module as empty instead of raising an error, and the tool stopped waiting for it. Now it
+  waits until the exe is really loaded (at most 30 seconds; it still notices when Ubisoft Connect ends the first start
+  and waits for the next one). The island map and the logbook were not affected.
+- Tests: `tests/test-patcher.ps1` 755 checks (new case AZ: against a process started suspended, whose main module is
+  still empty, the tool waits and gets the real load address once it runs; it gives up when the process ends or the
+  time limit passes), `tests/test-install.ps1` 47.
+
 ## 3.7.1 – 2026-11-23
 
 - **Fix: the island map and the logbook did not appear when the launcher opened them.** The launcher starts both with

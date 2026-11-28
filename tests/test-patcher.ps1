@@ -111,6 +111,9 @@
        the test switches) against the helper process: scripted events first, everything restored at the end.
     AO Values left behind by a killed tool window are restored by the next run (a value changed meanwhile stays);
        Stop() (window closed) restores and blocks every later write; dev\check-game.ps1 shows the active events.
+    AZ Game caught right after its start (3.7.2): against a process started suspended (PING.EXE, MainModule still
+       $null) the tool's Get-GameBase waits and returns the real load address once it runs, zero if the process ends
+       or the time limit passes.
   Expected bytes and plans come from the same functions in anno-patcher.ps1 (loaded via
   the syntax tree); the expected scaled values are computed separately in this test.
 #>
@@ -179,7 +182,7 @@ $CodeKind = @{ 'Width start' = 'Width'; 'Height start' = 'Height'; 'Range start'
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($tool, [ref]$null, [ref]$null)
 foreach ($stmt in $ast.EndBlock.Statements) {
     $txt = $stmt.Extent.Text
-    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode|Build-UltraCode|Get-CargoHolds|Build-UltraAccelCode|Get-HomeInfo|Build-HomeShipCode|Build-HomeShipTable)\b') -or
+    if (($stmt -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $txt -match '^function (Txt|Bytes|Rel32|Build-IslandCode|Build-ResourceCode|Read-Template|Read-Ships|Get-IslandPlan|Build-IslandTable|Build-PirateCode|Get-ShipSpeedBytes|Build-FleetCode|Build-TraderCode|Build-BigMapCode|Add-FertilityBlock|Build-FertilityCode|Build-UltraCode|Get-CargoHolds|Build-UltraAccelCode|Get-HomeInfo|Build-HomeShipCode|Build-HomeShipTable|Get-GameBase)\b') -or
         $txt -match '^\$(GameFolder|CaveRva|TableRva|TableMax|HookRva|HookContinue|ClassW|ClassH|PirateCaveRva|TimersHookRva|TimersContinue|FlagsRva|TimersMovapsTarget|ClockRva|Gold0Rva|PlayerSize|TimeLimitRva|MissionRva|MissionSize|LocalPlayerRva|CannonRva|CannonOrig|CannonTarget|FigureRva|FigureSize|SpeedOffset|ShipSpeedOrig|BuildingRva|BuildingSize|StorageOffset|StorageOrig|ResidentRva|ResidentSize|ResidentOrig|CargoOffset|CargoOrig|CargoMaxHolds|IntervalOffset|BuildingCount|ProdMarkerRva|ResourceCaveRva|ResourceCaveEnd|ResourceOffsets|IslandMax|IslandDensity|RivalSites|FleetCaveRva|FleetCallRva|LevelRva|FleetWait|TraderCaveRva|TraderRva|TraderMax|BigMapCaveRva|BigMapMarker|FertMagic|FertAmount|FertCaveRva|FertHookRva|FertAcceptRva|FertJumpTableRva|FertHookOrig|CostMarkerRva|UpkeepMarkerRva|CostHash|UpkeepHash|TaxRva|TaxOrig|RadiusOffset|RadiusMax|RadiusOrig|MineSites|DisasterOffSites|DisasterMoreSites|VolcanoRva|RivalGrowthSites|IslandPathRva|IslandPathMax|IslandPathSites|GiantPerClimate|GiantMaxPerMap|SupplyGoods|SupplyBelow|SupplyTo|SupplyEveryClock|UltraCaveRva|UltraHookRva|UltraHookOrig|KeyEndRva|SetSpeedRva|UltraAccelCaveRva|UltraAccelCallRva|UltraAccelCallOrig|AccelIatRva|ModifierFlagsRva|HomeFileNumber|HomeFlagRva|HomeShipTableRva|HomeShipCaveRva|ShipLoaderRva|ShipLoaderOrig|HomeClockMax|HomeDepositWares|HomeDepositKinds|HomeDepositAmounts|HomeCropBits)\b') { . ([scriptblock]::Create($txt)) }
     # Event engine (cases AI-AO): its constants, functions and the two C# types run here in the test process, against
     # the helper process ($script:h / $script:base as in the tool).
@@ -2130,6 +2133,65 @@ try {
     $a = $null
 
     Test-EventCases
+
+    Write-Host 'AZ Game caught right after its start: the tool waits for the load address (3.7.2)'
+    # A real process that is started suspended: it exists, but the Windows loader has not run yet - like Anno1602.exe
+    # in its first milliseconds. PING.EXE only, nothing of the game.
+    Add-Type -TypeDefinition @'
+using System;
+using System.ComponentModel;
+using System.Runtime.InteropServices;
+using System.Threading;
+public class SuspendedProcess {
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct StartupInfo { public int cb; public string reserved, desktop, title; public int x, y, xSize, ySize, xChars, yChars, fill, flags; public short show, reserved2; public IntPtr reserved3, stdIn, stdOut, stdErr; }
+    [StructLayout(LayoutKind.Sequential)]
+    struct ProcessInfo { public IntPtr process, thread; public int pid, tid; }
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CreateProcess(string app, string cmd, IntPtr pa, IntPtr ta, bool inherit, uint flags, IntPtr env, string dir, ref StartupInfo si, out ProcessInfo pi);
+    [DllImport("kernel32.dll")] static extern uint ResumeThread(IntPtr thread);
+    [DllImport("kernel32.dll")] static extern bool TerminateProcess(IntPtr process, uint code);
+    [DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+    ProcessInfo pi;
+    public int Id { get { return pi.pid; } }
+    // CREATE_SUSPENDED | CREATE_NO_WINDOW
+    public SuspendedProcess(string exe, string args) {
+        StartupInfo si = new StartupInfo(); si.cb = Marshal.SizeOf(si);
+        if (!CreateProcess(exe, "\"" + exe + "\" " + args, IntPtr.Zero, IntPtr.Zero, false, 0x4 | 0x08000000, IntPtr.Zero, null, ref si, out pi)) throw new Win32Exception();
+    }
+    public void ResumeAfter(int ms) { Thread t = new Thread(() => { Thread.Sleep(ms); ResumeThread(pi.thread); }); t.IsBackground = true; t.Start(); }
+    public void EndAfter(int ms) { Thread t = new Thread(() => { Thread.Sleep(ms); TerminateProcess(pi.process, 1); }); t.IsBackground = true; t.Start(); }
+    public void End() { TerminateProcess(pi.process, 1); CloseHandle(pi.thread); CloseHandle(pi.process); }
+}
+'@
+    $ping = Join-Path $env:WINDIR 'System32\PING.EXE'
+    $sp = New-Object SuspendedProcess($ping, '-n 3 127.0.0.1')
+    try {
+        $fresh = Get-Process -Id $sp.Id
+        $mm = 'exception'; try { $mm = $fresh.MainModule } catch { }
+        Assert-Check 'AZ fresh process: MainModule is $null without an exception (the cause of the error in 3.7.1)' ($null -eq $mm)
+        $sp.ResumeAfter(800)
+        $watch = [Diagnostics.Stopwatch]::StartNew(); $b = Get-GameBase $fresh; $ms = $watch.ElapsedMilliseconds
+        $real = (Get-Process -Id $sp.Id).MainModule.BaseAddress
+        Assert-Check "AZ waits until the process runs ($ms ms) and returns its load address ($b = $real)" ($ms -ge 700 -and $b -is [IntPtr] -and $b -ne [IntPtr]::Zero -and $b -eq $real)
+    }
+    finally { $sp.End() }
+    $sp = New-Object SuspendedProcess($ping, '-n 3 127.0.0.1')
+    try {
+        $fresh = Get-Process -Id $sp.Id
+        $sp.EndAfter(500)
+        $watch = [Diagnostics.Stopwatch]::StartNew(); $b = Get-GameBase $fresh; $ms = $watch.ElapsedMilliseconds
+        Assert-Check "AZ process ends while waiting: zero after $ms ms (the tool then waits for the restart)" ($b -is [IntPtr] -and $b -eq [IntPtr]::Zero -and $ms -ge 400 -and $ms -lt 5000)
+    }
+    finally { $sp.End() }
+    $sp = New-Object SuspendedProcess($ping, '-n 3 127.0.0.1')
+    try {
+        $fresh = Get-Process -Id $sp.Id
+        $watch = [Diagnostics.Stopwatch]::StartNew(); $b = Get-GameBase $fresh 1; $ms = $watch.ElapsedMilliseconds
+        Assert-Check "AZ process never starts: zero after the time limit of 1 s ($ms ms)" ($b -is [IntPtr] -and $b -eq [IntPtr]::Zero -and $ms -ge 900 -and $ms -lt 5000)
+    }
+    finally { $sp.End() }
+    Assert-Check 'AZ the tool takes the load address from Get-GameBase' ((Get-Content -Raw -LiteralPath $tool) -match '\$script:base = Get-GameBase \$proc\r?\n')
 
     Write-Host 'F  Process exits while the tool waits for the start'
     $a = Start-ImageProcess

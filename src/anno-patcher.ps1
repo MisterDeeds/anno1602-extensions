@@ -2766,6 +2766,26 @@ function Invoke-Patch($proc) {
     $true
 }
 
+# Load address of the exe (ASLR). Right after the process is created, .NET's MainModule is $null without an exception
+# (the Windows loader has not listed the exe yet); a little later it may throw until the module list is ready. Up to
+# 3.7.1 only the exception was waited for: the $null ended the wait at once and the tool stopped with "You cannot call
+# a method on a null-valued expression" (2026-11-28). Waits in both cases; [IntPtr]::Zero if the process ends or after
+# $Seconds.
+function Get-GameBase($proc, [double]$Seconds = 30) {
+    $watch = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        try {
+            $proc.Refresh()
+            $module = $proc.MainModule
+            if ($module -and $module.BaseAddress -ne [IntPtr]::Zero) { return $module.BaseAddress }
+        }
+        catch { }
+        try { if ($proc.HasExited) { return [IntPtr]::Zero } } catch { }
+        if ($watch.Elapsed.TotalSeconds -ge $Seconds) { return [IntPtr]::Zero }
+        Start-Sleep -Milliseconds 25
+    }
+}
+
 $null4 = Hex ([byte[]](0, 0, 0, 0))
 Write-Host ((Txt 'Target: {0} x {1} tiles (normal 500 x 350), scroll range {2} (normal 425).' 'Ziel: {0} x {1} Felder (normal 500 x 350), Scrollbereich {2} (normal 425).') -f $Width, $Height, (Format-Value 'Range' $values.Range))
 if ($TestProcessId -eq 0) {
@@ -2791,10 +2811,7 @@ while (-not $finished) {
             }
         }
         # Determine the load address of the exe (ASLR) as soon as the module is visible.
-        $script:base = [IntPtr]::Zero
-        for ($i = 0; $i -lt 200 -and $script:base -eq [IntPtr]::Zero; $i++) {
-            try { $proc.Refresh(); $script:base = $proc.MainModule.BaseAddress } catch { Start-Sleep -Milliseconds 25 }
-        }
+        $script:base = Get-GameBase $proc
         if ($script:base -eq [IntPtr]::Zero) {
             if ($proc.HasExited) { $exited[$proc.Id] = $true; continue }
             throw (Txt 'Cannot determine the load address of the game. Aborted, nothing changed.' 'Ladeadresse des Spiels nicht ermittelbar. Abbruch, nichts geaendert.')

@@ -1756,6 +1756,26 @@ zooms to the home island (58.4 % changed).
 Cleanup: game, tool and map ended; the test `lastgame` in the recycle bin; `saves.json` restored (same hash), the
 savegames unchanged. The test used up the launcher's update note (`LastVersion` 3.7.1).
 
+### Tool stopped right after "Starte jetzt" (2026-11-28, version 3.7.2)
+
+**Report (user, screenshot 12:30):** the tool window, started by the launcher with the user's choice, printed the options,
+"Starte jetzt Anno 1602 History Edition ueber Ubisoft Connect. Ich warte bis zu 15 Minuten ..." and then at once
+"Fehler: Es ist nicht möglich, eine Methode für einen Ausdruck aufzurufen, der den NULL hat." – no "Spiel gefunden"
+line, so the game ran without the extensions. The next start (tool 12:31:48, game 12:31:54) worked: in that game the
+code sites read `C7 05 … D0 07 00 00` (2000) and the variables 2000 / 1400 (O, read only).
+
+**Cause (O):** the waiting loop polls `Get-Process Anno1602` every 50 ms. In Windows PowerShell 5.1 (.NET Framework)
+`Process.MainModule` of a process whose loader has not run yet is **`$null` without an exception** (the module list is
+still empty). The loop only waited on an exception, so `$proc.MainModule.BaseAddress` gave `$null`, the loop ended
+after one try (`$null -eq [IntPtr]::Zero` is false), and the "Spiel gefunden" line failed on `$null.ToInt64()`.
+Reproduced with PING.EXE started suspended (`CREATE_SUSPENDED`): MainModule `$null`, the old lines give exactly that
+message. Whether the tool hits the moment depends on timing, which is why it showed up only now. The island map and
+the logbook were not affected: they read the same property inside try/catch, where `$null.BaseAddress` throws in C# and
+`.ToInt64()` throws in PowerShell, and they retry.
+
+**Fix 3.7.2:** `Get-GameBase` waits until MainModule exists and has a load address; it returns zero once the process
+has ended (Ubisoft Connect's restart, as before) or after 30 s (before: about 200 failed attempts). Test case AZ.
+
 ### Long run with all options (O), 2026-11-09 08:52 – about 19:00, evaluated 2026-11-10
 
 - Tool with `-Pirates Strong -ShipSpeed 2 -StartGold 50000 -Storage 3`, 1000 × 700, layout 0 (43 islands). The test session then broke off with a connection error of the Claude app; the tool ended with exit 4 without renaming `lastgame.gam`.
